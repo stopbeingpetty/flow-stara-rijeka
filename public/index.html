@@ -696,21 +696,159 @@ body.admin-mode .admin-only.is-block { display: block !important; }
   font-size: 11px; color: var(--muted);
   margin-left: 6px; text-transform: lowercase;
 }
-.hours-table .hours-cell { font-family: var(--font-mono); }
 .hours-table tfoot td {
   background: var(--surface-2);
   font-weight: 600;
   border-top: 2px solid var(--line-strong);
 }
-body.admin-mode .hours-table td.editable {
-  cursor: cell;
-  background-image: linear-gradient(180deg, transparent, transparent);
+ 
+/* ----- v2: compact cells with project label below ----- */
+.hours-table-v2 td.day-cell {
+  vertical-align: top;
+  padding: 8px 10px 6px;
+  min-width: 130px;
 }
-body.admin-mode .hours-table td.editable:hover {
+.hours-table-v2 .day-head {
+  display: flex; align-items: baseline; gap: 6px;
+}
+.hours-table-v2 .day-note {
+  font-size: 11px;
+  color: var(--ink-2);
+  margin-top: 4px;
+  padding: 2px 6px;
   background: var(--acc-soft);
-  outline: 1.5px solid var(--acc);
-  outline-offset: -1.5px;
+  border-radius: 4px;
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+.hours-table-v2 .day-note.empty {
+  background: transparent;
+  color: var(--muted-2);
+  border: 1px dashed var(--line);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+body.admin-mode .hours-table-v2 .day-row.clickable:hover .day-note.empty {
+  opacity: 1;
+}
+.hours-table-v2 td.hcell {
+  padding: 6px 8px;
+  vertical-align: middle;
+  min-width: 78px;
+}
+.hours-table-v2 td.hcell.empty .hc-dash {
+  color: var(--muted-2);
+  font-size: 14px;
+}
+.hours-table-v2 td.hcell .hc-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+}
+.hours-table-v2 td.hcell .hc-hours {
+  font-size: 14px; font-weight: 600;
+  color: var(--ink);
+}
+.hours-table-v2 td.hcell .hc-mar {
+  font-size: 11px; color: var(--muted);
+}
+.hours-table-v2 td.hcell .hc-proj {
+  font-size: 10px;
+  color: var(--ink-2);
+  margin-top: 2px;
+  letter-spacing: 0.02em;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 80px;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 1px 4px;
+  background: var(--surface-2);
+  border-radius: 3px;
+  display: inline-block;
+}
+.hours-table-v2 td.hcell.sum .hc-top {
+  font-size: 13px;
+}
+.hours-table-v2 .day-row.clickable {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+body.admin-mode .hours-table-v2 .day-row.clickable:hover td {
+  background: var(--acc-soft);
+}
+body.admin-mode .hours-table-v2 .day-row.clickable:hover td:first-child {
+  background: var(--acc-soft);
+}
+body.admin-mode .hours-table-v2 .day-row.clickable:hover .hc-proj {
+  background: var(--surface);
+}
+ 
+/* ----- DAY MODAL (brzi unos) ----- */
+.day-modal-grid { display: flex; flex-direction: column; gap: 12px; }
+.day-workers-grid {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.day-worker-head {
+  display: grid;
+  grid-template-columns: 110px 1fr 80px 70px;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+  font-size: 11px; font-weight: 500;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--muted);
+}
+.day-worker-row {
+  display: grid;
+  grid-template-columns: 110px 1fr 80px 70px;
+  gap: 8px;
+  padding: 8px 12px;
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+}
+.day-worker-row:last-child { border-bottom: none; }
+.day-worker-row .dw-name {
+  font-weight: 500;
+  font-family: var(--font-display);
+}
+.day-worker-row .input {
+  padding: 8px 10px;
+  font-size: 13px;
+}
+.day-worker-row .input.is-suggestion {
+  color: var(--muted-2);
+  font-style: italic;
+  background: linear-gradient(0deg, var(--acc-soft), var(--acc-soft)), var(--surface);
+  background-blend-mode: multiply;
+}
+.day-worker-row .input.dw-hours,
+.day-worker-row .input.dw-mar {
+  text-align: right;
+  font-family: var(--font-mono);
+}
+ 
+@media (max-width: 720px) {
+  .day-worker-head, .day-worker-row {
+    grid-template-columns: 80px 1fr 60px 55px;
+    gap: 6px;
+    padding: 8px;
+  }
+  .day-worker-row .input { padding: 6px 8px; font-size: 12px; }
+}
+ 
+/* Hide old admin-mode hover so the new clickable row works */
+body.admin-mode .hours-table td.editable:hover { /* legacy, no longer used */ }
  
 /* ============================================================
    STO tab specific (yellow/black branding)
@@ -1035,4 +1173,3 @@ body[data-tab="sto"] .page-title strong {
  
 </body>
 </html>
- 
