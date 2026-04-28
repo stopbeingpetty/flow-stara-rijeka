@@ -622,7 +622,12 @@ function chartOpts(opts = {}) {
         padding: 12,
         titleFont: { family: cssVar('--font-body'), weight: 600, size: 13 },
         bodyFont: { family: cssVar('--font-mono'), size: 12 },
-        callbacks: opts.money ? { label: c => c.dataset.label + ': ' + eur(c.raw, 0) } : undefined,
+        callbacks: {
+          label: c => {
+            const lbl = c.dataset.label ? c.dataset.label + ': ' : '';
+            return lbl + (opts.money ? eur(c.raw, 0) : c.raw);
+          },
+        },
       },
     },
     scales: {
@@ -831,6 +836,7 @@ function renderHours() {
     data: {
       labels: stats.map(s => s.name),
       datasets: [{
+        label: 'Sati',
         data: stats.map(s => s.totalHours),
         backgroundColor: stats.map((_, i) => PROJECT_PALETTE[i % PROJECT_PALETTE.length]),
         borderRadius: 6,
@@ -851,6 +857,7 @@ function renderHours() {
     data: {
       labels: days.map(d => d.day),
       datasets: [{
+        label: 'Ukupno sati',
         data: dailyTotals,
         borderColor: cssVar('--acc-hours'),
         backgroundColor: cssVar('--acc-hours') + '20',
@@ -1089,6 +1096,7 @@ function renderTrx() {
       data: {
         labels: grpEntries.map(e => e[0]),
         datasets: [{
+          label: 'Iznos',
           data: grpEntries.map(e => e[1]),
           backgroundColor: grpEntries.map(e => {
             return e[0] === 'Prihodi' ? cssVar('--positive')
@@ -1537,6 +1545,7 @@ function renderSto() {
     data: {
       labels: months.map(monthLabelShort),
       datasets: [{
+        label: 'Ukupno mjesečno',
         data: monthlyTotals,
         backgroundColor: months.map(m => m === activeMonth ? cssVar('--acc-sto-ink') : cssVar('--acc-sto')),
         borderRadius: 6,
@@ -2077,4 +2086,3 @@ async function boot() {
 document.addEventListener('DOMContentLoaded', boot);
  
 })();
- 
