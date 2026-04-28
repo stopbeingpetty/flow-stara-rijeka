@@ -1,0 +1,50 @@
+# ============================================================
+# Stara Rijeka · Cashflow · Netlify configuration
+# ============================================================
+
+[build]
+  publish = "public"
+  functions = "netlify/functions"
+
+[functions]
+  # Make sure seed-data.json is bundled with functions so first-load fallback works
+  included_files = ["seed-data.json"]
+  node_bundler = "esbuild"
+
+# Pretty API routes: /api/load → /.netlify/functions/load
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+  force = true
+
+# SPA fallback (only one HTML page, but here for safety)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Security headers
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+
+# Cache static assets aggressively, but never the HTML or API
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-store, no-cache, must-revalidate"
+
+[[headers]]
+  for = "/app.js"
+  [headers.values]
+    Cache-Control = "no-store, no-cache, must-revalidate"
+
+[[headers]]
+  for = "/api/*"
+  [headers.values]
+    Cache-Control = "no-store, no-cache, must-revalidate"

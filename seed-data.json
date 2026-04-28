@@ -1,0 +1,3008 @@
+{
+  "version": 1,
+  "year": 2026,
+  "company": {
+    "name": "Stara Rijeka d.o.o.",
+    "founded": 1998,
+    "limit_racuna": 30000
+  },
+  "settings": {
+    "workers": [
+      {
+        "name": "Hasan",
+        "satnica": 8.0,
+        "marenda": 4.0,
+        "prijevoz": 70.0,
+        "stan": 0.0,
+        "fiksno": 1100.0
+      },
+      {
+        "name": "Leke",
+        "satnica": 8.0,
+        "marenda": 4.0,
+        "prijevoz": 70.0,
+        "stan": 0.0,
+        "fiksno": 1100.0
+      },
+      {
+        "name": "Roky",
+        "satnica": 7.5,
+        "marenda": 4.0,
+        "prijevoz": 70.0,
+        "stan": 0.0,
+        "fiksno": 1100.0
+      },
+      {
+        "name": "Senad",
+        "satnica": 10.0,
+        "marenda": 4.0,
+        "prijevoz": 70.0,
+        "stan": 0.0,
+        "fiksno": 1100.0
+      },
+      {
+        "name": "Danijel",
+        "satnica": 9.0,
+        "marenda": 4.0,
+        "prijevoz": 70.0,
+        "stan": 250.0,
+        "fiksno": 1100.0
+      },
+      {
+        "name": "Dragan",
+        "satnica": 0.0,
+        "marenda": 0.0,
+        "prijevoz": 0.0,
+        "stan": 0.0,
+        "fiksno": 1100.0
+      }
+    ]
+  },
+  "trx": {
+    "2026-02": [
+      {
+        "date": "2026-02-02",
+        "type": "Trošak",
+        "partner": "Jojo",
+        "amount": 300.0,
+        "category": "Knjigovodstvo",
+        "group": "Tekući"
+      },
+      {
+        "date": "2026-02-02",
+        "type": "Trošak",
+        "partner": "Stan",
+        "amount": 1200.0,
+        "category": "Smještaj",
+        "group": "Tekući"
+      },
+      {
+        "date": "2026-02-02",
+        "type": "Trošak",
+        "partner": "Hrvatski Telekom",
+        "amount": 367.86,
+        "category": "Komunalije",
+        "group": "Tekući"
+      },
+      {
+        "date": "2026-02-02",
+        "type": "Trošak",
+        "partner": "Stan",
+        "amount": 1300.0,
+        "category": "Smještaj",
+        "group": "Tekući"
+      },
+      {
+        "date": "2026-02-02",
+        "type": "Trošak",
+        "partner": "PBZ",
+        "amount": 874.46,
+        "category": "Bankovne naknade",
+        "group": "Tekući"
+      },
+      {
+        "date": "2026-02-03",
+        "type": "Trošak",
+        "partner": "Forch",
+        "amount": 28.53,
+        "category": "Materijal",
+        "group": "Nepredviđeni"
+      },
+      {
+        "date": "2026-02-03",
+        "type": "Trošak",
+        "partner": "Porsche",
+        "amount": 3781.15,
+        "category": "Leasing",
+        "group": "Tekući"
+      },
+      {
+        "date": "2026-02-03",
+        "type": "Trošak",
+        "partner": "Ministarstvo financija, Porezna up.",
+        "amount": 80.49,
+        "category": "Porez",
+        "group": "Tekući"
+      },
+      {
+        "date": "2026-02-03",
+        "type": "Pozajmnica",
+        "partner": "Boris Atlija",
+        "amount": 3500.0,
+        "category": "Pozajmica",
+        "group": "Isključi"
+      },
+      {
+        "date": "2026-02-03",
+        "type": "Trošak",
+        "partner": "PBZ",
+        "amount": 133.02,
+        "category": "Bankovne naknade",
+        "group": "Tekući"
+      },
+      {
+        "date": "2026-02-04",
+        "type": "Trošak",
+        "partner": "Adria Oil",
+        "amount": 596.79,
+        "category": "Adria Oil",
+        "group": "Tekući"
+      },
+      {
+        "date": "2026-02-05",
+        "type": "Trošak",
+        "partner": "B.C. Commerce",
+        "amount": 680.64,
+        "category": "Ostalo",
+        "group": "Nepredviđeni"
+      },
+      {
+        "date": "2026-02-05",
+        "type": "Trošak",
+        "partner": "HRT",
+        "amount": 10.6,
+        "category": "Komunalije",
+        "group": "Tekući"
+      },
+      {
+        "date": "2026-02-05",
+        "type": "Trošak",
+        "partner": "Pondi",
+        "amount": 5.0,
+        "category": "Ostalo",
+        "group": "Nepredviđeni"
+      },
+      {
+        "date": "2026-02-09",
+        "type": "Prihod",
+        "partner": "David Atlija",
+        "amount": 5000.0,
+        "category": "Polo",
+        "group": "Prihodi"
+      },
+      {
+        "date": "2026-02-12",
+        "type": "Trošak",
+        "partner": "Auto Klub",
+        "amount": 30.99,
+        "category": "",
+        "group": "Nepredviđeni"
+      },
+      {
+        "date": "2026-02-12",
+        "type": "Trošak",
+        "partner": "Auto Klub",
+        "amount": 416.46,
+        "category": "",
+        "group": "Nepredviđeni"
+      },
+      {
+        "date": "2026-02-18",
+        "type": "Trošak",
+        "partner": "Adria Oil",
+        "amount": 356.38,
+        "category": "Adria Oil",
+        "group": "Tekući"
+      },
+      {
+        "date": "2026-02-20",
+        "type": "Trošak",
+        "partner": "Porsche",
+        "amount": 50.0,
+        "category": "",
+        "group": "Tekući"
+      },
+      {
+        "date": "2026-02-24",
+        "type": "Prihod",
+        "partner": "Omišalj Dolcevita",
+        "amount": 1545.0,
+        "category": "",
+        "group": "Prihodi"
+      },
+      {
+        "date": "2026-02-25",
+        "type": "Prihod",
+        "partner": "VB Automobili",
+        "amount": 10032.0,
+        "category": "",
+        "group": "Prihodi"
+      },
+      {
+        "date": "2026-02-28",
+        "type": "Trošak",
+        "partner": "Pondi",
+        "amount": 5.0,
+        "category": "Pondi",
+        "group": "Nepredviđeni"
+      }
+    ],
+    "2026-03": [
+      {
+        "date": "2026-03-01",
+        "type": "Trošak",
+        "partner": "HRT",
+        "amount": 10.62,
+        "category": "Komunalije",
+        "group": "Tekući"
+      },
+      {
+        "date": "2026-03-02",
+        "type": "Trošak",
+        "partner": "Porsche",
+        "amount": 1329.54,
+        "category": "Leasing",
+        "group": "Tekući"
+      },
+      {
+        "date": "2026-03-02",
+        "type": "Trošak",
+        "partner": "PBZ",
+        "amount": 39.25,
+        "category": "",
+        "group": "Tekući"
+      },
+      {
+        "date": "2026-03-03",
+        "type": "Trošak",
+        "partner": "Adria Oil",
+        "amount": 552.16,
+        "category": "Gorivo",
+        "group": "Tekući"
+      },
+      {
+        "date": "2026-03-04",
+        "type": "Trošak",
+        "partner": "Generali Osiguranje",
+        "amount": 2090.22,
+        "category": "Osiguranje",
+        "group": "Nepredviđeni"
+      },
+      {
+        "date": "2026-03-06",
+        "type": "Trošak",
+        "partner": "Bina - Istra D.D.",
+        "amount": 40.0,
+        "category": "Prijevoz",
+        "group": "Nepredviđeni"
+      },
+      {
+        "date": "2026-03-03",
+        "type": "Trošak",
+        "partner": "Hrvatski Telekom d.d.",
+        "amount": 378.75,
+        "category": "Komunalije",
+        "group": "Tekući"
+      },
+      {
+        "date": "2026-03-17",
+        "type": "Trošak",
+        "partner": "Adria Oil",
+        "amount": 435.28,
+        "category": "Gorivo",
+        "group": "Tekući"
+      },
+      {
+        "date": "2026-03-27",
+        "type": "Trošak",
+        "partner": "Jadran-Impex",
+        "amount": 491.76,
+        "category": "",
+        "group": "Nepredviđeni"
+      },
+      {
+        "date": "2026-03-31",
+        "type": "Trošak",
+        "partner": "Dioxa d.o.o.",
+        "amount": 34.0,
+        "category": "",
+        "group": ""
+      },
+      {
+        "date": "2026-03-31",
+        "type": "Trošak",
+        "partner": "Pondi",
+        "amount": 5.0,
+        "category": "e-poslovanje",
+        "group": "Tekući"
+      }
+    ],
+    "2026-04": [
+      {
+        "date": "2026-04-01",
+        "type": "Trošak",
+        "partner": "Porsche",
+        "amount": 1329.54,
+        "category": "Leasing",
+        "group": "Tekući"
+      },
+      {
+        "date": "2026-04-01",
+        "type": "Trošak",
+        "partner": "PBZ",
+        "amount": 38.27,
+        "category": "",
+        "group": "Tekući"
+      },
+      {
+        "date": "2026-04-01",
+        "type": "Trošak",
+        "partner": "HRT",
+        "amount": 10.62,
+        "category": "Komunalije",
+        "group": "Tekući"
+      },
+      {
+        "date": "2026-04-02",
+        "type": "Trošak",
+        "partner": "Adria Oil",
+        "amount": 753.34,
+        "category": "Gorivo",
+        "group": "Tekući"
+      },
+      {
+        "date": "2026-04-03",
+        "type": "Trošak",
+        "partner": "Hrvatski Telekom",
+        "amount": 408.05,
+        "category": "Komunalije",
+        "group": "Tekući"
+      },
+      {
+        "date": "2026-04-07",
+        "type": "Trošak",
+        "partner": "Generali Osiguranje",
+        "amount": 322.65,
+        "category": "Osiguranje",
+        "group": "Nepredviđeni"
+      },
+      {
+        "date": "2026-04-07",
+        "type": "Trošak",
+        "partner": "Generali Osiguranje",
+        "amount": 687.68,
+        "category": "Osiguranje",
+        "group": "Nepredviđeni"
+      },
+      {
+        "date": "2026-04-11",
+        "type": "Trošak",
+        "partner": "Odvjetnik Toni Primorac",
+        "amount": 1031.25,
+        "category": "",
+        "group": "Nepredviđeni"
+      },
+      {
+        "date": "2026-04-13",
+        "type": "Trošak",
+        "partner": "Ustanova za Zdravstvenu Skrb PRO Vita",
+        "amount": 340.0,
+        "category": "Liječnički",
+        "group": "Nepredviđeni"
+      },
+      {
+        "date": "2026-04-13",
+        "type": "Trošak",
+        "partner": "Ustanova za Zdravstvenu Skrb PRO Vita",
+        "amount": 170.0,
+        "category": "Liječnički",
+        "group": "Nepredviđeni"
+      },
+      {
+        "date": "2026-04-13",
+        "type": "Trošak",
+        "partner": "Ustanova za Zdravstvenu Skrb PRO Vita",
+        "amount": 41.82,
+        "category": "Liječnički",
+        "group": "Nepredviđeni"
+      },
+      {
+        "date": "2026-04-14",
+        "type": "Trošak",
+        "partner": "A1",
+        "amount": 1.0,
+        "category": "Mobitel",
+        "group": "Nepredviđeni"
+      },
+      {
+        "date": "2026-04-16",
+        "type": "Trošak",
+        "partner": "Porsche",
+        "amount": 39500.0,
+        "category": "Leasing",
+        "group": "Nepredviđeni"
+      },
+      {
+        "date": "2026-04-16",
+        "type": "Trošak",
+        "partner": "Adria Oil",
+        "amount": 579.52,
+        "category": "Gorivo",
+        "group": "Tekući"
+      },
+      {
+        "date": "2026-04-24",
+        "type": "Trošak",
+        "partner": "Porsche",
+        "amount": 343.75,
+        "category": "Leasing",
+        "group": "Nepredviđeni"
+      }
+    ]
+  },
+  "sto": {
+    "2026-02": [
+      {
+        "date": "2026-02-16",
+        "amount": 46.56,
+        "project": "Omišalj",
+        "note": ""
+      },
+      {
+        "date": "2026-02-16",
+        "amount": 352.19,
+        "project": "Kastav kulir",
+        "note": ""
+      },
+      {
+        "date": "2026-02-18",
+        "amount": 46.56,
+        "project": "Omišalj",
+        "note": ""
+      },
+      {
+        "date": "2026-02-19",
+        "amount": 262.38,
+        "project": "Grižane",
+        "note": ""
+      },
+      {
+        "date": "2026-02-23",
+        "amount": 1657.21,
+        "project": "Grižane",
+        "note": ""
+      },
+      {
+        "date": "2026-02-23",
+        "amount": 228.13,
+        "project": "Grižane",
+        "note": ""
+      },
+      {
+        "date": "2026-02-23",
+        "amount": 46.56,
+        "project": "Alb Opatija",
+        "note": ""
+      },
+      {
+        "date": "2026-02-24",
+        "amount": 82.5,
+        "project": "Grižane",
+        "note": ""
+      },
+      {
+        "date": "2026-02-26",
+        "amount": 562.75,
+        "project": "Grižane",
+        "note": ""
+      },
+      {
+        "date": "2026-02-27",
+        "amount": 44.33,
+        "project": "Robi Opatija",
+        "note": ""
+      },
+      {
+        "date": "2026-02-27",
+        "amount": 676.25,
+        "project": "Grižane",
+        "note": ""
+      },
+      {
+        "date": "UKUPNO",
+        "amount": 4005.42,
+        "project": "",
+        "note": ""
+      }
+    ],
+    "2026-03": [
+      {
+        "date": "2026-03-03",
+        "amount": 8891.62,
+        "project": "Davena d.o.o. Matulji",
+        "note": ""
+      },
+      {
+        "date": "2026-03-03",
+        "amount": 110.25,
+        "project": "Njivice",
+        "note": ""
+      },
+      {
+        "date": "2026-03-03",
+        "amount": 38.0,
+        "project": "Njivice",
+        "note": ""
+      },
+      {
+        "date": "2026-03-03",
+        "amount": 97.5,
+        "project": "Dinko Pulac",
+        "note": ""
+      },
+      {
+        "date": "2026-03-05",
+        "amount": 2495.19,
+        "project": "Njivice",
+        "note": ""
+      },
+      {
+        "date": "2026-03-05",
+        "amount": 1370.15,
+        "project": "Grižane",
+        "note": ""
+      },
+      {
+        "date": "2026-03-06",
+        "amount": 378.75,
+        "project": "Robi Opatija",
+        "note": ""
+      },
+      {
+        "date": "2026-03-09",
+        "amount": 190.0,
+        "project": "Grižane",
+        "note": ""
+      },
+      {
+        "date": "2026-03-12",
+        "amount": 717.19,
+        "project": "Njivice",
+        "note": ""
+      },
+      {
+        "date": "2026-03-16",
+        "amount": 1114.0,
+        "project": "Njivice",
+        "note": ""
+      },
+      {
+        "date": "2026-03-17",
+        "amount": 353.25,
+        "project": "Njivice",
+        "note": ""
+      },
+      {
+        "date": "2026-03-19",
+        "amount": 262.38,
+        "project": "Njivice",
+        "note": ""
+      },
+      {
+        "date": "2026-03-25",
+        "amount": 293.0,
+        "project": "Njivice",
+        "note": ""
+      },
+      {
+        "date": "2026-03-30",
+        "amount": 721.75,
+        "project": "Bivio",
+        "note": ""
+      },
+      {
+        "date": "2026-03-30",
+        "amount": 290.4,
+        "project": "Bivio",
+        "note": ""
+      },
+      {
+        "date": "2026-03-31",
+        "amount": 388.0,
+        "project": "Bivio",
+        "note": ""
+      },
+      {
+        "date": "UKUPNO",
+        "amount": 17711.43,
+        "project": "",
+        "note": ""
+      }
+    ],
+    "2026-04": [
+      {
+        "date": "2026-04-07",
+        "amount": 689.13,
+        "project": "Bivio",
+        "note": ""
+      },
+      {
+        "date": "2026-04-07",
+        "amount": 743.81,
+        "project": "Bivio",
+        "note": ""
+      },
+      {
+        "date": "2026-04-07",
+        "amount": 1356.88,
+        "project": "Njivice",
+        "note": ""
+      },
+      {
+        "date": "2026-04-08",
+        "amount": 142.5,
+        "project": "Njivice",
+        "note": ""
+      },
+      {
+        "date": "2026-04-10",
+        "amount": 743.81,
+        "project": "Bivio",
+        "note": ""
+      },
+      {
+        "date": "2026-04-13",
+        "amount": 105.0,
+        "project": "Bivio",
+        "note": ""
+      },
+      {
+        "date": "2026-04-14",
+        "amount": 54.6,
+        "project": "Bivio",
+        "note": ""
+      },
+      {
+        "date": "2026-04-15",
+        "amount": 1140.0,
+        "project": "Bivio",
+        "note": ""
+      },
+      {
+        "date": "2026-04-20",
+        "amount": 4870.03,
+        "project": "Bivio",
+        "note": ""
+      },
+      {
+        "date": "2026-04-22",
+        "amount": 2364.38,
+        "project": "Bivio",
+        "note": ""
+      },
+      {
+        "date": "2026-04-23",
+        "amount": 1044.38,
+        "project": "Bivio",
+        "note": ""
+      },
+      {
+        "date": "2026-04-20",
+        "amount": 51.25,
+        "project": "Bivio",
+        "note": ""
+      },
+      {
+        "date": "2026-04-24",
+        "amount": 47.5,
+        "project": "Bivio",
+        "note": ""
+      },
+      {
+        "date": "2026-04-21",
+        "amount": 570.0,
+        "project": "Bivio",
+        "note": ""
+      },
+      {
+        "date": "UKUPNO",
+        "amount": 13923.27,
+        "project": "",
+        "note": ""
+      }
+    ]
+  },
+  "hours": {
+    "2026-03": {
+      "days": [
+        {
+          "date": "2026-03-01",
+          "day_name": "Ned",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-03-02",
+          "day_name": "Pon",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-03-03",
+          "day_name": "Uto",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 7.0,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 7.0,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 7.0,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 7.0,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 7.0,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-03-04",
+          "day_name": "Sri",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 6.5,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 6.5,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-03-05",
+          "day_name": "Čet",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 6.5,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 6.5,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 6.5,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 6.5,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 6.5,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-03-06",
+          "day_name": "Pet",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-03-07",
+          "day_name": "Sub",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 7.0,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 7.0,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 7.0,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 7.0,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 7.0,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-03-08",
+          "day_name": "Ned",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-03-09",
+          "day_name": "Pon",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-03-10",
+          "day_name": "Uto",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-03-11",
+          "day_name": "Sri",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-03-12",
+          "day_name": "Čet",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-03-13",
+          "day_name": "Pet",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-03-14",
+          "day_name": "Sub",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 6.5,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 6.5,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 6.5,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 6.5,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 6.5,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-03-15",
+          "day_name": "Ned",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-03-16",
+          "day_name": "Pon",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-03-17",
+          "day_name": "Uto",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 8.5,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-03-18",
+          "day_name": "Sri",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-03-19",
+          "day_name": "Čet",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 8.5,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 8.5,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 8.5,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 8.5,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 8.5,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-03-20",
+          "day_name": "Pet",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-03-21",
+          "day_name": "Sub",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-03-22",
+          "day_name": "Ned",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-03-23",
+          "day_name": "Pon",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-03-24",
+          "day_name": "Uto",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 8.5,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 8.5,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 8.5,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 8.5,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 8.5,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-03-25",
+          "day_name": "Sri",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 8.5,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 8.5,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 8.5,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 8.5,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 8.5,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-03-26",
+          "day_name": "Čet",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-03-27",
+          "day_name": "Pet",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 6.0,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 6.0,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 6.0,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 6.0,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 6.0,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-03-28",
+          "day_name": "Sub",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 6.0,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 6.0,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 6.0,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 6.0,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 6.0,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-03-29",
+          "day_name": "Ned",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-03-30",
+          "day_name": "Pon",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-03-31",
+          "day_name": "Uto",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        }
+      ],
+      "extras": {
+        "Hasan": 544.0,
+        "Leke": 552.0,
+        "Roky": 383.0,
+        "Senad": 912.0,
+        "Danijel": 720.0,
+        "Dragan": 1300.0
+      }
+    },
+    "2026-04": {
+      "days": [
+        {
+          "date": "2026-04-01",
+          "day_name": "Sri",
+          "note": "Hasan - MUP",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Leke": {
+              "project": "Njivice",
+              "hours": 7.0,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "Njivice",
+              "hours": 7.0,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "Bivio",
+              "hours": 4.5,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "Bivio",
+              "hours": 4.5,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-04-02",
+          "day_name": "Čet",
+          "note": "Senad u Bosni",
+          "workers": {
+            "Hasan": {
+              "project": "Njivice",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "Njivice",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "Njivice",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Danijel": {
+              "project": "Bivio",
+              "hours": 6.0,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-04-03",
+          "day_name": "Pet",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "Njivice",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "Njivice",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "Njivice",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-04-04",
+          "day_name": "Sub",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "Njivice",
+              "hours": 6.0,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "Njivice",
+              "hours": 6.0,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "Njivice",
+              "hours": 6.0,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-04-05",
+          "day_name": "Ned",
+          "note": "Uskrs",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-04-06",
+          "day_name": "Pon",
+          "note": "Uskrsni pon.",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 8.0,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 8.0,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 8.0,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 8.0,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 8.0,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-04-07",
+          "day_name": "Uto",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Leke": {
+              "project": "Njivice",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "Bivio",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "Njivice",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "Bivio",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-04-08",
+          "day_name": "Sri",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Leke": {
+              "project": "Njivice",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "Bivio",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "Njivice",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "Bivio",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-04-09",
+          "day_name": "Čet",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "Bivio",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "Njivice",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "Njivice",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "Bivio",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "Bivio",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-04-10",
+          "day_name": "Pet",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "Bivio",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "Bivio",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "Bivio",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "Bivio",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "Bivio",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-04-11",
+          "day_name": "Sub",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "Bivio",
+              "hours": 6.0,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "Bivio",
+              "hours": 6.0,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "Bivio",
+              "hours": 6.0,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "Bivio",
+              "hours": 6.0,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "Bivio",
+              "hours": 6.0,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-04-12",
+          "day_name": "Ned",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-04-13",
+          "day_name": "Pon",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "Liječnički",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Leke": {
+              "project": "Liječnički",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Roky": {
+              "project": "Liječnički",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Senad": {
+              "project": "Bivio",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "Bivio",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-04-14",
+          "day_name": "Uto",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "Bivio",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "Bivio",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "Bivio",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "Liječnički",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "Liječnički",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-04-15",
+          "day_name": "Sri",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "Bivio",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "Bivio",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "Bivio",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "Bivio",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "Bivio",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-04-16",
+          "day_name": "Čet",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "Bivio",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "Bivio",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "Bivio",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "Bivio",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "Bivio",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-04-17",
+          "day_name": "Pet",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "Bivio",
+              "hours": 8.0,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "Bivio",
+              "hours": 8.0,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "Bivio",
+              "hours": 8.0,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "Bivio",
+              "hours": 8.0,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "Bivio",
+              "hours": 8.0,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-04-18",
+          "day_name": "Sub",
+          "note": "Roky trbuh",
+          "workers": {
+            "Hasan": {
+              "project": "Bivio",
+              "hours": 7.0,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "Bivio",
+              "hours": 7.0,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "Trbuh",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Senad": {
+              "project": "Bivio",
+              "hours": 7.0,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "Bivio",
+              "hours": 7.0,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-04-19",
+          "day_name": "Ned",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-04-20",
+          "day_name": "Pon",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "Bivio",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "Bivio",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "Bivio",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "Bivio",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "Bivio",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-04-21",
+          "day_name": "Uto",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "Bivio",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "Bivio",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "Bivio",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "Bivio",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "Bivio",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-04-22",
+          "day_name": "Sri",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "Bivio",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "Bivio",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "Bivio",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "Bivio",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "Bivio",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-04-23",
+          "day_name": "Čet",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "Bivio",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "Bivio",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "Bivio",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "Bivio",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "Bivio",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-04-24",
+          "day_name": "Pet",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "Bivio",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "Drenova",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "Bivio",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "Drenova",
+              "hours": 9.0,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "Bivio",
+              "hours": 9.5,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-04-25",
+          "day_name": "Sub",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "Bivio",
+              "hours": 7.0,
+              "marenda": 4.0
+            },
+            "Leke": {
+              "project": "Bivio",
+              "hours": 7.0,
+              "marenda": 4.0
+            },
+            "Roky": {
+              "project": "Bivio",
+              "hours": 7.0,
+              "marenda": 4.0
+            },
+            "Senad": {
+              "project": "Bivio",
+              "hours": 7.0,
+              "marenda": 4.0
+            },
+            "Danijel": {
+              "project": "Bivio",
+              "hours": 7.0,
+              "marenda": 4.0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-04-26",
+          "day_name": "Ned",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-04-27",
+          "day_name": "Pon",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-04-28",
+          "day_name": "Uto",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-04-29",
+          "day_name": "Sri",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        },
+        {
+          "date": "2026-04-30",
+          "day_name": "Čet",
+          "note": "",
+          "workers": {
+            "Hasan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Leke": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Roky": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Senad": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Danijel": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            },
+            "Dragan": {
+              "project": "",
+              "hours": 0,
+              "marenda": 0
+            }
+          }
+        }
+      ],
+      "extras": {
+        "Hasan": 200.0,
+        "Leke": 412.0,
+        "Roky": 270.0,
+        "Senad": 596.0,
+        "Danijel": 496.5,
+        "Dragan": 1300.0
+      }
+    }
+  }
+}

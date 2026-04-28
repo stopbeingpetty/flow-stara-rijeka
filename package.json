@@ -1,0 +1,13 @@
+{
+  "name": "stara-rijeka-cashflow",
+  "version": "1.0.0",
+  "description": "Cashflow evidencija za Stara Rijeka d.o.o.",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^8.1.0"
+  }
+}
