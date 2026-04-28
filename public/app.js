@@ -767,7 +767,7 @@ function renderHours() {
           <div class="card-sub">Po radniku</div>
         </div>
         <div class="page-actions">
-          <span class="pill green">Σ Isplata: <strong style="margin-left: 4px;">${eur(stats.reduce((a, s) => a + s.dodatno, 0), 0)}</strong></span>
+          <span class="pill green">Σ Sveukupno: <strong style="margin-left: 4px;">${eur(stats.reduce((a, s) => a + s.zaradaSati + s.totalMarenda + s.prijevoz + s.stan + s.fiksno + s.dodatno, 0), 0)}</strong></span>
         </div>
       </div>
       <div class="table-scroll">
@@ -783,10 +783,13 @@ function renderHours() {
               <th class="text-right">Stan</th>
               <th class="text-right">Fiksno/mj.</th>
               <th class="text-right">Dodatno (isplata)</th>
+              <th class="text-right">Sveukupno</th>
             </tr>
           </thead>
           <tbody>
-            ${stats.map(s => `
+            ${stats.map(s => {
+              const sveukupno = s.zaradaSati + s.totalMarenda + s.prijevoz + s.stan + s.fiksno + s.dodatno;
+              return `
               <tr>
                 <td><strong>${escapeHtml(s.name)}</strong></td>
                 <td class="num text-right">${eur(s.satnica, 2)}</td>
@@ -801,8 +804,9 @@ function renderHours() {
                     ? `<input class="input cell-edit" type="number" step="any" value="${s.dodatno}" data-extra-worker="${escapeHtml(s.name)}" style="width: 100px; margin-left: auto;">`
                     : `<strong>${eur(s.dodatno, 0)}</strong>`}
                 </td>
+                <td class="num text-right" style="background: var(--positive-soft); color: var(--positive); font-weight: 700;">${eur(sveukupno, 2)}</td>
               </tr>
-            `).join('')}
+            `;}).join('')}
           </tbody>
           <tfoot>
             <tr>
@@ -815,6 +819,7 @@ function renderHours() {
               <td class="num text-right"><strong>${eur(stats.reduce((a, s) => a + s.stan, 0), 0)}</strong></td>
               <td class="num text-right"><strong>${eur(stats.reduce((a, s) => a + s.fiksno, 0), 0)}</strong></td>
               <td class="num text-right"><strong>${eur(stats.reduce((a, s) => a + s.dodatno, 0), 0)}</strong></td>
+              <td class="num text-right" style="background: var(--positive-soft); color: var(--positive);"><strong>${eur(stats.reduce((a, s) => a + s.zaradaSati + s.totalMarenda + s.prijevoz + s.stan + s.fiksno + s.dodatno, 0), 2)}</strong></td>
             </tr>
           </tfoot>
         </table>
