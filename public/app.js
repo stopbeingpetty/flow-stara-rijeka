@@ -3,35 +3,36 @@
    ============================================================ */
 (() => {
 'use strict';
-
+ 
 /* ---------- CONSTANTS ---------- */
 const MONTH_NAMES_HR = ['Siječanj','Veljača','Ožujak','Travanj','Svibanj','Lipanj','Srpanj','Kolovoz','Rujan','Listopad','Studeni','Prosinac'];
 const DAY_NAMES_HR = ['Ned','Pon','Uto','Sri','Čet','Pet','Sub'];
 const FMT = new Intl.NumberFormat('hr-HR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const FMT_INT = new Intl.NumberFormat('hr-HR', { maximumFractionDigits: 0 });
 const FMT_PCT = new Intl.NumberFormat('hr-HR', { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1 });
-
+ 
 const TRX_GROUPS = ['Tekući', 'Nepredviđeni', 'Prihodi', 'Isključi'];
 const TRX_TYPES = ['Trošak', 'Prihod', 'Pozajmnica'];
 const TRX_CATEGORIES = ['Knjigovodstvo','Smještaj','Komunalije','Bankovne naknade','Materijal','Leasing','Porez','Pozajmica','Adria Oil','Ostalo','Polo','Pondi','Auto Klub','Mobitel','Osiguranje','e-poslovanje','Liječnički','Prijevoz','Gorivo'];
-
+ 
 /* Project palette for STO + projects */
 const PROJECT_PALETTE = [
   '#1e3a5f','#7c2d3a','#2c5f5d','#b8860b','#5a4a8a','#1f6b3a','#8a4a2c','#2c4a8a','#b85d6e','#4a8a2c'
 ];
-
+ 
 /* ---------- STATE ---------- */
 let state = null;        // canonical data
 let isAdmin = false;
 let activeTab = 'cashflow';
 let activeMonth = '2026-04';   // current default
 let stoView = 'month';   // 'month' | 'year'
+let trxView = 'month';   // 'month' | 'year'
 const charts = {};       // Chart.js instances (so we can destroy)
-
+ 
 /* ---------- API CLIENT ---------- */
 const API = {
   pin: localStorage.getItem('sr_pin') || null,
-
+ 
   async load() {
     setConnDot('syncing');
     try {
@@ -52,7 +53,7 @@ const API = {
       throw e;
     }
   },
-
+ 
   async save(data) {
     if (!this.pin) throw new Error('Nije unesen admin PIN');
     setConnDot('syncing');
@@ -78,7 +79,7 @@ const API = {
     localStorage.setItem('sr_data_backup', JSON.stringify(data));
     return await r.json();
   },
-
+ 
   async verifyPin(pin) {
     const r = await fetch('/api/save', {
       method: 'POST',
@@ -88,13 +89,13 @@ const API = {
     return r.status === 200;
   },
 };
-
+ 
 function setConnDot(state) {
   const el = document.getElementById('connDot');
   el.className = 'connection-dot ' + state;
   el.title = state === 'online' ? 'Spojeno' : state === 'syncing' ? 'Sinkronizacija…' : 'Offline';
 }
-
+ 
 /* ---------- TOAST ---------- */
 function toast(msg, type = '', duration = 2500) {
   const wrap = document.getElementById('toastMount');
@@ -107,7 +108,7 @@ function toast(msg, type = '', duration = 2500) {
     setTimeout(() => el.remove(), 250);
   }, duration);
 }
-
+ 
 /* ---------- MODAL HELPER ---------- */
 function modal(html, opts = {}) {
   const mount = document.getElementById('modalMount');
@@ -120,7 +121,7 @@ function modal(html, opts = {}) {
   });
   return { close, root: backdrop };
 }
-
+ 
 /* ---------- PIN MODAL ---------- */
 function showPinModal() {
   if (isAdmin) {
@@ -134,7 +135,7 @@ function showPinModal() {
     rerenderActive();
     return;
   }
-
+ 
   let pin = '';
   const html = `
     <div class="modal-title">Admin pristup</div>
@@ -180,7 +181,7 @@ function showPinModal() {
       toast('Greška pri provjeri PIN-a', 'error');
     }
   };
-
+ 
   m.root.addEventListener('click', e => {
     const key = e.target.closest('.pin-key');
     if (!key) return;
@@ -192,7 +193,7 @@ function showPinModal() {
       if (pin.length === 4) setTimeout(submit, 200);
     }
   });
-
+ 
   // Keyboard support
   const keyHandler = (e) => {
     if (!document.querySelector('.modal-backdrop')) {
@@ -210,7 +211,7 @@ function showPinModal() {
   };
   document.addEventListener('keydown', keyHandler);
 }
-
+ 
 function updateAdminButton() {
   const btn = document.getElementById('adminBtn');
   btn.classList.toggle('active', isAdmin);
@@ -226,7 +227,7 @@ function updateAdminButton() {
         <path d="M7 11V7a5 5 0 0110 0v4" />
       </svg>`;
 }
-
+ 
 /* ---------- HELPERS ---------- */
 const eur = (n, dec = 2) => {
   if (n === null || n === undefined || isNaN(n)) return '—';
@@ -262,7 +263,7 @@ const ensureMonth = (key) => {
 };
 const cssVar = (name) => getComputedStyle(document.body).getPropertyValue(name).trim();
 const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-
+ 
 /* Build day list for a given month */
 function daysInMonth(monthKey) {
   const [y, m] = monthKey.split('-').map(Number);
@@ -279,7 +280,7 @@ function daysInMonth(monthKey) {
   }
   return days;
 }
-
+ 
 /* ---------- COMPUTATIONS ---------- */
 function computeCashflowSummary() {
   const months = allMonths();
@@ -303,13 +304,13 @@ function computeCashflowSummary() {
   }
   return summary;
 }
-
+ 
 function computeWorkersTotal(monthKey) {
   const h = state.hours[monthKey];
   if (!h) return 0;
   return Object.values(h.extras || {}).reduce((a, b) => a + (Number(b) || 0), 0);
 }
-
+ 
 function computeWorkerStats(monthKey) {
   const h = state.hours[monthKey];
   if (!h || !h.days) return [];
@@ -340,7 +341,7 @@ function computeWorkerStats(monthKey) {
     };
   });
 }
-
+ 
 function computeAccountBalance() {
   const limit = state.company?.limit_racuna || 30000;
   let saldo = 0;
@@ -356,7 +357,7 @@ function computeAccountBalance() {
   }
   return { limit, saldo, dostupno: limit + saldo };
 }
-
+ 
 /* ============================================================
    TAB ROUTING
    ============================================================ */
@@ -370,7 +371,7 @@ function setTab(tab) {
   Object.keys(charts).forEach(k => delete charts[k]);
   rerenderActive();
 }
-
+ 
 function rerenderActive() {
   if (activeTab === 'cashflow') renderCashflow();
   else if (activeTab === 'hours') renderHours();
@@ -378,17 +379,18 @@ function rerenderActive() {
   else if (activeTab === 'sto') renderSto();
   else if (activeTab === 'settings') renderSettings();
 }
-
+ 
 /* ============================================================
    MONTH PICKER
    ============================================================ */
-function buildMonthPicker(currentKey, onChange, options = {}) {
+function buildMonthPicker(currentKey, _onChange, options = {}) {
+  // Returns HTML only. Use bindMonthPicker(panel, ...) after innerHTML.
   const months = options.months || allMonths();
   if (!months.includes(currentKey)) {
     if (months.length) currentKey = months[months.length - 1];
   }
   const idx = months.indexOf(currentKey);
-  const html = `
+  return `
     <div class="month-picker" data-month="${currentKey}">
       <button data-act="prev" ${idx <= 0 ? 'disabled' : ''} aria-label="Prethodni">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
@@ -402,22 +404,23 @@ function buildMonthPicker(currentKey, onChange, options = {}) {
       </button>` : ''}
     </div>
   `;
-  // Attach listener after render
-  setTimeout(() => {
-    const root = document.querySelector(`.month-picker[data-month="${currentKey}"]`);
-    if (!root) return;
-    root.addEventListener('click', e => {
-      const btn = e.target.closest('button');
-      if (!btn) return;
-      const act = btn.dataset.act;
-      if (act === 'prev' && idx > 0) onChange(months[idx - 1]);
-      else if (act === 'next' && idx < months.length - 1) onChange(months[idx + 1]);
-      else if (act === 'add') addNewMonth(onChange);
-    });
-  }, 0);
-  return html;
 }
-
+ 
+function bindMonthPicker(panel, currentKey, onChange, options = {}) {
+  const months = options.months || allMonths();
+  const idx = months.indexOf(currentKey);
+  const root = panel.querySelector('.month-picker');
+  if (!root) return;
+  root.addEventListener('click', e => {
+    const btn = e.target.closest('button');
+    if (!btn || btn.disabled) return;
+    const act = btn.dataset.act;
+    if (act === 'prev' && idx > 0) onChange(months[idx - 1]);
+    else if (act === 'next' && idx < months.length - 1) onChange(months[idx + 1]);
+    else if (act === 'add') addNewMonth(onChange);
+  });
+}
+ 
 function addNewMonth(onChange) {
   const months = allMonths();
   const last = months[months.length - 1] || '2026-01';
@@ -436,7 +439,7 @@ function addNewMonth(onChange) {
     toast(`Dodan mjesec ${monthLabel(newKey)}`, 'success');
   });
 }
-
+ 
 /* ============================================================
    SAVE WRAPPER
    ============================================================ */
@@ -450,16 +453,15 @@ async function saveData() {
     return false;
   }
 }
-
+ 
 /* ============================================================
    RENDER: CASHFLOW
    ============================================================ */
 function renderCashflow() {
   const summary = computeCashflowSummary();
   const months = allMonths();
-  const account = computeAccountBalance();
-
-  // YTD totals
+ 
+  // YTD totals (used in tablica footer only)
   const ytd = months.reduce((a, k) => ({
     prihodi: a.prihodi + summary[k].prihodi,
     tekuci: a.tekuci + summary[k].tekuci,
@@ -469,9 +471,7 @@ function renderCashflow() {
     troskovi: a.troskovi + summary[k].troskoviUkupno,
     neto: a.neto + summary[k].neto,
   }), { prihodi: 0, tekuci: 0, nepredvideni: 0, sto: 0, radnici: 0, troskovi: 0, neto: 0 });
-
-  const negClass = ytd.neto < 0 ? 'negative' : ytd.neto > 0 ? 'positive' : '';
-
+ 
   const panel = document.getElementById('panel-cashflow');
   panel.innerHTML = `
     <div class="page-head">
@@ -480,24 +480,7 @@ function renderCashflow() {
         <h1 class="page-title">Cashflow <em>sažetak</em></h1>
       </div>
     </div>
-
-    <div class="flourish">
-      <div class="flourish-grid">
-        <div>
-          <div class="eyebrow" style="margin-bottom: 12px;">NETO REZULTAT YTD</div>
-          <div class="flourish-stat ${negClass}">
-            ${ytd.neto < 0 ? '−' : ''}<span class="currency">€</span>${FMT_INT.format(Math.abs(ytd.neto))}<em>,${(Math.abs(ytd.neto) % 1).toFixed(2).slice(2)}</em>
-          </div>
-        </div>
-        <div class="flourish-side">
-          <div><span class="label">Prihodi</span><span class="value">${eur(ytd.prihodi, 0)}</span></div>
-          <div><span class="label">Troškovi</span><span class="value">${eur(ytd.troskovi, 0)}</span></div>
-          <div><span class="label">Mjeseca</span><span class="value">${months.length}</span></div>
-          <div><span class="label">Trans. (Trx)</span><span class="value">${months.reduce((a, k) => a + (state.trx[k]?.length || 0), 0)}</span></div>
-        </div>
-      </div>
-    </div>
-
+ 
     <div class="grid grid-cf" style="margin-bottom: 24px;">
       <div class="card">
         <div class="card-head">
@@ -518,26 +501,7 @@ function renderCashflow() {
         <div class="chart-box tall"><canvas id="cf-chart-donut"></canvas></div>
       </div>
     </div>
-
-    <div class="kpi-row" style="margin-bottom: 24px;">
-      <div class="kpi-cell">
-        <div class="stat-label">Limit računa</div>
-        <div class="stat-value">${eur(account.limit, 0)}</div>
-      </div>
-      <div class="kpi-cell">
-        <div class="stat-label">Saldo (kumul.)</div>
-        <div class="stat-value ${account.saldo < 0 ? 'negative' : 'positive'}">${eur(account.saldo, 0)}</div>
-      </div>
-      <div class="kpi-cell">
-        <div class="stat-label">Dostupno</div>
-        <div class="stat-value">${eur(account.dostupno, 0)}</div>
-      </div>
-      <div class="kpi-cell">
-        <div class="stat-label">Profitna marža YTD</div>
-        <div class="stat-value ${ytd.prihodi > 0 && ytd.neto / ytd.prihodi >= 0 ? 'positive' : 'negative'}">${ytd.prihodi > 0 ? FMT_PCT.format(ytd.neto / ytd.prihodi) : '—'}</div>
-      </div>
-    </div>
-
+ 
     <div class="card">
       <div class="card-head">
         <div>
@@ -593,7 +557,7 @@ function renderCashflow() {
       </div>
     </div>
   `;
-
+ 
   // Click row → switch to Trx tab
   panel.querySelectorAll('tbody tr[data-month]').forEach(tr => {
     tr.addEventListener('click', () => {
@@ -601,7 +565,7 @@ function renderCashflow() {
       setTab('trx');
     });
   });
-
+ 
   // CHART: monthly bars
   const ctx1 = document.getElementById('cf-chart-monthly');
   charts.cfMonthly = new Chart(ctx1, {
@@ -619,7 +583,7 @@ function renderCashflow() {
       money: true,
     }),
   });
-
+ 
   // CHART: donut
   const ctx2 = document.getElementById('cf-chart-donut');
   charts.cfDonut = new Chart(ctx2, {
@@ -644,7 +608,7 @@ function renderCashflow() {
     },
   });
 }
-
+ 
 /* Shared chart options */
 function chartOpts(opts = {}) {
   return {
@@ -670,7 +634,7 @@ function chartOpts(opts = {}) {
     },
   };
 }
-
+ 
 /* ============================================================
    RENDER: HOURS (evidencija sati)
    ============================================================ */
@@ -685,7 +649,7 @@ function renderHours() {
   const stats = computeWorkerStats(activeMonth);
   const today = new Date().toISOString().slice(0, 10);
   const workers = state.settings.workers;
-
+ 
   const panel = document.getElementById('panel-hours');
   panel.innerHTML = `
     <div class="page-head">
@@ -697,7 +661,7 @@ function renderHours() {
         ${buildMonthPicker(activeMonth, (m) => { activeMonth = m; ensureMonth(m); renderHours(); }, { allowAdd: true })}
       </div>
     </div>
-
+ 
     <div class="grid grid-cf" style="margin-bottom: 24px;">
       <div class="card">
         <div class="card-head">
@@ -718,7 +682,7 @@ function renderHours() {
         <div class="chart-box"><canvas id="hr-chart-daily"></canvas></div>
       </div>
     </div>
-
+ 
     <div class="card" style="margin-bottom: 24px;">
       <div class="card-head">
         <div>
@@ -778,7 +742,7 @@ function renderHours() {
         </div>
       </div>
     </div>
-
+ 
     <div class="card">
       <div class="card-head">
         <div>
@@ -840,7 +804,7 @@ function renderHours() {
       </div>
     </div>
   `;
-
+ 
   // Cell editing
   if (isAdmin) {
     panel.querySelectorAll('.editable').forEach(td => {
@@ -856,7 +820,10 @@ function renderHours() {
       });
     });
   }
-
+ 
+  // Bind month picker
+  bindMonthPicker(panel, activeMonth, (m) => { activeMonth = m; ensureMonth(m); renderHours(); }, { allowAdd: true });
+ 
   // CHART: bars
   const ctx1 = document.getElementById('hr-chart-bars');
   charts.hrBars = new Chart(ctx1, {
@@ -871,7 +838,7 @@ function renderHours() {
     },
     options: chartOpts({ legend: false, money: false }),
   });
-
+ 
   // CHART: daily line
   const ctx2 = document.getElementById('hr-chart-daily');
   const dailyTotals = days.map(d => {
@@ -897,7 +864,7 @@ function renderHours() {
     options: chartOpts({ legend: false, money: false }),
   });
 }
-
+ 
 function editHourCell(td) {
   if (td.querySelector('input')) return;
   const date = td.dataset.date;
@@ -928,21 +895,23 @@ function editHourCell(td) {
     else if (e.key === 'Escape') { td.textContent = cur || ''; }
   });
 }
-
+ 
 /* ============================================================
    RENDER: TRX
    ============================================================ */
 function renderTrx() {
+  if (trxView === 'year') return renderTrxYear();
+ 
   ensureMonth(activeMonth);
   const items = (state.trx[activeMonth] || []).slice().sort((a, b) => a.date.localeCompare(b.date));
-
+ 
   const byGroup = items.reduce((a, t) => { a[t.group || 'Ostalo'] = (a[t.group || 'Ostalo'] || 0) + t.amount; return a; }, {});
   const byCat = items.filter(t => t.group !== 'Prihodi' && t.group !== 'Isključi').reduce((a, t) => { a[t.category || 'Ostalo'] = (a[t.category || 'Ostalo'] || 0) + t.amount; return a; }, {});
-
+ 
   const totalTroskovi = (byGroup['Tekući'] || 0) + (byGroup['Nepredviđeni'] || 0);
   const totalPrihodi = byGroup['Prihodi'] || 0;
   const neto = totalPrihodi - totalTroskovi;
-
+ 
   const panel = document.getElementById('panel-trx');
   panel.innerHTML = `
     <div class="page-head">
@@ -951,14 +920,18 @@ function renderTrx() {
         <h1 class="page-title">Troškovi <em>· transakcije</em></h1>
       </div>
       <div class="page-actions">
-        ${buildMonthPicker(activeMonth, (m) => { activeMonth = m; renderTrx(); }, { allowAdd: true })}
+        <div class="toggle">
+          <button class="active" data-view="month">Mjesec</button>
+          <button data-view="year">Godišnji</button>
+        </div>
+        ${buildMonthPicker(activeMonth, null, { allowAdd: true })}
         <button class="btn btn-primary admin-only" id="trx-add">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           Dodaj transakciju
         </button>
       </div>
     </div>
-
+ 
     <div class="kpi-row" style="margin-bottom: 24px;">
       <div class="kpi-cell">
         <div class="stat-label">Prihodi</div>
@@ -981,7 +954,7 @@ function renderTrx() {
         <div class="stat-sub">prihodi − troškovi</div>
       </div>
     </div>
-
+ 
     <div class="grid grid-cf" style="margin-bottom: 24px;">
       <div class="card">
         <div class="card-head">
@@ -1002,7 +975,7 @@ function renderTrx() {
         <div class="chart-box"><canvas id="trx-chart-grp"></canvas></div>
       </div>
     </div>
-
+ 
     <div class="card">
       <div class="card-head">
         <div>
@@ -1060,7 +1033,16 @@ function renderTrx() {
       `}
     </div>
   `;
-
+ 
+  // Bind month picker
+  bindMonthPicker(panel, activeMonth, (m) => { activeMonth = m; renderTrx(); }, { allowAdd: true });
+ 
+  // View toggle
+  panel.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => {
+    trxView = b.dataset.view;
+    renderTrx();
+  }));
+ 
   if (isAdmin) {
     panel.querySelector('#trx-add')?.addEventListener('click', () => trxModal());
     panel.querySelectorAll('[data-act="edit-trx"]').forEach(b => b.addEventListener('click', () => trxModal(parseInt(b.dataset.i))));
@@ -1070,7 +1052,7 @@ function renderTrx() {
       if (await saveData()) renderTrx();
     }));
   }
-
+ 
   // CHART: by category (donut)
   const catEntries = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
   const ctx1 = document.getElementById('trx-chart-cat');
@@ -1097,7 +1079,7 @@ function renderTrx() {
       },
     });
   }
-
+ 
   // CHART: by group (horizontal bar)
   const grpEntries = Object.entries(byGroup).filter(([k]) => k !== 'Isključi').sort((a, b) => b[1] - a[1]);
   const ctx2 = document.getElementById('trx-chart-grp');
@@ -1120,13 +1102,163 @@ function renderTrx() {
     });
   }
 }
-
+ 
+function renderTrxYear() {
+  const months = allMonths();
+  // Build category × month matrix (only Tekući + Nepredviđeni)
+  const categories = Array.from(new Set(months.flatMap(k => (state.trx[k] || []).filter(t => t.group === 'Tekući' || t.group === 'Nepredviđeni').map(t => t.category || 'Bez kategorije')))).sort();
+  const matrix = categories.map(c => {
+    const row = { category: c, byMonth: {}, total: 0 };
+    for (const k of months) {
+      const sum = (state.trx[k] || []).filter(t => (t.category || 'Bez kategorije') === c && (t.group === 'Tekući' || t.group === 'Nepredviđeni')).reduce((a, t) => a + t.amount, 0);
+      row.byMonth[k] = sum;
+      row.total += sum;
+    }
+    return row;
+  }).filter(r => r.total > 0).sort((a, b) => b.total - a.total);
+ 
+  const grandTroskovi = matrix.reduce((a, r) => a + r.total, 0);
+  const grandPrihodi = months.reduce((a, k) => a + (state.trx[k] || []).filter(t => t.group === 'Prihodi').reduce((s, t) => s + t.amount, 0), 0);
+  const monthlyTotals = months.reduce((a, k) => { a[k] = matrix.reduce((s, r) => s + r.byMonth[k], 0); return a; }, {});
+  const monthlyPrihodi = months.reduce((a, k) => { a[k] = (state.trx[k] || []).filter(t => t.group === 'Prihodi').reduce((s, t) => s + t.amount, 0); return a; }, {});
+  const grandTrxCount = months.reduce((a, k) => a + (state.trx[k]?.length || 0), 0);
+ 
+  const panel = document.getElementById('panel-trx');
+  panel.innerHTML = `
+    <div class="page-head">
+      <div class="page-title-block">
+        <div class="page-eyebrow">YTD · Godina 2026</div>
+        <h1 class="page-title">Troškovi <em>· godišnji</em></h1>
+      </div>
+      <div class="page-actions">
+        <div class="toggle">
+          <button data-view="month">Mjesec</button>
+          <button class="active" data-view="year">Godišnji</button>
+        </div>
+      </div>
+    </div>
+ 
+    <div class="kpi-row" style="margin-bottom: 24px;">
+      <div class="kpi-cell">
+        <div class="stat-label">Prihodi YTD</div>
+        <div class="stat-value positive">${eur(grandPrihodi, 0)}</div>
+      </div>
+      <div class="kpi-cell">
+        <div class="stat-label">Troškovi YTD</div>
+        <div class="stat-value">${eur(grandTroskovi, 0)}</div>
+      </div>
+      <div class="kpi-cell">
+        <div class="stat-label">Neto YTD</div>
+        <div class="stat-value ${grandPrihodi - grandTroskovi < 0 ? 'negative' : 'positive'}">${eur(grandPrihodi - grandTroskovi, 0)}</div>
+      </div>
+      <div class="kpi-cell">
+        <div class="stat-label">Ukupno transakcija</div>
+        <div class="stat-value">${grandTrxCount}</div>
+      </div>
+    </div>
+ 
+    <div class="card" style="margin-bottom: 24px;">
+      <div class="card-head">
+        <div>
+          <div class="card-title">Distribucija po kategoriji</div>
+          <div class="card-sub">YTD ukupno · samo troškovi</div>
+        </div>
+      </div>
+      <div class="chart-box tall"><canvas id="trx-y-chart"></canvas></div>
+    </div>
+ 
+    <div class="card">
+      <div class="card-head">
+        <div>
+          <div class="card-title">Matrica · kategorija × mjesec</div>
+          <div class="card-sub">€ po kategoriji po mjesecu (Tekući + Nepredviđeni)</div>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Kategorija</th>
+              ${months.map(k => `<th class="text-right">${monthLabelShort(k)}</th>`).join('')}
+              <th class="text-right">UKUPNO</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${matrix.map((r, i) => `
+              <tr>
+                <td>
+                  <span class="project-swatch" style="background: ${PROJECT_PALETTE[i % PROJECT_PALETTE.length]}; display: inline-block; vertical-align: middle; margin-right: 8px;"></span>
+                  <strong>${escapeHtml(r.category)}</strong>
+                </td>
+                ${months.map(k => `<td class="num text-right" style="${r.byMonth[k] === 0 ? 'color: var(--muted-2);' : ''}">${r.byMonth[k] === 0 ? '—' : eur(r.byMonth[k], 0)}</td>`).join('')}
+                <td class="num text-right" style="font-weight: 600;">${eur(r.total, 0)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td>TROŠKOVI UKUPNO</td>
+              ${months.map(k => `<td class="num text-right">${eur(monthlyTotals[k], 0)}</td>`).join('')}
+              <td class="num text-right"><strong>${eur(grandTroskovi, 0)}</strong></td>
+            </tr>
+            <tr>
+              <td style="color: var(--positive);">PRIHODI</td>
+              ${months.map(k => `<td class="num text-right" style="color: var(--positive);">${eur(monthlyPrihodi[k], 0)}</td>`).join('')}
+              <td class="num text-right" style="color: var(--positive);"><strong>${eur(grandPrihodi, 0)}</strong></td>
+            </tr>
+            <tr>
+              <td>NETO</td>
+              ${months.map(k => {
+                const neto = (monthlyPrihodi[k] || 0) - (monthlyTotals[k] || 0);
+                return `<td class="num text-right" style="color: var(--${neto < 0 ? 'negative' : 'positive'});"><strong>${eur(neto, 0)}</strong></td>`;
+              }).join('')}
+              <td class="num text-right" style="color: var(--${grandPrihodi - grandTroskovi < 0 ? 'negative' : 'positive'});"><strong>${eur(grandPrihodi - grandTroskovi, 0)}</strong></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  `;
+ 
+  // View toggle
+  panel.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => {
+    trxView = b.dataset.view;
+    renderTrx();
+  }));
+ 
+  // Donut by category YTD
+  if (matrix.length) {
+    const ctx = document.getElementById('trx-y-chart');
+    charts.trxYear = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: matrix.map(r => r.category),
+        datasets: [{
+          data: matrix.map(r => r.total),
+          backgroundColor: matrix.map((_, i) => PROJECT_PALETTE[i % PROJECT_PALETTE.length]),
+          borderWidth: 2,
+          borderColor: cssVar('--surface'),
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '60%',
+        plugins: {
+          legend: { position: 'right', labels: { font: { family: cssVar('--font-body'), size: 12 }, padding: 10, boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: 'rectRounded' } },
+          tooltip: { callbacks: { label: c => c.label + ': ' + eur(c.raw, 0) } },
+        },
+      },
+    });
+  }
+}
+ 
 function formatDate(s) {
   if (!s) return '';
   const [y, m, d] = s.split('-');
   return `${d}.${m}.`;
 }
-
+ 
 function typePill(t) {
   if (t === 'Prihod') return `<span class="pill green">Prihod</span>`;
   if (t === 'Pozajmnica') return `<span class="pill purple">Pozajmnica</span>`;
@@ -1139,7 +1271,7 @@ function groupPill(g) {
   if (g === 'Isključi') return `<span class="pill gray">${g}</span>`;
   return `<span class="pill gray">${g || '—'}</span>`;
 }
-
+ 
 function trxModal(idx = null) {
   ensureMonth(activeMonth);
   const t = idx !== null ? state.trx[activeMonth][idx] : { date: new Date().toISOString().slice(0, 10), type: 'Trošak', partner: '', amount: 0, category: '', group: 'Tekući' };
@@ -1220,19 +1352,19 @@ function trxModal(idx = null) {
     }
   });
 }
-
+ 
 /* ============================================================
    RENDER: STO
    ============================================================ */
 function renderSto() {
   if (stoView === 'year') return renderStoYear();
-
+ 
   ensureMonth(activeMonth);
   const items = (state.sto[activeMonth] || []).slice().sort((a, b) => a.date.localeCompare(b.date));
   const total = items.reduce((a, t) => a + t.amount, 0);
   const projects = items.reduce((a, t) => { a[t.project || 'Bez projekta'] = (a[t.project || 'Bez projekta'] || 0) + t.amount; return a; }, {});
   const projEntries = Object.entries(projects).sort((a, b) => b[1] - a[1]);
-
+ 
   // YTD by project
   const ytdProj = {};
   for (const k of allMonths()) {
@@ -1241,7 +1373,7 @@ function renderSto() {
     }
   }
   const ytdTotal = Object.values(ytdProj).reduce((a, b) => a + b, 0);
-
+ 
   const panel = document.getElementById('panel-sto');
   panel.innerHTML = `
     <div class="page-head">
@@ -1254,14 +1386,14 @@ function renderSto() {
           <button class="${stoView === 'month' ? 'active' : ''}" data-view="month">Mjesec</button>
           <button class="${stoView === 'year' ? 'active' : ''}" data-view="year">Godišnji</button>
         </div>
-        ${buildMonthPicker(activeMonth, (m) => { activeMonth = m; renderSto(); }, { allowAdd: true })}
+        ${buildMonthPicker(activeMonth, null, { allowAdd: true })}
         <button class="btn btn-primary admin-only" id="sto-add">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           Dodaj
         </button>
       </div>
     </div>
-
+ 
     <div class="kpi-row" style="margin-bottom: 24px;">
       <div class="kpi-cell">
         <div class="stat-label">Ukupno · ${monthLabelShort(activeMonth)}</div>
@@ -1281,7 +1413,7 @@ function renderSto() {
         <div class="stat-value">${eur(ytdTotal, 0)}</div>
       </div>
     </div>
-
+ 
     <div class="grid grid-cf" style="margin-bottom: 24px;">
       <div class="card">
         <div class="card-head">
@@ -1316,7 +1448,7 @@ function renderSto() {
         ` : `<div class="empty">Nema podataka</div>`}
       </div>
     </div>
-
+ 
     <div class="card">
       <div class="card-head">
         <div>
@@ -1376,13 +1508,16 @@ function renderSto() {
       `}
     </div>
   `;
-
+ 
+  // Bind month picker
+  bindMonthPicker(panel, activeMonth, (m) => { activeMonth = m; renderSto(); }, { allowAdd: true });
+ 
   // View toggle
   panel.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => {
     stoView = b.dataset.view;
     renderSto();
   }));
-
+ 
   if (isAdmin) {
     panel.querySelector('#sto-add')?.addEventListener('click', () => stoModal());
     panel.querySelectorAll('[data-act="edit-sto"]').forEach(b => b.addEventListener('click', () => stoModal(parseInt(b.dataset.i))));
@@ -1392,7 +1527,7 @@ function renderSto() {
       if (await saveData()) renderSto();
     }));
   }
-
+ 
   // Trend chart
   const months = allMonths();
   const monthlyTotals = months.map(k => (state.sto[k] || []).reduce((a, t) => a + t.amount, 0));
@@ -1412,7 +1547,7 @@ function renderSto() {
     options: chartOpts({ legend: false, money: true }),
   });
 }
-
+ 
 function renderStoYear() {
   const projects = Array.from(new Set(allMonths().flatMap(k => (state.sto[k] || []).map(t => t.project || 'Bez projekta')))).sort();
   const months = allMonths();
@@ -1429,7 +1564,7 @@ function renderStoYear() {
   matrix.sort((a, b) => b.total - a.total);
   const grandTotal = matrix.reduce((a, r) => a + r.total, 0);
   const monthlyTotals = months.reduce((a, k) => { a[k] = matrix.reduce((s, r) => s + r.byMonth[k], 0); return a; }, {});
-
+ 
   const panel = document.getElementById('panel-sto');
   panel.innerHTML = `
     <div class="page-head">
@@ -1444,7 +1579,7 @@ function renderStoYear() {
         </div>
       </div>
     </div>
-
+ 
     <div class="flourish">
       <div class="flourish-grid">
         <div>
@@ -1460,7 +1595,7 @@ function renderStoYear() {
         </div>
       </div>
     </div>
-
+ 
     <div class="card" style="margin: 24px 0;">
       <div class="card-head">
         <div>
@@ -1470,7 +1605,7 @@ function renderStoYear() {
       </div>
       <div class="chart-box tall"><canvas id="sto-y-chart"></canvas></div>
     </div>
-
+ 
     <div class="card">
       <div class="card-head">
         <div>
@@ -1510,12 +1645,12 @@ function renderStoYear() {
       </div>
     </div>
   `;
-
+ 
   panel.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => {
     stoView = b.dataset.view;
     renderSto();
   }));
-
+ 
   // Donut by project YTD
   const ctx = document.getElementById('sto-y-chart');
   charts.stoYear = new Chart(ctx, {
@@ -1540,7 +1675,7 @@ function renderStoYear() {
     },
   });
 }
-
+ 
 function stoModal(idx = null) {
   ensureMonth(activeMonth);
   const t = idx !== null ? state.sto[activeMonth][idx] : { date: new Date().toISOString().slice(0, 10), amount: 0, project: '', note: '' };
@@ -1606,7 +1741,7 @@ function stoModal(idx = null) {
     }
   });
 }
-
+ 
 /* ============================================================
    RENDER: SETTINGS
    ============================================================ */
@@ -1619,7 +1754,7 @@ function renderSettings() {
         <h1 class="page-title">Postavke <em>i backup</em></h1>
       </div>
     </div>
-
+ 
     <div class="grid grid-2" style="margin-bottom: 24px;">
       <div class="card">
         <div class="card-head">
@@ -1640,7 +1775,7 @@ function renderSettings() {
         </div>
         ${isAdmin ? `<div style="margin-top: 16px;"><button class="btn btn-primary" id="save-general">Spremi promjene</button></div>` : ''}
       </div>
-
+ 
       <div class="card">
         <div class="card-head">
           <div>
@@ -1669,7 +1804,7 @@ function renderSettings() {
         </div>
       </div>
     </div>
-
+ 
     <div class="card" style="margin-bottom: 24px;">
       <div class="card-head">
         <div>
@@ -1717,7 +1852,7 @@ function renderSettings() {
       </div>
       ${isAdmin ? '<div style="margin-top: 16px;"><button class="btn btn-primary" id="save-workers">Spremi promjene radnika</button></div>' : ''}
     </div>
-
+ 
     <div class="card">
       <div class="card-head">
         <div>
@@ -1743,7 +1878,7 @@ function renderSettings() {
       </div>
     </div>
   `;
-
+ 
   // Wire up
   panel.querySelector('#dl-json')?.addEventListener('click', downloadJson);
   panel.querySelector('#dl-xlsx')?.addEventListener('click', downloadXlsx);
@@ -1801,7 +1936,7 @@ function renderSettings() {
     });
   }
 }
-
+ 
 /* ============================================================
    EXPORT FUNCTIONS
    ============================================================ */
@@ -1815,7 +1950,7 @@ function downloadJson() {
   URL.revokeObjectURL(url);
   toast('Backup preuzet', 'success');
 }
-
+ 
 function downloadXlsx() {
   // Lazy-load SheetJS
   if (typeof XLSX === 'undefined') {
@@ -1826,9 +1961,9 @@ function downloadXlsx() {
     toast('Učitavam Excel modul…');
     return;
   }
-
+ 
   const wb = XLSX.utils.book_new();
-
+ 
   // CASHFLOW summary sheet
   const summary = computeCashflowSummary();
   const months = allMonths();
@@ -1842,14 +1977,14 @@ function downloadXlsx() {
     cfRows.push([monthLabel(k), s.prihodi, s.tekuci, s.nepredvideni, s.sto, s.radnici, s.troskoviUkupno, s.neto]);
   }
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(cfRows), 'CASHFLOW');
-
+ 
   // Settings
   const setRows = [['Radnik', 'Satnica', 'Marenda', 'Prijevoz', 'Stan', 'Fiksno']];
   for (const w of state.settings.workers) {
     setRows.push([w.name, w.satnica, w.marenda, w.prijevoz, w.stan, w.fiksno]);
   }
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(setRows), 'Postavke');
-
+ 
   // TRX per month
   for (const k of months) {
     const items = (state.trx[k] || []);
@@ -1858,7 +1993,7 @@ function downloadXlsx() {
     for (const t of items) rows.push([t.date, t.type, t.partner, t.amount, t.category, t.group]);
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), `Trx ${monthLabelShort(k)}`);
   }
-
+ 
   // STO per month
   for (const k of months) {
     const items = (state.sto[k] || []);
@@ -1867,7 +2002,7 @@ function downloadXlsx() {
     for (const t of items) rows.push([t.date, t.amount, t.project, t.note]);
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), `STO ${monthLabelShort(k)}`);
   }
-
+ 
   // Hours per month
   for (const k of Object.keys(state.hours || {})) {
     const h = state.hours[k];
@@ -1880,11 +2015,11 @@ function downloadXlsx() {
     rows.push(['Dodatno', '', ...workers.flatMap(n => [h.extras?.[n] || 0, ''])]);
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), `Sati ${monthLabelShort(k)}`);
   }
-
+ 
   XLSX.writeFile(wb, `stara-rijeka-cashflow-${new Date().toISOString().slice(0,10)}.xlsx`);
   toast('Excel preuzet', 'success');
 }
-
+ 
 /* ============================================================
    BOOT
    ============================================================ */
@@ -1903,7 +2038,7 @@ async function boot() {
     } catch (e) {}
   }
   updateAdminButton();
-
+ 
   try {
     state = await API.load();
     if (!state || !state.settings) throw new Error('Invalid state');
@@ -1921,24 +2056,24 @@ async function boot() {
     `;
     return;
   }
-
+ 
   // Default activeMonth = latest available
   const months = allMonths();
   if (months.length) activeMonth = months[months.length - 1];
-
+ 
   // Wire tabs
   document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
-
+ 
   // Wire admin button
   document.getElementById('adminBtn').addEventListener('click', showPinModal);
-
+ 
   // Hide boot
   setTimeout(() => document.getElementById('boot').classList.add('hidden'), 200);
-
+ 
   // Initial render
   rerenderActive();
 }
-
+ 
 document.addEventListener('DOMContentLoaded', boot);
-
+ 
 })();
