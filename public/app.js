@@ -641,7 +641,7 @@ function chartOpts(opts = {}) {
 }
  
 /* ============================================================
-   RENDER: HOURS (evidencija sati)
+   RENDER: HOURS (evidencija sati) — kompletni redizajn
    ============================================================ */
 function renderHours() {
   const months = allMonths().filter(m => state.hours[m]);
@@ -663,7 +663,7 @@ function renderHours() {
         <h1 class="page-title">Evidencija <em>sati</em></h1>
       </div>
       <div class="page-actions">
-        ${buildMonthPicker(activeMonth, (m) => { activeMonth = m; ensureMonth(m); renderHours(); }, { allowAdd: true })}
+        ${buildMonthPicker(activeMonth, null, { allowAdd: true })}
       </div>
     </div>
  
@@ -692,22 +692,17 @@ function renderHours() {
       <div class="card-head">
         <div>
           <div class="card-title">Dnevni unos sati</div>
-          <div class="card-sub">${isAdmin ? 'Klikni ćeliju za izmjenu' : 'Pregled · za izmjene aktiviraj admin mod'}</div>
+          <div class="card-sub">${isAdmin ? 'Klikni red dana za brzi unos · Tab za navigaciju · Cmd+← / Cmd+→ za prethodni/sljedeći dan' : 'Pregled · za izmjene aktiviraj admin mod'}</div>
         </div>
       </div>
       <div class="hours-table-wrap">
         <div class="hours-scroll">
-          <table class="hours-table">
+          <table class="hours-table hours-table-v2">
             <thead>
               <tr>
                 <th>Datum</th>
-                ${workers.map(w => `<th class="worker-col" colspan="2">${escapeHtml(w.name)}</th>`).join('')}
+                ${workers.map(w => `<th class="worker-col">${escapeHtml(w.name)}</th>`).join('')}
                 <th>Σ Dan</th>
-              </tr>
-              <tr>
-                <th></th>
-                ${workers.map(() => `<th>Sati</th><th>Mar.</th>`).join('')}
-                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -715,20 +710,35 @@ function renderHours() {
                 const dayData = h.days.find(x => x.date === d.date);
                 const isWk = d.isWeekend;
                 const isToday = d.date === today;
+                const note = dayData?.note || '';
                 let dailySum = 0;
                 const cells = workers.map(w => {
-                  const wd = (dayData?.workers || {})[w.name] || { hours: 0, marenda: 0 };
+                  const wd = (dayData?.workers || {})[w.name] || { hours: 0, marenda: 0, project: '' };
                   if (wd.hours > 0) dailySum += wd.hours;
+                  if (wd.hours === 0 && !wd.project) {
+                    return `<td class="hcell empty"><span class="hc-dash">—</span></td>`;
+                  }
                   return `
-                    <td class="hours-cell editable" data-date="${d.date}" data-worker="${escapeHtml(w.name)}" data-field="hours">${wd.hours || ''}</td>
-                    <td class="hours-cell editable" data-date="${d.date}" data-worker="${escapeHtml(w.name)}" data-field="marenda" style="color: var(--muted);">${wd.marenda || ''}</td>
+                    <td class="hcell ${wd.hours > 0 ? 'has-hours' : ''}">
+                      <div class="hc-top">
+                        <span class="hc-hours">${wd.hours || 0}</span>
+                        <span class="hc-mar">${wd.marenda || 0}</span>
+                      </div>
+                      ${wd.project ? `<div class="hc-proj">${escapeHtml(wd.project)}</div>` : ''}
+                    </td>
                   `;
                 }).join('');
                 return `
-                  <tr class="${isWk ? 'weekend' : ''} ${isToday ? 'today' : ''}">
-                    <td><span class="day-num">${d.day}.</span><span class="day-name">${d.dayName}</span></td>
+                  <tr class="day-row ${isWk ? 'weekend' : ''} ${isToday ? 'today' : ''} ${isAdmin ? 'clickable' : ''}" data-date="${d.date}">
+                    <td class="day-cell">
+                      <div class="day-head">
+                        <span class="day-num">${d.day}.</span>
+                        <span class="day-name">${d.dayName}</span>
+                      </div>
+                      ${note ? `<div class="day-note" title="${escapeHtml(note)}">📝 ${escapeHtml(note)}</div>` : (isAdmin ? `<div class="day-note empty">+ napomena</div>` : '')}
+                    </td>
                     ${cells}
-                    <td class="hours-cell"><strong>${dailySum > 0 ? dailySum : ''}</strong></td>
+                    <td class="hcell sum"><strong>${dailySum > 0 ? dailySum : ''}</strong></td>
                   </tr>
                 `;
               }).join('')}
@@ -738,9 +748,11 @@ function renderHours() {
                 <td>Ukupno</td>
                 ${workers.map(w => {
                   const s = stats.find(x => x.name === w.name);
-                  return `<td class="hours-cell"><strong>${s?.totalHours || 0}</strong></td><td class="hours-cell">${s?.totalMarenda || 0}</td>`;
+                  return `<td class="hcell sum">
+                    <div class="hc-top"><strong>${s?.totalHours || 0}</strong><span class="hc-mar">${s?.totalMarenda || 0}</span></div>
+                  </td>`;
                 }).join('')}
-                <td class="hours-cell"><strong>${stats.reduce((a, s) => a + s.totalHours, 0)}</strong></td>
+                <td class="hcell sum"><strong>${stats.reduce((a, s) => a + s.totalHours, 0)}</strong></td>
               </tr>
             </tfoot>
           </table>
@@ -810,10 +822,14 @@ function renderHours() {
     </div>
   `;
  
-  // Cell editing
+  // Click row → open day modal (admin only)
   if (isAdmin) {
-    panel.querySelectorAll('.editable').forEach(td => {
-      td.addEventListener('click', () => editHourCell(td));
+    panel.querySelectorAll('.day-row.clickable').forEach(tr => {
+      tr.addEventListener('click', (e) => {
+        // Don't open if user clicked on something interactive
+        if (e.target.closest('input, button, select')) return;
+        openDayModal(tr.dataset.date);
+      });
     });
     panel.querySelectorAll('input[data-extra-worker]').forEach(inp => {
       inp.addEventListener('change', async () => {
@@ -826,7 +842,6 @@ function renderHours() {
     });
   }
  
-  // Bind month picker
   bindMonthPicker(panel, activeMonth, (m) => { activeMonth = m; ensureMonth(m); renderHours(); }, { allowAdd: true });
  
   // CHART: bars
@@ -872,36 +887,208 @@ function renderHours() {
   });
 }
  
-function editHourCell(td) {
-  if (td.querySelector('input')) return;
-  const date = td.dataset.date;
-  const worker = td.dataset.worker;
-  const field = td.dataset.field;
-  const cur = parseFloat(td.textContent) || '';
-  td.innerHTML = `<input class="input cell-edit" type="number" step="0.5" value="${cur}" autofocus />`;
-  const inp = td.querySelector('input');
-  inp.focus();
-  inp.select();
-  const commit = async () => {
-    const val = parseFloat(inp.value);
+/* ============================================================
+   DAY MODAL — brzi unos cijelog dana
+   ============================================================ */
+function openDayModal(dateStr) {
+  ensureMonth(activeMonth);
+  const workers = state.settings.workers;
+ 
+  // Find day or create skeleton
+  let day = state.hours[activeMonth].days.find(d => d.date === dateStr);
+  if (!day) {
+    const dn = DAY_NAMES_HR[new Date(dateStr).getDay()];
+    day = { date: dateStr, day_name: dn, note: '', workers: {} };
+  }
+ 
+  // Auto-suggest projects from previous day
+  const allDays = state.hours[activeMonth].days.slice().sort((a, b) => a.date.localeCompare(b.date));
+  const dayIdx = daysInMonth(activeMonth).findIndex(d => d.date === dateStr);
+  const prevDateStr = dayIdx > 0 ? daysInMonth(activeMonth)[dayIdx - 1].date : null;
+  const prevDay = prevDateStr ? allDays.find(d => d.date === prevDateStr) : null;
+ 
+  // All known projects (for datalist)
+  const knownProjects = Array.from(new Set(
+    state.hours[activeMonth].days.flatMap(d =>
+      Object.values(d.workers || {}).map(w => w.project)
+    ).filter(Boolean)
+  )).sort();
+ 
+  // Date display
+  const dt = new Date(dateStr);
+  const dayName = DAY_NAMES_HR[dt.getDay()];
+  const dateLabel = `${dt.getDate()}. ${MONTH_NAMES_HR[dt.getMonth()]} ${dt.getFullYear()}`;
+ 
+  // Adjacent dates for nav
+  const monthDays = daysInMonth(activeMonth);
+  const curIdx = monthDays.findIndex(d => d.date === dateStr);
+  const prevDate = curIdx > 0 ? monthDays[curIdx - 1].date : null;
+  const nextDate = curIdx < monthDays.length - 1 ? monthDays[curIdx + 1].date : null;
+ 
+  const html = `
+    <div class="modal-title">${dateLabel} · <em style="color: var(--muted); font-style: italic; font-weight: 400;">${dayName}</em></div>
+    <div class="modal-sub">Tab za navigaciju · ⌘+←/→ za prethodni/sljedeći dan · Esc za zatvaranje</div>
+ 
+    <div class="day-modal-grid">
+      <div class="field" style="grid-column: 1 / -1; margin-bottom: 8px;">
+        <label class="field-label">Napomena za dan (opcionalno)</label>
+        <input class="input" id="day-note" value="${escapeHtml(day.note || '')}" placeholder="Npr. Uskrs, Hasan - MUP, Roky trbuh…" tabindex="1">
+      </div>
+ 
+      <div class="day-workers-grid">
+        <div class="day-worker-head">
+          <div>Radnik</div>
+          <div>Projekt</div>
+          <div>Sati</div>
+          <div>Mar.</div>
+        </div>
+        ${workers.map((w, i) => {
+          const wd = day.workers[w.name] || { project: '', hours: 0, marenda: 0 };
+          // Auto-suggest projekt iz prethodnog dana ako prazan i nemamo unos
+          const suggestedProj = wd.project || (prevDay?.workers?.[w.name]?.project) || '';
+          const isSuggestion = !wd.project && suggestedProj;
+          return `
+            <div class="day-worker-row">
+              <div class="dw-name">${escapeHtml(w.name)}</div>
+              <input class="input dw-proj ${isSuggestion ? 'is-suggestion' : ''}" list="day-projects"
+                     data-w="${escapeHtml(w.name)}" data-f="project"
+                     value="${escapeHtml(suggestedProj)}"
+                     placeholder="Projekt"
+                     tabindex="${2 + i * 3}">
+              <input class="input dw-hours" type="number" step="0.5" inputmode="decimal"
+                     data-w="${escapeHtml(w.name)}" data-f="hours"
+                     value="${wd.hours || ''}"
+                     placeholder="0"
+                     tabindex="${3 + i * 3}">
+              <input class="input dw-mar" type="number" step="0.5" inputmode="decimal"
+                     data-w="${escapeHtml(w.name)}" data-f="marenda"
+                     value="${wd.marenda || ''}"
+                     placeholder="0"
+                     tabindex="${4 + i * 3}">
+            </div>
+          `;
+        }).join('')}
+      </div>
+      <datalist id="day-projects">
+        ${knownProjects.map(p => `<option value="${escapeHtml(p)}"></option>`).join('')}
+      </datalist>
+    </div>
+ 
+    <div class="modal-actions" style="justify-content: space-between;">
+      <div style="display: flex; gap: 6px;">
+        <button class="btn" data-act="prev-day" ${!prevDate ? 'disabled' : ''} title="Prethodni dan (⌘+←)">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          Prethodni
+        </button>
+        <button class="btn" data-act="next-day" ${!nextDate ? 'disabled' : ''} title="Sljedeći dan (⌘+→)">
+          Sljedeći
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn" data-act="cancel">Odustani</button>
+        <button class="btn btn-primary" data-act="save">Spremi</button>
+      </div>
+    </div>
+  `;
+ 
+  const m = modal(html, { wide: true });
+ 
+  // Auto-fokus prvi sati input
+  const firstHours = m.root.querySelector('.dw-hours');
+  if (firstHours) setTimeout(() => firstHours.focus(), 50);
+ 
+  // Auto-fill marenda kad sati > 0 i marenda prazna
+  m.root.querySelectorAll('.dw-hours').forEach(inp => {
+    inp.addEventListener('change', () => {
+      const wName = inp.dataset.w;
+      const w = workers.find(x => x.name === wName);
+      const marInp = m.root.querySelector(`input.dw-mar[data-w="${CSS.escape(wName)}"]`);
+      const v = parseFloat(inp.value);
+      if (v > 0 && marInp && !marInp.value && w) {
+        marInp.value = w.marenda || 0;
+      } else if (!v && marInp) {
+        marInp.value = '';
+      }
+    });
+  });
+ 
+  // Suggestion class drops on input (no longer suggestion once edited)
+  m.root.querySelectorAll('.dw-proj.is-suggestion').forEach(inp => {
+    inp.addEventListener('input', () => inp.classList.remove('is-suggestion'), { once: true });
+  });
+ 
+  const collect = () => {
+    const newDay = {
+      date: dateStr,
+      day_name: dayName,
+      note: m.root.querySelector('#day-note').value.trim(),
+      workers: {}
+    };
+    workers.forEach(w => {
+      const projInp = m.root.querySelector(`input.dw-proj[data-w="${CSS.escape(w.name)}"]`);
+      const hInp = m.root.querySelector(`input.dw-hours[data-w="${CSS.escape(w.name)}"]`);
+      const mInp = m.root.querySelector(`input.dw-mar[data-w="${CSS.escape(w.name)}"]`);
+      newDay.workers[w.name] = {
+        project: (projInp.value || '').trim(),
+        hours: parseFloat(hInp.value) || 0,
+        marenda: parseFloat(mInp.value) || 0,
+      };
+    });
+    return newDay;
+  };
+ 
+  const save = async (afterSave) => {
+    const newDay = collect();
     ensureMonth(activeMonth);
-    let day = state.hours[activeMonth].days.find(d => d.date === date);
-    if (!day) {
-      const dn = DAY_NAMES_HR[new Date(date).getDay()];
-      day = { date, day_name: dn, note: '', workers: {} };
-      state.hours[activeMonth].days.push(day);
+    const idx = state.hours[activeMonth].days.findIndex(d => d.date === dateStr);
+    if (idx >= 0) state.hours[activeMonth].days[idx] = newDay;
+    else {
+      state.hours[activeMonth].days.push(newDay);
       state.hours[activeMonth].days.sort((a, b) => a.date.localeCompare(b.date));
     }
-    if (!day.workers[worker]) day.workers[worker] = { project: '', hours: 0, marenda: 0 };
-    day.workers[worker][field] = isNaN(val) ? 0 : val;
-    if (await saveData()) renderHours();
+    if (await saveData()) {
+      renderHours();
+      if (afterSave) afterSave();
+      else m.close();
+    }
   };
-  inp.addEventListener('blur', commit);
-  inp.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
-    else if (e.key === 'Escape') { td.textContent = cur || ''; }
+ 
+  const moveTo = async (newDate) => {
+    if (!newDate) return;
+    await save(() => {
+      m.close();
+      setTimeout(() => openDayModal(newDate), 50);
+    });
+  };
+ 
+  // Click handlers
+  m.root.addEventListener('click', async e => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    if (btn.dataset.act === 'cancel') m.close();
+    else if (btn.dataset.act === 'save') save();
+    else if (btn.dataset.act === 'prev-day') moveTo(prevDate);
+    else if (btn.dataset.act === 'next-day') moveTo(nextDate);
   });
+ 
+  // Keyboard shortcuts
+  const keyHandler = (e) => {
+    if (!m.root.isConnected) {
+      document.removeEventListener('keydown', keyHandler);
+      return;
+    }
+    if ((e.metaKey || e.ctrlKey) && e.key === 'ArrowLeft') {
+      e.preventDefault(); moveTo(prevDate);
+    } else if ((e.metaKey || e.ctrlKey) && e.key === 'ArrowRight') {
+      e.preventDefault(); moveTo(nextDate);
+    } else if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault(); save();
+    }
+  };
+  document.addEventListener('keydown', keyHandler);
 }
+ 
  
 /* ============================================================
    RENDER: TRX
