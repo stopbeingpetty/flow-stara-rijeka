@@ -306,9 +306,9 @@ function computeCashflowSummary() {
 }
 
 function computeWorkersTotal(monthKey) {
-  const h = state.hours[monthKey];
-  if (!h) return 0;
-  return Object.values(h.extras || {}).reduce((a, b) => a + (Number(b) || 0), 0);
+  // Total worker payout for cashflow = Σ Sveukupno za sve radnike
+  const stats = computeWorkerStats(monthKey);
+  return stats.reduce((a, s) => a + (s.sveukupno || 0), 0);
 }
 
 function computeWorkerStats(monthKey) {
@@ -325,11 +325,30 @@ function computeWorkerStats(monthKey) {
       }
     }
     const zaradaSati = totalHours * w.satnica;
-    const manualDodatno = (h.extras && h.extras[w.name]) || 0;
     // Auto-formula: ako radnik ima satnicu > 0 → Dodatno = Zarada + Marenda − Fiksno
-    //               ako satnica = 0 (npr. Dragan) → Dodatno ostaje ručni unos
+    //               ako satnica = 0 (npr. Dragan) → Dodatno je uvijek ručni unos
     const isAutoCalculated = w.satnica > 0;
-    const dodatno = isAutoCalculated ? (zaradaSati + totalMarenda - w.fiksno) : manualDodatno;
+    const autoDodatno = isAutoCalculated ? (zaradaSati + totalMarenda - w.fiksno) : 0;
+    // Manual override is stored in extras[name]. Special object shape: { override: number } means user manually set it.
+    // For backward compat / non-auto workers, plain number in extras means manual.
+    const extra = h.extras && h.extras[w.name];
+    let dodatno, isOverridden = false;
+    if (extra !== null && extra !== undefined && typeof extra === 'object' && 'override' in extra) {
+      dodatno = Number(extra.override) || 0;
+      isOverridden = isAutoCalculated && Math.abs(dodatno - autoDodatno) > 0.005;
+    } else if (typeof extra === 'number') {
+      // For non-auto worker (Dragan): plain number = manual unos
+      // For auto worker: legacy plain number — treat as override only if it differs from auto
+      if (isAutoCalculated) {
+        dodatno = extra;
+        isOverridden = Math.abs(dodatno - autoDodatno) > 0.005;
+      } else {
+        dodatno = extra;
+        isOverridden = false;
+      }
+    } else {
+      dodatno = autoDodatno;
+    }
     // Sveukupno = Dodatno + Fiksno + Prijevoz + Stan
     const sveukupno = dodatno + w.fiksno + w.prijevoz + w.stan;
     return {
@@ -343,7 +362,8 @@ function computeWorkerStats(monthKey) {
       stan: w.stan,
       fiksno: w.fiksno,
       dodatno,
-      manualDodatno,
+      autoDodatno,
+      isOverridden,
       isAutoCalculated,
       sveukupno,
     };
@@ -807,11 +827,26 @@ function renderHours() {
                 <td class="num text-right">${eur(s.stan, 0)}</td>
                 <td class="num text-right">${eur(s.fiksno, 0)}</td>
                 <td class="num text-right">
-                  ${s.isAutoCalculated
-                    ? `<span title="Auto: Zarada + Marenda − Fiksno"><strong>${eur(s.dodatno, 2)}</strong></span>`
-                    : (isAdmin
-                        ? `<input class="input cell-edit" type="number" step="any" value="${s.dodatno}" data-extra-worker="${escapeHtml(s.name)}" style="width: 100px; margin-left: auto;">`
-                        : `<strong>${eur(s.dodatno, 0)}</strong>`)}
+                  ${(() => {
+                    if (!s.isAutoCalculated) {
+                      // Dragan-style: pure manual
+                      return isAdmin
+                        ? `<input class="input cell-edit" type="number" step="any" value="${s.dodatno}" data-extra-worker="${escapeHtml(s.name)}" data-extra-mode="manual" style="width: 100px; margin-left: auto;">`
+                        : `<strong>${eur(s.dodatno, 0)}</strong>`;
+                    }
+                    // Auto-calculated worker
+                    if (isAdmin) {
+                      const tooltipText = s.isOverridden
+                        ? `Auto bi bilo: ${eur(s.autoDodatno, 2)} · klikni × za reset`
+                        : `Auto: Zarada + Marenda − Fiksno · klikni za ručnu izmjenu`;
+                      return `<div class="dodatno-cell ${s.isOverridden ? 'overridden' : ''}" title="${escapeHtml(tooltipText)}">
+                        ${s.isOverridden ? `<button class="dodatno-reset" data-reset-worker="${escapeHtml(s.name)}" title="Vrati na auto (${eur(s.autoDodatno, 2)})" aria-label="Reset">×</button>` : ''}
+                        <input class="input cell-edit dodatno-input" type="number" step="any" value="${s.dodatno}" data-extra-worker="${escapeHtml(s.name)}" data-extra-mode="auto" data-auto-value="${s.autoDodatno}" style="width: 100px;">
+                        ${s.isOverridden ? `<span class="dodatno-mark" title="Ručno postavljeno">✎</span>` : ''}
+                      </div>`;
+                    }
+                    return `<strong>${eur(s.dodatno, 2)}</strong>${s.isOverridden ? ` <span class="dodatno-mark-readonly" title="Ručno postavljeno">✎</span>` : ''}`;
+                  })()}
                 </td>
                 <td class="num text-right" style="background: var(--positive-soft); color: var(--positive); font-weight: 700;">${eur(s.sveukupno, 2)}</td>
               </tr>
@@ -848,10 +883,37 @@ function renderHours() {
     panel.querySelectorAll('input[data-extra-worker]').forEach(inp => {
       inp.addEventListener('change', async () => {
         const w = inp.dataset.extraWorker;
+        const mode = inp.dataset.extraMode;
         ensureMonth(activeMonth);
         if (!state.hours[activeMonth].extras) state.hours[activeMonth].extras = {};
-        state.hours[activeMonth].extras[w] = parseFloat(inp.value) || 0;
+        const newVal = parseFloat(inp.value) || 0;
+
+        if (mode === 'auto') {
+          // Auto-calculated worker: only store override if value differs from auto
+          const autoVal = parseFloat(inp.dataset.autoValue) || 0;
+          if (Math.abs(newVal - autoVal) < 0.005) {
+            // Reverted to auto value → remove override
+            delete state.hours[activeMonth].extras[w];
+          } else {
+            state.hours[activeMonth].extras[w] = { override: newVal };
+          }
+        } else {
+          // Manual worker (Dragan): store as plain number
+          state.hours[activeMonth].extras[w] = newVal;
+        }
         if (await saveData()) renderHours();
+      });
+    });
+    // Reset override → delete extras[w]
+    panel.querySelectorAll('button[data-reset-worker]').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const w = btn.dataset.resetWorker;
+        ensureMonth(activeMonth);
+        if (state.hours[activeMonth].extras && w in state.hours[activeMonth].extras) {
+          delete state.hours[activeMonth].extras[w];
+          if (await saveData()) renderHours();
+        }
       });
     });
   }
@@ -2222,7 +2284,12 @@ function downloadXlsx() {
     for (const d of h.days) {
       rows.push([d.date, d.day_name, ...workers.flatMap(n => [d.workers?.[n]?.hours || 0, d.workers?.[n]?.marenda || 0])]);
     }
-    rows.push(['Dodatno', '', ...workers.flatMap(n => [h.extras?.[n] || 0, ''])]);
+    // Compute proper Dodatno (auto + override) for each worker
+    const monthStats = computeWorkerStats(k);
+    rows.push(['Dodatno', '', ...workers.flatMap(n => {
+      const s = monthStats.find(x => x.name === n);
+      return [s ? s.dodatno : 0, ''];
+    })]);
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), `Sati ${monthLabelShort(k)}`);
   }
 
