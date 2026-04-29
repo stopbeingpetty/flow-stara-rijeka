@@ -543,6 +543,45 @@ body.admin-mode .admin-only.is-block { display: block !important; }
   cursor: help;
 }
 
+/* Dug badge - subtle indicator under worker name */
+.dug-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 500;
+  padding: 1px 6px;
+  margin-left: 8px;
+  border-radius: 3px;
+  background: var(--negative-soft);
+  color: var(--negative);
+  letter-spacing: 0.02em;
+  font-family: var(--font-mono);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.dug-badge.editable {
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.dug-badge.editable:hover {
+  background: var(--negative);
+  color: #fff;
+}
+.dug-badge.add {
+  background: transparent;
+  color: var(--muted-2);
+  border: 1px dashed var(--line-strong);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+tr:hover .dug-badge.add {
+  opacity: 1;
+}
+.dug-badge.add:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
 /* ============================================================
    INPUTS
    ============================================================ */
