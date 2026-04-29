@@ -20,7 +20,7 @@
   --font-display: 'Newsreader', Georgia, 'Times New Roman', serif;
   --font-body: 'Geist', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
- 
+
   /* Foundation */
   --bg: #fafaf7;
   --surface: #ffffff;
@@ -31,7 +31,7 @@
   --muted-2: #9a9a9a;
   --line: #e8e6df;
   --line-strong: #d4d2cb;
- 
+
   /* Tab accents */
   --acc-cashflow: #1e3a5f;
   --acc-cashflow-soft: #e8edf3;
@@ -44,14 +44,14 @@
   --acc-sto-soft: #fff8d1;
   --acc-settings: #2c5f5d;
   --acc-settings-soft: #e1ecec;
- 
+
   /* Semantics */
   --positive: #1f6b3a;
   --positive-soft: #e3f1e8;
   --negative: #9b2c2c;
   --negative-soft: #f6e4e4;
   --warning: #b8860b;
- 
+
   /* Geometry */
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -60,23 +60,23 @@
   --shadow-sm: 0 1px 2px rgba(15,15,15,0.04), 0 1px 3px rgba(15,15,15,0.06);
   --shadow-md: 0 4px 12px rgba(15,15,15,0.06), 0 2px 4px rgba(15,15,15,0.04);
   --shadow-lg: 0 12px 32px rgba(15,15,15,0.08), 0 4px 12px rgba(15,15,15,0.05);
- 
+
   /* Motion */
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-snap: cubic-bezier(0.4, 0, 0.2, 1);
- 
+
   /* Layout */
   --max-w: 1280px;
   --gutter: 24px;
 }
- 
+
 /* Active tab dynamic vars (set on body) */
 body[data-tab="cashflow"] { --acc: var(--acc-cashflow); --acc-soft: var(--acc-cashflow-soft); --acc-ink: #fff; }
 body[data-tab="hours"]    { --acc: var(--acc-hours);    --acc-soft: var(--acc-hours-soft);    --acc-ink: #fff; }
 body[data-tab="trx"]      { --acc: var(--acc-trx);      --acc-soft: var(--acc-trx-soft);      --acc-ink: #fff; }
 body[data-tab="sto"]      { --acc: var(--acc-sto);      --acc-soft: var(--acc-sto-soft);      --acc-ink: var(--acc-sto-ink); }
 body[data-tab="settings"] { --acc: var(--acc-settings); --acc-soft: var(--acc-settings-soft); --acc-ink: #fff; }
- 
+
 /* ============================================================
    RESET
    ============================================================ */
@@ -105,7 +105,7 @@ a { color: inherit; text-decoration: none; }
 table { border-collapse: collapse; width: 100%; }
 img, svg { display: block; max-width: 100%; }
 [hidden] { display: none !important; }
- 
+
 /* ============================================================
    TYPOGRAPHY UTILITIES
    ============================================================ */
@@ -116,12 +116,12 @@ img, svg { display: block; max-width: 100%; }
   text-transform: uppercase; color: var(--muted);
 }
 .num { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum'; }
- 
+
 /* ============================================================
    APP SHELL
    ============================================================ */
 .app { min-height: 100dvh; display: flex; flex-direction: column; }
- 
+
 /* Top bar */
 .topbar {
   position: sticky; top: 0; z-index: 50;
@@ -159,9 +159,9 @@ img, svg { display: block; max-width: 100%; }
   font-size: 11px; color: var(--muted); letter-spacing: 0.04em;
   white-space: nowrap;
 }
- 
+
 .topbar-actions { display: flex; align-items: center; gap: 8px; }
- 
+
 .btn-icon {
   width: 38px; height: 38px;
   border-radius: 10px;
@@ -178,7 +178,7 @@ img, svg { display: block; max-width: 100%; }
   color: var(--positive);
 }
 .btn-icon svg { width: 18px; height: 18px; }
- 
+
 .connection-dot {
   width: 8px; height: 8px; border-radius: 50%;
   background: var(--muted-2);
@@ -191,7 +191,7 @@ img, svg { display: block; max-width: 100%; }
   0%,100% { opacity: 1; }
   50% { opacity: 0.4; }
 }
- 
+
 /* ============================================================
    TAB NAVIGATION
    ============================================================ */
@@ -211,7 +211,7 @@ img, svg { display: block; max-width: 100%; }
   -ms-overflow-style: none;
 }
 .tabs-inner::-webkit-scrollbar { display: none; }
- 
+
 .tab {
   padding: 14px 16px; flex-shrink: 0;
   display: flex; align-items: center; gap: 8px;
@@ -233,7 +233,7 @@ img, svg { display: block; max-width: 100%; }
 .tab[data-tab="trx"]       .tab-dot { background: var(--acc-trx); }
 .tab[data-tab="sto"]       .tab-dot { background: var(--acc-sto); border: 1px solid var(--ink); }
 .tab[data-tab="settings"]  .tab-dot { background: var(--acc-settings); }
- 
+
 /* ============================================================
    MAIN CONTENT
    ============================================================ */
@@ -243,14 +243,14 @@ img, svg { display: block; max-width: 100%; }
   width: 100%;
   padding: 32px var(--gutter) 80px;
 }
- 
+
 .tab-panel { display: none; animation: fadeUp 0.5s var(--ease) both; }
 .tab-panel.active { display: block; }
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
- 
+
 /* Page header inside each tab */
 .page-head {
   display: flex; align-items: flex-end; justify-content: space-between;
@@ -282,7 +282,7 @@ img, svg { display: block; max-width: 100%; }
   color: var(--muted);
 }
 .page-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
- 
+
 /* Month picker */
 .month-picker {
   display: inline-flex; align-items: center;
@@ -304,7 +304,7 @@ img, svg { display: block; max-width: 100%; }
   font-size: 15px; letter-spacing: -0.01em;
   min-width: 130px; text-align: center;
 }
- 
+
 /* ============================================================
    CARDS
    ============================================================ */
@@ -332,18 +332,18 @@ img, svg { display: block; max-width: 100%; }
   font-size: 12px; color: var(--muted);
   margin-top: 2px;
 }
- 
+
 /* Grid layouts */
 .grid { display: grid; gap: 20px; }
 .grid-2 { grid-template-columns: repeat(2, 1fr); }
 .grid-3 { grid-template-columns: repeat(3, 1fr); }
 .grid-4 { grid-template-columns: repeat(4, 1fr); }
 .grid-cf { grid-template-columns: 1.4fr 1fr; }
- 
+
 @media (max-width: 980px) {
   .grid-cf, .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
 }
- 
+
 /* ============================================================
    STAT BLOCKS
    ============================================================ */
@@ -371,7 +371,7 @@ img, svg { display: block; max-width: 100%; }
 .stat-sub .delta { padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600; }
 .stat-sub .delta.up { background: var(--positive-soft); color: var(--positive); }
 .stat-sub .delta.down { background: var(--negative-soft); color: var(--negative); }
- 
+
 /* KPI ribbon */
 .kpi-row {
   display: grid; gap: 1px;
@@ -386,7 +386,7 @@ img, svg { display: block; max-width: 100%; }
   padding: 18px 20px;
   display: flex; flex-direction: column; gap: 6px;
 }
- 
+
 /* ============================================================
    BUTTONS
    ============================================================ */
@@ -409,7 +409,7 @@ img, svg { display: block; max-width: 100%; }
 .btn:active:not(:disabled) { transform: translateY(0); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .btn svg { width: 16px; height: 16px; }
- 
+
 .btn-primary {
   background: var(--acc); color: var(--acc-ink);
   border-color: var(--acc);
@@ -420,12 +420,12 @@ img, svg { display: block; max-width: 100%; }
 }
 .btn-ghost { background: transparent; border-color: transparent; }
 .btn-ghost:hover { background: var(--surface-2); }
- 
+
 .btn-danger { color: var(--negative); }
 .btn-danger:hover { background: var(--negative-soft); border-color: var(--negative); }
- 
+
 .btn-sm { padding: 6px 10px; font-size: 13px; }
- 
+
 /* ============================================================
    TABLES
    ============================================================ */
@@ -469,7 +469,7 @@ img, svg { display: block; max-width: 100%; }
   border-top: 2px solid var(--line-strong);
   border-bottom: none;
 }
- 
+
 /* Pill / tag */
 .pill {
   display: inline-flex; align-items: center; gap: 4px;
@@ -485,12 +485,64 @@ img, svg { display: block; max-width: 100%; }
 .pill.yellow { background: var(--acc-sto-soft); color: var(--ink); border: 1px solid #e8c200; }
 .pill.gray { background: var(--surface-2); color: var(--muted); }
 .pill.purple { background: #efe7f3; color: #6b3fa0; }
- 
+
 /* Edit-mode controls hidden by default */
 .admin-only { display: none !important; }
 body.admin-mode .admin-only { display: inline-flex !important; }
 body.admin-mode .admin-only.is-block { display: block !important; }
- 
+
+/* Dodatno cell with override controls */
+.dodatno-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  position: relative;
+}
+.dodatno-cell .input.cell-edit {
+  width: 100px;
+  padding: 4px 6px;
+  font-family: var(--font-mono);
+  text-align: right;
+}
+.dodatno-cell.overridden .input.cell-edit {
+  border-color: var(--acc-cashflow);
+  background: #f7fafd;
+  font-weight: 600;
+}
+.dodatno-cell .dodatno-mark {
+  font-size: 11px;
+  color: var(--acc-cashflow);
+  cursor: help;
+  user-select: none;
+}
+.dodatno-cell .dodatno-reset {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--muted);
+  border: 1px solid var(--line-strong);
+  font-size: 13px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: all 0.12s;
+}
+.dodatno-cell .dodatno-reset:hover {
+  background: var(--negative-soft);
+  color: var(--negative);
+  border-color: var(--negative);
+}
+.dodatno-mark-readonly {
+  font-size: 11px;
+  color: var(--acc-cashflow);
+  margin-left: 4px;
+  cursor: help;
+}
+
 /* ============================================================
    INPUTS
    ============================================================ */
@@ -520,7 +572,7 @@ body.admin-mode .admin-only.is-block { display: block !important; }
   font-size: 12px; font-weight: 500;
   color: var(--muted-2); letter-spacing: 0.04em;
 }
- 
+
 /* ============================================================
    MODAL
    ============================================================ */
@@ -551,7 +603,7 @@ body.admin-mode .admin-only.is-block { display: block !important; }
 }
 .modal-sub { font-size: 13px; color: var(--muted); margin-bottom: 24px; }
 .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 24px; }
- 
+
 /* PIN pad */
 .pin-display {
   display: flex; gap: 12px; justify-content: center;
@@ -590,7 +642,7 @@ body.admin-mode .admin-only.is-block { display: block !important; }
 .pin-key:active { transform: scale(0.96); background: var(--ink); color: #fff; }
 .pin-key.special { background: transparent; border-color: transparent; color: var(--muted); font-size: 14px; }
 .pin-key.special:hover { background: var(--surface-2); }
- 
+
 /* ============================================================
    CHARTS / DATA VIZ
    ============================================================ */
@@ -601,7 +653,7 @@ body.admin-mode .admin-only.is-block { display: block !important; }
 }
 .chart-box.tall { height: 340px; }
 .chart-box.short { height: 200px; }
- 
+
 /* Project bar list */
 .project-list { display: flex; flex-direction: column; gap: 12px; }
 .project-row {
@@ -634,7 +686,7 @@ body.admin-mode .admin-only.is-block { display: block !important; }
   border-radius: 3px;
   transition: width 0.6s var(--ease);
 }
- 
+
 /* ============================================================
    HOURS GRID (matrix)
    ============================================================ */
@@ -701,7 +753,7 @@ body.admin-mode .admin-only.is-block { display: block !important; }
   font-weight: 600;
   border-top: 2px solid var(--line-strong);
 }
- 
+
 /* ----- v2: compact cells with project label below ----- */
 .hours-table-v2 td.day-cell {
   vertical-align: top;
@@ -790,7 +842,7 @@ body.admin-mode .hours-table-v2 .day-row.clickable:hover td:first-child {
 body.admin-mode .hours-table-v2 .day-row.clickable:hover .hc-proj {
   background: var(--surface);
 }
- 
+
 /* ----- DAY MODAL (brzi unos) ----- */
 .day-modal-grid { display: flex; flex-direction: column; gap: 12px; }
 .day-workers-grid {
@@ -837,7 +889,7 @@ body.admin-mode .hours-table-v2 .day-row.clickable:hover .hc-proj {
   text-align: right;
   font-family: var(--font-mono);
 }
- 
+
 @media (max-width: 720px) {
   .day-worker-head, .day-worker-row {
     grid-template-columns: 80px 1fr 60px 55px;
@@ -846,10 +898,10 @@ body.admin-mode .hours-table-v2 .day-row.clickable:hover .hc-proj {
   }
   .day-worker-row .input { padding: 6px 8px; font-size: 12px; }
 }
- 
+
 /* Hide old admin-mode hover so the new clickable row works */
 body.admin-mode .hours-table td.editable:hover { /* legacy, no longer used */ }
- 
+
 /* ============================================================
    STO tab specific (yellow/black branding)
    ============================================================ */
@@ -860,7 +912,7 @@ body[data-tab="sto"] .page-title strong {
   border-radius: 6px;
   font-style: normal;
 }
- 
+
 /* Toggle pills (e.g. month vs year for STO) */
 .toggle {
   display: inline-flex;
@@ -881,7 +933,7 @@ body[data-tab="sto"] .page-title strong {
   color: var(--ink);
   box-shadow: var(--shadow-sm);
 }
- 
+
 /* ============================================================
    TOAST
    ============================================================ */
@@ -909,7 +961,7 @@ body[data-tab="sto"] .page-title strong {
   from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
 }
- 
+
 /* ============================================================
    EMPTY / LOADING STATES
    ============================================================ */
@@ -928,7 +980,7 @@ body[data-tab="sto"] .page-title strong {
   color: var(--muted-2);
 }
 .empty .empty-icon svg { width: 26px; height: 26px; }
- 
+
 .skeleton {
   background: linear-gradient(90deg, var(--surface-2) 0%, #ebeae3 50%, var(--surface-2) 100%);
   background-size: 200% 100%;
@@ -939,7 +991,7 @@ body[data-tab="sto"] .page-title strong {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
- 
+
 /* Loading screen */
 .boot {
   position: fixed; inset: 0; z-index: 999;
@@ -972,7 +1024,7 @@ body[data-tab="sto"] .page-title strong {
   margin: 12px auto 0;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
- 
+
 /* ============================================================
    DECORATIVE NUMBERS (CASHFLOW header)
    ============================================================ */
@@ -1037,7 +1089,7 @@ body[data-tab="sto"] .page-title strong {
   .flourish-grid { grid-template-columns: 1fr; gap: 20px; }
   .flourish-side { min-width: 0; }
 }
- 
+
 /* ============================================================
    FOOTER
    ============================================================ */
@@ -1050,7 +1102,7 @@ body[data-tab="sto"] .page-title strong {
   font-family: var(--font-mono);
 }
 .foot strong { font-weight: 500; color: var(--ink-2); }
- 
+
 /* ============================================================
    RESPONSIVE
    ============================================================ */
@@ -1069,7 +1121,7 @@ body[data-tab="sto"] .page-title strong {
   .hours-table th, .hours-table td { padding: 6px 8px; font-size: 12px; }
   .modal { padding: 24px; }
 }
- 
+
 /* ============================================================
    PRINT
    ============================================================ */
@@ -1081,7 +1133,7 @@ body[data-tab="sto"] .page-title strong {
 </style>
 </head>
 <body data-tab="cashflow">
- 
+
 <!-- ========== BOOT SCREEN ========== -->
 <div id="boot" class="boot">
   <div class="boot-inner">
@@ -1090,10 +1142,10 @@ body[data-tab="sto"] .page-title strong {
     <div class="boot-spinner"></div>
   </div>
 </div>
- 
+
 <!-- ========== APP ========== -->
 <div class="app">
- 
+
   <!-- TOP BAR -->
   <header class="topbar">
     <div class="topbar-inner">
@@ -1115,7 +1167,7 @@ body[data-tab="sto"] .page-title strong {
       </div>
     </div>
   </header>
- 
+
   <!-- TABS -->
   <nav class="tabs">
     <div class="tabs-inner" role="tablist">
@@ -1136,40 +1188,40 @@ body[data-tab="sto"] .page-title strong {
       </button>
     </div>
   </nav>
- 
+
   <!-- MAIN -->
   <main class="main">
- 
+
     <!-- ========== TAB: CASHFLOW ========== -->
     <section id="panel-cashflow" class="tab-panel active" role="tabpanel"></section>
- 
+
     <!-- ========== TAB: HOURS ========== -->
     <section id="panel-hours" class="tab-panel" role="tabpanel"></section>
- 
+
     <!-- ========== TAB: TRX ========== -->
     <section id="panel-trx" class="tab-panel" role="tabpanel"></section>
- 
+
     <!-- ========== TAB: STO ========== -->
     <section id="panel-sto" class="tab-panel" role="tabpanel"></section>
- 
+
     <!-- ========== TAB: SETTINGS ========== -->
     <section id="panel-settings" class="tab-panel" role="tabpanel"></section>
- 
+
   </main>
- 
+
   <footer class="foot">
     <strong>Stara Rijeka d.o.o.</strong> · Cashflow 2026 · designed by David Atlija
   </footer>
 </div>
- 
+
 <!-- Modal mount -->
 <div id="modalMount"></div>
 <div id="toastMount" class="toast-wrap"></div>
- 
+
 <!-- ============================================================
      APP LOGIC
      ============================================================ -->
 <script src="app.js"></script>
- 
+
 </body>
 </html>
