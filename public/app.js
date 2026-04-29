@@ -306,9 +306,9 @@ function computeCashflowSummary() {
 }
 
 function computeWorkersTotal(monthKey) {
-  // Total worker payout for cashflow = Σ Sveukupno za sve radnike
+  // Total worker cost for cashflow = Σ Mjesečni trošak za sve radnike
   const stats = computeWorkerStats(monthKey);
-  return stats.reduce((a, s) => a + (s.sveukupno || 0), 0);
+  return stats.reduce((a, s) => a + (s.mjesecniTrosak || 0), 0);
 }
 
 function computeWorkerStats(monthKey) {
@@ -347,8 +347,10 @@ function computeWorkerStats(monthKey) {
     } else {
       dodatno = 0;
     }
-    // Sveukupno = Dodatno + Fiksno + Prijevoz + Stan
-    const sveukupno = dodatno + w.fiksno + w.prijevoz + w.stan;
+    // Mjesečni trošak (ukupni mjesečni izdatak firme za radnika) = Dodatno + Fiksno + Prijevoz + Stan
+    const mjesecniTrosak = dodatno + w.fiksno + w.prijevoz + w.stan;
+    // Za isplatu (ono što radnik prima u kovertu / kao dodatak na plaću) = samo Dodatno
+    const zaIsplatu = dodatno;
     return {
       name: w.name,
       satnica: w.satnica,
@@ -363,7 +365,8 @@ function computeWorkerStats(monthKey) {
       fiksno: w.fiksno,
       dodatno,
       isAutoCalculated,
-      sveukupno,
+      mjesecniTrosak,
+      zaIsplatu,
     };
   });
 }
@@ -790,10 +793,11 @@ function renderHours() {
       <div class="card-head">
         <div>
           <div class="card-title">Sažetak isplate · ${monthLabelShort(activeMonth)}</div>
-          <div class="card-sub">Po radniku · <span style="font-style: italic;">Dodatno = Zarada + Marenda − Fiksno · Sati klikni za ručnu izmjenu</span></div>
+          <div class="card-sub">Po radniku · <span style="font-style: italic;">Dodatno = Zarada + Marenda − Fiksno · Za isplatu = Dodatno · Mj. trošak = Dodatno + Fiksno + Prijevoz + Stan</span></div>
         </div>
         <div class="page-actions">
-          <span class="pill green">Σ Sveukupno: <strong style="margin-left: 4px;">${eur(stats.reduce((a, s) => a + s.sveukupno, 0), 0)}</strong></span>
+          <span class="pill gray">Σ Mj. trošak: <strong style="margin-left: 4px;">${eur(stats.reduce((a, s) => a + s.mjesecniTrosak, 0), 0)}</strong></span>
+          <span class="pill green">Σ Za isplatu: <strong style="margin-left: 4px;">${eur(stats.reduce((a, s) => a + s.zaIsplatu, 0), 0)}</strong></span>
         </div>
       </div>
       <div class="table-scroll">
@@ -808,8 +812,9 @@ function renderHours() {
               <th class="text-right">Prijevoz</th>
               <th class="text-right">Stan</th>
               <th class="text-right">Fiksno/mj.</th>
-              <th class="text-right">Dodatno (isplata)</th>
-              <th class="text-right">Sveukupno</th>
+              <th class="text-right">Dodatno</th>
+              <th class="text-right">Za isplatu</th>
+              <th class="text-right">Mj. trošak</th>
             </tr>
           </thead>
           <tbody>
@@ -845,7 +850,8 @@ function renderHours() {
                         ? `<input class="input cell-edit" type="number" step="any" value="${s.dodatno}" data-extra-worker="${escapeHtml(s.name)}" data-extra-mode="manual" style="width: 100px; margin-left: auto;">`
                         : `<strong>${eur(s.dodatno, 0)}</strong>`)}
                 </td>
-                <td class="num text-right" style="background: var(--positive-soft); color: var(--positive); font-weight: 700;">${eur(s.sveukupno, 2)}</td>
+                <td class="num text-right" style="background: var(--positive-soft); color: var(--positive); font-weight: 700;">${eur(s.zaIsplatu, 2)}</td>
+                <td class="num text-right" style="color: var(--ink-2); font-weight: 600;">${eur(s.mjesecniTrosak, 2)}</td>
               </tr>
             `;}).join('')}
           </tbody>
@@ -860,7 +866,8 @@ function renderHours() {
               <td class="num text-right"><strong>${eur(stats.reduce((a, s) => a + s.stan, 0), 0)}</strong></td>
               <td class="num text-right"><strong>${eur(stats.reduce((a, s) => a + s.fiksno, 0), 0)}</strong></td>
               <td class="num text-right"><strong>${eur(stats.reduce((a, s) => a + s.dodatno, 0), 2)}</strong></td>
-              <td class="num text-right" style="background: var(--positive-soft); color: var(--positive);"><strong>${eur(stats.reduce((a, s) => a + s.sveukupno, 0), 2)}</strong></td>
+              <td class="num text-right" style="background: var(--positive-soft); color: var(--positive);"><strong>${eur(stats.reduce((a, s) => a + s.zaIsplatu, 0), 2)}</strong></td>
+              <td class="num text-right" style="color: var(--ink-2);"><strong>${eur(stats.reduce((a, s) => a + s.mjesecniTrosak, 0), 2)}</strong></td>
             </tr>
           </tfoot>
         </table>
