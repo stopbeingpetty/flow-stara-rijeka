@@ -772,7 +772,7 @@ function renderHours() {
       <div class="card-head">
         <div>
           <div class="card-title">Sažetak isplate · ${monthLabelShort(activeMonth)}</div>
-          <div class="card-sub">Po radniku</div>
+          <div class="card-sub">Po radniku · <span style="font-style: italic;">Dodatno = Zarada + Marenda − Fiksno</span></div>
         </div>
         <div class="page-actions">
           <span class="pill green">Σ Sveukupno: <strong style="margin-left: 4px;">${eur(stats.reduce((a, s) => a + s.sveukupno, 0), 0)}</strong></span>
@@ -808,7 +808,7 @@ function renderHours() {
                 <td class="num text-right">${eur(s.fiksno, 0)}</td>
                 <td class="num text-right">
                   ${s.isAutoCalculated
-                    ? `<span title="Auto: Zarada + Marenda − Fiksno" style="color: var(--muted); font-style: italic; font-size: 11px; margin-right: 6px;">auto</span><strong>${eur(s.dodatno, 2)}</strong>`
+                    ? `<span title="Auto: Zarada + Marenda − Fiksno"><strong>${eur(s.dodatno, 2)}</strong></span>`
                     : (isAdmin
                         ? `<input class="input cell-edit" type="number" step="any" value="${s.dodatno}" data-extra-worker="${escapeHtml(s.name)}" style="width: 100px; margin-left: auto;">`
                         : `<strong>${eur(s.dodatno, 0)}</strong>`)}
