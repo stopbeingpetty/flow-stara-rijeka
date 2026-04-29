@@ -349,8 +349,11 @@ function computeWorkerStats(monthKey) {
     }
     // Mjesečni trošak (ukupni mjesečni izdatak firme za radnika) = Dodatno + Fiksno + Prijevoz + Stan
     const mjesecniTrosak = dodatno + w.fiksno + w.prijevoz + w.stan;
-    // Za isplatu (ono što radnik prima u kovertu / kao dodatak na plaću) = samo Dodatno
-    const zaIsplatu = dodatno;
+    // Za isplatu (ono što radnik prima na ruke ovaj mjesec) = Dodatno + Prijevoz + Stan
+    // (Fiksno ide preko bankovnog računa, ne ulazi u keš isplatu)
+    const zaIsplatu = dodatno + w.prijevoz + w.stan;
+    // Dug radnika (ako postoji) — ne utječe na izračune, samo prikaz
+    const dug = Number(w.dug) || 0;
     return {
       name: w.name,
       satnica: w.satnica,
@@ -367,6 +370,7 @@ function computeWorkerStats(monthKey) {
       isAutoCalculated,
       mjesecniTrosak,
       zaIsplatu,
+      dug,
     };
   });
 }
@@ -793,7 +797,7 @@ function renderHours() {
       <div class="card-head">
         <div>
           <div class="card-title">Sažetak isplate · ${monthLabelShort(activeMonth)}</div>
-          <div class="card-sub">Po radniku · <span style="font-style: italic;">Dodatno = Zarada + Marenda − Fiksno · Za isplatu = Dodatno · Mj. trošak = Dodatno + Fiksno + Prijevoz + Stan</span></div>
+          <div class="card-sub">Po radniku · <span style="font-style: italic;">Dodatno = Zarada + Marenda − Fiksno · Za isplatu = Dodatno + Prijevoz + Stan (na ruke) · Mj. trošak = Za isplatu + Fiksno (ukupno za firmu)</span></div>
         </div>
         <div class="page-actions">
           <span class="pill gray">Σ Mj. trošak: <strong style="margin-left: 4px;">${eur(stats.reduce((a, s) => a + s.mjesecniTrosak, 0), 0)}</strong></span>
@@ -821,7 +825,12 @@ function renderHours() {
             ${stats.map(s => {
               return `
               <tr>
-                <td><strong>${escapeHtml(s.name)}</strong></td>
+                <td>
+                  <strong>${escapeHtml(s.name)}</strong>
+                  ${s.dug > 0
+                    ? `<span class="dug-badge ${isAdmin ? 'editable' : ''}" data-dug-worker="${escapeHtml(s.name)}" title="${isAdmin ? 'Klikni za izmjenu duga' : 'Dug radnika'}">dug ${eur(s.dug, 0)}</span>`
+                    : (isAdmin ? `<span class="dug-badge add editable" data-dug-worker="${escapeHtml(s.name)}" title="Dodaj dug">+ dug</span>` : '')}
+                </td>
                 <td class="num text-right">${eur(s.satnica, 2)}</td>
                 <td class="num text-right">
                   ${(() => {
@@ -942,6 +951,13 @@ function renderHours() {
           state.hours[activeMonth].extras[w] = newVal;
         }
         if (await saveData()) renderHours();
+      });
+    });
+    // Dug badge: click to edit
+    panel.querySelectorAll('.dug-badge.editable').forEach(badge => {
+      badge.addEventListener('click', () => {
+        const wName = badge.dataset.dugWorker;
+        openDugModal(wName);
       });
     });
   }
@@ -1191,6 +1207,58 @@ function openDayModal(dateStr) {
     }
   };
   document.addEventListener('keydown', keyHandler);
+}
+
+/* ============================================================
+   DUG MODAL — uređivanje duga radnika
+   ============================================================ */
+function openDugModal(workerName) {
+  const wIdx = state.settings.workers.findIndex(x => x.name === workerName);
+  if (wIdx < 0) return;
+  const w = state.settings.workers[wIdx];
+  const curDug = Number(w.dug) || 0;
+
+  const html = `
+    <div class="modal-title">Dug · ${escapeHtml(workerName)}</div>
+    <div class="modal-sub">Iznos koji radnik duguje firmi (informativno, ne utječe na obračun)</div>
+    <div class="field">
+      <label class="field-label">Iznos duga (€)</label>
+      <input class="input" id="dug-input" type="number" step="0.01" value="${curDug}" placeholder="0">
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-act="cancel">Odustani</button>
+      ${curDug > 0 ? '<button class="btn btn-danger" data-act="clear">Obriši dug</button>' : ''}
+      <button class="btn btn-primary" data-act="save">Spremi</button>
+    </div>
+  `;
+  const m = modal(html);
+  setTimeout(() => m.root.querySelector('#dug-input')?.focus(), 50);
+
+  const save = async (newVal) => {
+    state.settings.workers[wIdx].dug = newVal;
+    if (await saveData()) {
+      m.close();
+      renderHours();
+    }
+  };
+
+  m.root.addEventListener('click', e => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    if (btn.dataset.act === 'cancel') m.close();
+    else if (btn.dataset.act === 'clear') save(0);
+    else if (btn.dataset.act === 'save') {
+      const v = parseFloat(m.root.querySelector('#dug-input').value) || 0;
+      save(v);
+    }
+  });
+  m.root.querySelector('#dug-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const v = parseFloat(e.target.value) || 0;
+      save(v);
+    }
+  });
 }
 
 
