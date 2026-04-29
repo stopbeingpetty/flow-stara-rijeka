@@ -3,23 +3,23 @@
    ============================================================ */
 (() => {
 'use strict';
- 
+
 /* ---------- CONSTANTS ---------- */
 const MONTH_NAMES_HR = ['Siječanj','Veljača','Ožujak','Travanj','Svibanj','Lipanj','Srpanj','Kolovoz','Rujan','Listopad','Studeni','Prosinac'];
 const DAY_NAMES_HR = ['Ned','Pon','Uto','Sri','Čet','Pet','Sub'];
 const FMT = new Intl.NumberFormat('hr-HR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const FMT_INT = new Intl.NumberFormat('hr-HR', { maximumFractionDigits: 0 });
 const FMT_PCT = new Intl.NumberFormat('hr-HR', { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1 });
- 
+
 const TRX_GROUPS = ['Tekući', 'Nepredviđeni', 'Prihodi', 'Isključi'];
 const TRX_TYPES = ['Trošak', 'Prihod', 'Pozajmnica'];
 const TRX_CATEGORIES = ['Knjigovodstvo','Smještaj','Komunalije','Bankovne naknade','Materijal','Leasing','Porez','Pozajmica','Adria Oil','Ostalo','Polo','Pondi','Auto Klub','Mobitel','Osiguranje','e-poslovanje','Liječnički','Prijevoz','Gorivo'];
- 
+
 /* Project palette for STO + projects */
 const PROJECT_PALETTE = [
   '#1e3a5f','#7c2d3a','#2c5f5d','#b8860b','#5a4a8a','#1f6b3a','#8a4a2c','#2c4a8a','#b85d6e','#4a8a2c'
 ];
- 
+
 /* ---------- STATE ---------- */
 let state = null;        // canonical data
 let isAdmin = false;
@@ -28,11 +28,11 @@ let activeMonth = '2026-04';   // current default
 let stoView = 'month';   // 'month' | 'year'
 let trxView = 'month';   // 'month' | 'year'
 const charts = {};       // Chart.js instances (so we can destroy)
- 
+
 /* ---------- API CLIENT ---------- */
 const API = {
   pin: localStorage.getItem('sr_pin') || null,
- 
+
   async load() {
     setConnDot('syncing');
     try {
@@ -53,7 +53,7 @@ const API = {
       throw e;
     }
   },
- 
+
   async save(data) {
     if (!this.pin) throw new Error('Nije unesen admin PIN');
     setConnDot('syncing');
@@ -79,7 +79,7 @@ const API = {
     localStorage.setItem('sr_data_backup', JSON.stringify(data));
     return await r.json();
   },
- 
+
   async verifyPin(pin) {
     const r = await fetch('/api/save', {
       method: 'POST',
@@ -89,13 +89,13 @@ const API = {
     return r.status === 200;
   },
 };
- 
+
 function setConnDot(state) {
   const el = document.getElementById('connDot');
   el.className = 'connection-dot ' + state;
   el.title = state === 'online' ? 'Spojeno' : state === 'syncing' ? 'Sinkronizacija…' : 'Offline';
 }
- 
+
 /* ---------- TOAST ---------- */
 function toast(msg, type = '', duration = 2500) {
   const wrap = document.getElementById('toastMount');
@@ -108,7 +108,7 @@ function toast(msg, type = '', duration = 2500) {
     setTimeout(() => el.remove(), 250);
   }, duration);
 }
- 
+
 /* ---------- MODAL HELPER ---------- */
 function modal(html, opts = {}) {
   const mount = document.getElementById('modalMount');
@@ -121,7 +121,7 @@ function modal(html, opts = {}) {
   });
   return { close, root: backdrop };
 }
- 
+
 /* ---------- PIN MODAL ---------- */
 function showPinModal() {
   if (isAdmin) {
@@ -135,7 +135,7 @@ function showPinModal() {
     rerenderActive();
     return;
   }
- 
+
   let pin = '';
   const html = `
     <div class="modal-title">Admin pristup</div>
@@ -181,7 +181,7 @@ function showPinModal() {
       toast('Greška pri provjeri PIN-a', 'error');
     }
   };
- 
+
   m.root.addEventListener('click', e => {
     const key = e.target.closest('.pin-key');
     if (!key) return;
@@ -193,7 +193,7 @@ function showPinModal() {
       if (pin.length === 4) setTimeout(submit, 200);
     }
   });
- 
+
   // Keyboard support
   const keyHandler = (e) => {
     if (!document.querySelector('.modal-backdrop')) {
@@ -211,7 +211,7 @@ function showPinModal() {
   };
   document.addEventListener('keydown', keyHandler);
 }
- 
+
 function updateAdminButton() {
   const btn = document.getElementById('adminBtn');
   btn.classList.toggle('active', isAdmin);
@@ -227,7 +227,7 @@ function updateAdminButton() {
         <path d="M7 11V7a5 5 0 0110 0v4" />
       </svg>`;
 }
- 
+
 /* ---------- HELPERS ---------- */
 const eur = (n, dec = 2) => {
   if (n === null || n === undefined || isNaN(n)) return '—';
@@ -263,7 +263,7 @@ const ensureMonth = (key) => {
 };
 const cssVar = (name) => getComputedStyle(document.body).getPropertyValue(name).trim();
 const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
- 
+
 /* Build day list for a given month */
 function daysInMonth(monthKey) {
   const [y, m] = monthKey.split('-').map(Number);
@@ -280,7 +280,7 @@ function daysInMonth(monthKey) {
   }
   return days;
 }
- 
+
 /* ---------- COMPUTATIONS ---------- */
 function computeCashflowSummary() {
   const months = allMonths();
@@ -304,13 +304,13 @@ function computeCashflowSummary() {
   }
   return summary;
 }
- 
+
 function computeWorkersTotal(monthKey) {
   const h = state.hours[monthKey];
   if (!h) return 0;
   return Object.values(h.extras || {}).reduce((a, b) => a + (Number(b) || 0), 0);
 }
- 
+
 function computeWorkerStats(monthKey) {
   const h = state.hours[monthKey];
   if (!h || !h.days) return [];
@@ -325,7 +325,13 @@ function computeWorkerStats(monthKey) {
       }
     }
     const zaradaSati = totalHours * w.satnica;
-    const dodatno = (h.extras && h.extras[w.name]) || 0;
+    const manualDodatno = (h.extras && h.extras[w.name]) || 0;
+    // Auto-formula: ako radnik ima satnicu > 0 → Dodatno = Zarada + Marenda − Fiksno
+    //               ako satnica = 0 (npr. Dragan) → Dodatno ostaje ručni unos
+    const isAutoCalculated = w.satnica > 0;
+    const dodatno = isAutoCalculated ? (zaradaSati + totalMarenda - w.fiksno) : manualDodatno;
+    // Sveukupno = Dodatno + Fiksno + Prijevoz + Stan
+    const sveukupno = dodatno + w.fiksno + w.prijevoz + w.stan;
     return {
       name: w.name,
       satnica: w.satnica,
@@ -337,11 +343,13 @@ function computeWorkerStats(monthKey) {
       stan: w.stan,
       fiksno: w.fiksno,
       dodatno,
-      ukupnoIsplata: dodatno,
+      manualDodatno,
+      isAutoCalculated,
+      sveukupno,
     };
   });
 }
- 
+
 function computeAccountBalance() {
   const limit = state.company?.limit_racuna || 30000;
   let saldo = 0;
@@ -357,7 +365,7 @@ function computeAccountBalance() {
   }
   return { limit, saldo, dostupno: limit + saldo };
 }
- 
+
 /* ============================================================
    TAB ROUTING
    ============================================================ */
@@ -371,7 +379,7 @@ function setTab(tab) {
   Object.keys(charts).forEach(k => delete charts[k]);
   rerenderActive();
 }
- 
+
 function rerenderActive() {
   if (activeTab === 'cashflow') renderCashflow();
   else if (activeTab === 'hours') renderHours();
@@ -379,7 +387,7 @@ function rerenderActive() {
   else if (activeTab === 'sto') renderSto();
   else if (activeTab === 'settings') renderSettings();
 }
- 
+
 /* ============================================================
    MONTH PICKER
    ============================================================ */
@@ -405,7 +413,7 @@ function buildMonthPicker(currentKey, _onChange, options = {}) {
     </div>
   `;
 }
- 
+
 function bindMonthPicker(panel, currentKey, onChange, options = {}) {
   const months = options.months || allMonths();
   const idx = months.indexOf(currentKey);
@@ -420,7 +428,7 @@ function bindMonthPicker(panel, currentKey, onChange, options = {}) {
     else if (act === 'add') addNewMonth(onChange);
   });
 }
- 
+
 function addNewMonth(onChange) {
   const months = allMonths();
   const last = months[months.length - 1] || '2026-01';
@@ -439,7 +447,7 @@ function addNewMonth(onChange) {
     toast(`Dodan mjesec ${monthLabel(newKey)}`, 'success');
   });
 }
- 
+
 /* ============================================================
    SAVE WRAPPER
    ============================================================ */
@@ -453,14 +461,14 @@ async function saveData() {
     return false;
   }
 }
- 
+
 /* ============================================================
    RENDER: CASHFLOW
    ============================================================ */
 function renderCashflow() {
   const summary = computeCashflowSummary();
   const months = allMonths();
- 
+
   // YTD totals (used in tablica footer only)
   const ytd = months.reduce((a, k) => ({
     prihodi: a.prihodi + summary[k].prihodi,
@@ -471,7 +479,7 @@ function renderCashflow() {
     troskovi: a.troskovi + summary[k].troskoviUkupno,
     neto: a.neto + summary[k].neto,
   }), { prihodi: 0, tekuci: 0, nepredvideni: 0, sto: 0, radnici: 0, troskovi: 0, neto: 0 });
- 
+
   const panel = document.getElementById('panel-cashflow');
   panel.innerHTML = `
     <div class="page-head">
@@ -480,7 +488,7 @@ function renderCashflow() {
         <h1 class="page-title">Cashflow <em>sažetak</em></h1>
       </div>
     </div>
- 
+
     <div class="grid grid-cf" style="margin-bottom: 24px;">
       <div class="card">
         <div class="card-head">
@@ -501,7 +509,7 @@ function renderCashflow() {
         <div class="chart-box tall"><canvas id="cf-chart-donut"></canvas></div>
       </div>
     </div>
- 
+
     <div class="card">
       <div class="card-head">
         <div>
@@ -557,7 +565,7 @@ function renderCashflow() {
       </div>
     </div>
   `;
- 
+
   // Click row → switch to Trx tab
   panel.querySelectorAll('tbody tr[data-month]').forEach(tr => {
     tr.addEventListener('click', () => {
@@ -565,7 +573,7 @@ function renderCashflow() {
       setTab('trx');
     });
   });
- 
+
   // CHART: monthly bars
   const ctx1 = document.getElementById('cf-chart-monthly');
   charts.cfMonthly = new Chart(ctx1, {
@@ -583,7 +591,7 @@ function renderCashflow() {
       money: true,
     }),
   });
- 
+
   // CHART: donut
   const ctx2 = document.getElementById('cf-chart-donut');
   charts.cfDonut = new Chart(ctx2, {
@@ -608,7 +616,7 @@ function renderCashflow() {
     },
   });
 }
- 
+
 /* Shared chart options */
 function chartOpts(opts = {}) {
   return {
@@ -639,7 +647,7 @@ function chartOpts(opts = {}) {
     },
   };
 }
- 
+
 /* ============================================================
    RENDER: HOURS (evidencija sati) — kompletni redizajn
    ============================================================ */
@@ -654,7 +662,7 @@ function renderHours() {
   const stats = computeWorkerStats(activeMonth);
   const today = new Date().toISOString().slice(0, 10);
   const workers = state.settings.workers;
- 
+
   const panel = document.getElementById('panel-hours');
   panel.innerHTML = `
     <div class="page-head">
@@ -666,7 +674,7 @@ function renderHours() {
         ${buildMonthPicker(activeMonth, null, { allowAdd: true })}
       </div>
     </div>
- 
+
     <div class="grid grid-cf" style="margin-bottom: 24px;">
       <div class="card">
         <div class="card-head">
@@ -687,7 +695,7 @@ function renderHours() {
         <div class="chart-box"><canvas id="hr-chart-daily"></canvas></div>
       </div>
     </div>
- 
+
     <div class="card" style="margin-bottom: 24px;">
       <div class="card-head">
         <div>
@@ -759,7 +767,7 @@ function renderHours() {
         </div>
       </div>
     </div>
- 
+
     <div class="card">
       <div class="card-head">
         <div>
@@ -767,7 +775,7 @@ function renderHours() {
           <div class="card-sub">Po radniku</div>
         </div>
         <div class="page-actions">
-          <span class="pill green">Σ Sveukupno: <strong style="margin-left: 4px;">${eur(stats.reduce((a, s) => a + s.zaradaSati + s.totalMarenda + s.prijevoz + s.stan + s.dodatno, 0), 0)}</strong></span>
+          <span class="pill green">Σ Sveukupno: <strong style="margin-left: 4px;">${eur(stats.reduce((a, s) => a + s.sveukupno, 0), 0)}</strong></span>
         </div>
       </div>
       <div class="table-scroll">
@@ -788,7 +796,6 @@ function renderHours() {
           </thead>
           <tbody>
             ${stats.map(s => {
-              const sveukupno = s.zaradaSati + s.totalMarenda + s.prijevoz + s.stan + s.dodatno;
               return `
               <tr>
                 <td><strong>${escapeHtml(s.name)}</strong></td>
@@ -800,11 +807,13 @@ function renderHours() {
                 <td class="num text-right">${eur(s.stan, 0)}</td>
                 <td class="num text-right">${eur(s.fiksno, 0)}</td>
                 <td class="num text-right">
-                  ${isAdmin
-                    ? `<input class="input cell-edit" type="number" step="any" value="${s.dodatno}" data-extra-worker="${escapeHtml(s.name)}" style="width: 100px; margin-left: auto;">`
-                    : `<strong>${eur(s.dodatno, 0)}</strong>`}
+                  ${s.isAutoCalculated
+                    ? `<span title="Auto: Zarada + Marenda − Fiksno" style="color: var(--muted); font-style: italic; font-size: 11px; margin-right: 6px;">auto</span><strong>${eur(s.dodatno, 2)}</strong>`
+                    : (isAdmin
+                        ? `<input class="input cell-edit" type="number" step="any" value="${s.dodatno}" data-extra-worker="${escapeHtml(s.name)}" style="width: 100px; margin-left: auto;">`
+                        : `<strong>${eur(s.dodatno, 0)}</strong>`)}
                 </td>
-                <td class="num text-right" style="background: var(--positive-soft); color: var(--positive); font-weight: 700;">${eur(sveukupno, 2)}</td>
+                <td class="num text-right" style="background: var(--positive-soft); color: var(--positive); font-weight: 700;">${eur(s.sveukupno, 2)}</td>
               </tr>
             `;}).join('')}
           </tbody>
@@ -818,15 +827,15 @@ function renderHours() {
               <td class="num text-right"><strong>${eur(stats.reduce((a, s) => a + s.prijevoz, 0), 0)}</strong></td>
               <td class="num text-right"><strong>${eur(stats.reduce((a, s) => a + s.stan, 0), 0)}</strong></td>
               <td class="num text-right"><strong>${eur(stats.reduce((a, s) => a + s.fiksno, 0), 0)}</strong></td>
-              <td class="num text-right"><strong>${eur(stats.reduce((a, s) => a + s.dodatno, 0), 0)}</strong></td>
-              <td class="num text-right" style="background: var(--positive-soft); color: var(--positive);"><strong>${eur(stats.reduce((a, s) => a + s.zaradaSati + s.totalMarenda + s.prijevoz + s.stan + s.dodatno, 0), 2)}</strong></td>
+              <td class="num text-right"><strong>${eur(stats.reduce((a, s) => a + s.dodatno, 0), 2)}</strong></td>
+              <td class="num text-right" style="background: var(--positive-soft); color: var(--positive);"><strong>${eur(stats.reduce((a, s) => a + s.sveukupno, 0), 2)}</strong></td>
             </tr>
           </tfoot>
         </table>
       </div>
     </div>
   `;
- 
+
   // Click row → open day modal (admin only)
   if (isAdmin) {
     panel.querySelectorAll('.day-row.clickable').forEach(tr => {
@@ -846,9 +855,9 @@ function renderHours() {
       });
     });
   }
- 
+
   bindMonthPicker(panel, activeMonth, (m) => { activeMonth = m; ensureMonth(m); renderHours(); }, { allowAdd: true });
- 
+
   // CHART: bars
   const ctx1 = document.getElementById('hr-chart-bars');
   charts.hrBars = new Chart(ctx1, {
@@ -864,7 +873,7 @@ function renderHours() {
     },
     options: chartOpts({ legend: false, money: false }),
   });
- 
+
   // CHART: daily line
   const ctx2 = document.getElementById('hr-chart-daily');
   const dailyTotals = days.map(d => {
@@ -891,55 +900,55 @@ function renderHours() {
     options: chartOpts({ legend: false, money: false }),
   });
 }
- 
+
 /* ============================================================
    DAY MODAL — brzi unos cijelog dana
    ============================================================ */
 function openDayModal(dateStr) {
   ensureMonth(activeMonth);
   const workers = state.settings.workers;
- 
+
   // Find day or create skeleton
   let day = state.hours[activeMonth].days.find(d => d.date === dateStr);
   if (!day) {
     const dn = DAY_NAMES_HR[new Date(dateStr).getDay()];
     day = { date: dateStr, day_name: dn, note: '', workers: {} };
   }
- 
+
   // Auto-suggest projects from previous day
   const allDays = state.hours[activeMonth].days.slice().sort((a, b) => a.date.localeCompare(b.date));
   const dayIdx = daysInMonth(activeMonth).findIndex(d => d.date === dateStr);
   const prevDateStr = dayIdx > 0 ? daysInMonth(activeMonth)[dayIdx - 1].date : null;
   const prevDay = prevDateStr ? allDays.find(d => d.date === prevDateStr) : null;
- 
+
   // All known projects (for datalist)
   const knownProjects = Array.from(new Set(
     state.hours[activeMonth].days.flatMap(d =>
       Object.values(d.workers || {}).map(w => w.project)
     ).filter(Boolean)
   )).sort();
- 
+
   // Date display
   const dt = new Date(dateStr);
   const dayName = DAY_NAMES_HR[dt.getDay()];
   const dateLabel = `${dt.getDate()}. ${MONTH_NAMES_HR[dt.getMonth()]} ${dt.getFullYear()}`;
- 
+
   // Adjacent dates for nav
   const monthDays = daysInMonth(activeMonth);
   const curIdx = monthDays.findIndex(d => d.date === dateStr);
   const prevDate = curIdx > 0 ? monthDays[curIdx - 1].date : null;
   const nextDate = curIdx < monthDays.length - 1 ? monthDays[curIdx + 1].date : null;
- 
+
   const html = `
     <div class="modal-title">${dateLabel} · <em style="color: var(--muted); font-style: italic; font-weight: 400;">${dayName}</em></div>
     <div class="modal-sub">Tab za navigaciju · ⌘+←/→ za prethodni/sljedeći dan · Esc za zatvaranje</div>
- 
+
     <div class="day-modal-grid">
       <div class="field" style="grid-column: 1 / -1; margin-bottom: 8px;">
         <label class="field-label">Napomena za dan (opcionalno)</label>
         <input class="input" id="day-note" value="${escapeHtml(day.note || '')}" placeholder="Npr. Uskrs, Hasan - MUP, Roky trbuh…" tabindex="1">
       </div>
- 
+
       <div class="day-workers-grid">
         <div class="day-worker-head">
           <div>Radnik</div>
@@ -978,7 +987,7 @@ function openDayModal(dateStr) {
         ${knownProjects.map(p => `<option value="${escapeHtml(p)}"></option>`).join('')}
       </datalist>
     </div>
- 
+
     <div class="modal-actions" style="justify-content: space-between;">
       <div style="display: flex; gap: 6px;">
         <button class="btn" data-act="prev-day" ${!prevDate ? 'disabled' : ''} title="Prethodni dan (⌘+←)">
@@ -996,13 +1005,13 @@ function openDayModal(dateStr) {
       </div>
     </div>
   `;
- 
+
   const m = modal(html, { wide: true });
- 
+
   // Auto-fokus prvi sati input
   const firstHours = m.root.querySelector('.dw-hours');
   if (firstHours) setTimeout(() => firstHours.focus(), 50);
- 
+
   // Auto-fill marenda kad sati > 0 i marenda prazna
   m.root.querySelectorAll('.dw-hours').forEach(inp => {
     inp.addEventListener('change', () => {
@@ -1017,12 +1026,12 @@ function openDayModal(dateStr) {
       }
     });
   });
- 
+
   // Suggestion class drops on input (no longer suggestion once edited)
   m.root.querySelectorAll('.dw-proj.is-suggestion').forEach(inp => {
     inp.addEventListener('input', () => inp.classList.remove('is-suggestion'), { once: true });
   });
- 
+
   const collect = () => {
     const newDay = {
       date: dateStr,
@@ -1042,7 +1051,7 @@ function openDayModal(dateStr) {
     });
     return newDay;
   };
- 
+
   const save = async (afterSave) => {
     const newDay = collect();
     ensureMonth(activeMonth);
@@ -1058,7 +1067,7 @@ function openDayModal(dateStr) {
       else m.close();
     }
   };
- 
+
   const moveTo = async (newDate) => {
     if (!newDate) return;
     await save(() => {
@@ -1066,7 +1075,7 @@ function openDayModal(dateStr) {
       setTimeout(() => openDayModal(newDate), 50);
     });
   };
- 
+
   // Click handlers
   m.root.addEventListener('click', async e => {
     const btn = e.target.closest('button[data-act]');
@@ -1076,7 +1085,7 @@ function openDayModal(dateStr) {
     else if (btn.dataset.act === 'prev-day') moveTo(prevDate);
     else if (btn.dataset.act === 'next-day') moveTo(nextDate);
   });
- 
+
   // Keyboard shortcuts
   const keyHandler = (e) => {
     if (!m.root.isConnected) {
@@ -1093,24 +1102,24 @@ function openDayModal(dateStr) {
   };
   document.addEventListener('keydown', keyHandler);
 }
- 
- 
+
+
 /* ============================================================
    RENDER: TRX
    ============================================================ */
 function renderTrx() {
   if (trxView === 'year') return renderTrxYear();
- 
+
   ensureMonth(activeMonth);
   const items = (state.trx[activeMonth] || []).slice().sort((a, b) => a.date.localeCompare(b.date));
- 
+
   const byGroup = items.reduce((a, t) => { a[t.group || 'Ostalo'] = (a[t.group || 'Ostalo'] || 0) + t.amount; return a; }, {});
   const byCat = items.filter(t => t.group !== 'Prihodi' && t.group !== 'Isključi').reduce((a, t) => { a[t.category || 'Ostalo'] = (a[t.category || 'Ostalo'] || 0) + t.amount; return a; }, {});
- 
+
   const totalTroskovi = (byGroup['Tekući'] || 0) + (byGroup['Nepredviđeni'] || 0);
   const totalPrihodi = byGroup['Prihodi'] || 0;
   const neto = totalPrihodi - totalTroskovi;
- 
+
   const panel = document.getElementById('panel-trx');
   panel.innerHTML = `
     <div class="page-head">
@@ -1130,7 +1139,7 @@ function renderTrx() {
         </button>
       </div>
     </div>
- 
+
     <div class="kpi-row" style="margin-bottom: 24px;">
       <div class="kpi-cell">
         <div class="stat-label">Prihodi</div>
@@ -1153,7 +1162,7 @@ function renderTrx() {
         <div class="stat-sub">prihodi − troškovi</div>
       </div>
     </div>
- 
+
     <div class="grid grid-cf" style="margin-bottom: 24px;">
       <div class="card">
         <div class="card-head">
@@ -1174,7 +1183,7 @@ function renderTrx() {
         <div class="chart-box"><canvas id="trx-chart-grp"></canvas></div>
       </div>
     </div>
- 
+
     <div class="card">
       <div class="card-head">
         <div>
@@ -1232,16 +1241,16 @@ function renderTrx() {
       `}
     </div>
   `;
- 
+
   // Bind month picker
   bindMonthPicker(panel, activeMonth, (m) => { activeMonth = m; renderTrx(); }, { allowAdd: true });
- 
+
   // View toggle
   panel.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => {
     trxView = b.dataset.view;
     renderTrx();
   }));
- 
+
   if (isAdmin) {
     panel.querySelector('#trx-add')?.addEventListener('click', () => trxModal());
     panel.querySelectorAll('[data-act="edit-trx"]').forEach(b => b.addEventListener('click', () => trxModal(parseInt(b.dataset.i))));
@@ -1251,7 +1260,7 @@ function renderTrx() {
       if (await saveData()) renderTrx();
     }));
   }
- 
+
   // CHART: by category (donut)
   const catEntries = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
   const ctx1 = document.getElementById('trx-chart-cat');
@@ -1278,7 +1287,7 @@ function renderTrx() {
       },
     });
   }
- 
+
   // CHART: by group (horizontal bar)
   const grpEntries = Object.entries(byGroup).filter(([k]) => k !== 'Isključi').sort((a, b) => b[1] - a[1]);
   const ctx2 = document.getElementById('trx-chart-grp');
@@ -1302,7 +1311,7 @@ function renderTrx() {
     });
   }
 }
- 
+
 function renderTrxYear() {
   const months = allMonths();
   // Build category × month matrix (only Tekući + Nepredviđeni)
@@ -1316,13 +1325,13 @@ function renderTrxYear() {
     }
     return row;
   }).filter(r => r.total > 0).sort((a, b) => b.total - a.total);
- 
+
   const grandTroskovi = matrix.reduce((a, r) => a + r.total, 0);
   const grandPrihodi = months.reduce((a, k) => a + (state.trx[k] || []).filter(t => t.group === 'Prihodi').reduce((s, t) => s + t.amount, 0), 0);
   const monthlyTotals = months.reduce((a, k) => { a[k] = matrix.reduce((s, r) => s + r.byMonth[k], 0); return a; }, {});
   const monthlyPrihodi = months.reduce((a, k) => { a[k] = (state.trx[k] || []).filter(t => t.group === 'Prihodi').reduce((s, t) => s + t.amount, 0); return a; }, {});
   const grandTrxCount = months.reduce((a, k) => a + (state.trx[k]?.length || 0), 0);
- 
+
   const panel = document.getElementById('panel-trx');
   panel.innerHTML = `
     <div class="page-head">
@@ -1337,7 +1346,7 @@ function renderTrxYear() {
         </div>
       </div>
     </div>
- 
+
     <div class="kpi-row" style="margin-bottom: 24px;">
       <div class="kpi-cell">
         <div class="stat-label">Prihodi YTD</div>
@@ -1356,7 +1365,7 @@ function renderTrxYear() {
         <div class="stat-value">${grandTrxCount}</div>
       </div>
     </div>
- 
+
     <div class="card" style="margin-bottom: 24px;">
       <div class="card-head">
         <div>
@@ -1366,7 +1375,7 @@ function renderTrxYear() {
       </div>
       <div class="chart-box tall"><canvas id="trx-y-chart"></canvas></div>
     </div>
- 
+
     <div class="card">
       <div class="card-head">
         <div>
@@ -1419,13 +1428,13 @@ function renderTrxYear() {
       </div>
     </div>
   `;
- 
+
   // View toggle
   panel.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => {
     trxView = b.dataset.view;
     renderTrx();
   }));
- 
+
   // Donut by category YTD
   if (matrix.length) {
     const ctx = document.getElementById('trx-y-chart');
@@ -1452,13 +1461,13 @@ function renderTrxYear() {
     });
   }
 }
- 
+
 function formatDate(s) {
   if (!s) return '';
   const [y, m, d] = s.split('-');
   return `${d}.${m}.`;
 }
- 
+
 function typePill(t) {
   if (t === 'Prihod') return `<span class="pill green">Prihod</span>`;
   if (t === 'Pozajmnica') return `<span class="pill purple">Pozajmnica</span>`;
@@ -1471,7 +1480,7 @@ function groupPill(g) {
   if (g === 'Isključi') return `<span class="pill gray">${g}</span>`;
   return `<span class="pill gray">${g || '—'}</span>`;
 }
- 
+
 function trxModal(idx = null) {
   ensureMonth(activeMonth);
   const t = idx !== null ? state.trx[activeMonth][idx] : { date: new Date().toISOString().slice(0, 10), type: 'Trošak', partner: '', amount: 0, category: '', group: 'Tekući' };
@@ -1552,19 +1561,19 @@ function trxModal(idx = null) {
     }
   });
 }
- 
+
 /* ============================================================
    RENDER: STO
    ============================================================ */
 function renderSto() {
   if (stoView === 'year') return renderStoYear();
- 
+
   ensureMonth(activeMonth);
   const items = (state.sto[activeMonth] || []).slice().sort((a, b) => a.date.localeCompare(b.date));
   const total = items.reduce((a, t) => a + t.amount, 0);
   const projects = items.reduce((a, t) => { a[t.project || 'Bez projekta'] = (a[t.project || 'Bez projekta'] || 0) + t.amount; return a; }, {});
   const projEntries = Object.entries(projects).sort((a, b) => b[1] - a[1]);
- 
+
   // YTD by project
   const ytdProj = {};
   for (const k of allMonths()) {
@@ -1573,7 +1582,7 @@ function renderSto() {
     }
   }
   const ytdTotal = Object.values(ytdProj).reduce((a, b) => a + b, 0);
- 
+
   const panel = document.getElementById('panel-sto');
   panel.innerHTML = `
     <div class="page-head">
@@ -1593,7 +1602,7 @@ function renderSto() {
         </button>
       </div>
     </div>
- 
+
     <div class="kpi-row" style="margin-bottom: 24px;">
       <div class="kpi-cell">
         <div class="stat-label">Ukupno · ${monthLabelShort(activeMonth)}</div>
@@ -1613,7 +1622,7 @@ function renderSto() {
         <div class="stat-value">${eur(ytdTotal, 0)}</div>
       </div>
     </div>
- 
+
     <div class="grid grid-cf" style="margin-bottom: 24px;">
       <div class="card">
         <div class="card-head">
@@ -1648,7 +1657,7 @@ function renderSto() {
         ` : `<div class="empty">Nema podataka</div>`}
       </div>
     </div>
- 
+
     <div class="card">
       <div class="card-head">
         <div>
@@ -1708,16 +1717,16 @@ function renderSto() {
       `}
     </div>
   `;
- 
+
   // Bind month picker
   bindMonthPicker(panel, activeMonth, (m) => { activeMonth = m; renderSto(); }, { allowAdd: true });
- 
+
   // View toggle
   panel.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => {
     stoView = b.dataset.view;
     renderSto();
   }));
- 
+
   if (isAdmin) {
     panel.querySelector('#sto-add')?.addEventListener('click', () => stoModal());
     panel.querySelectorAll('[data-act="edit-sto"]').forEach(b => b.addEventListener('click', () => stoModal(parseInt(b.dataset.i))));
@@ -1727,7 +1736,7 @@ function renderSto() {
       if (await saveData()) renderSto();
     }));
   }
- 
+
   // Trend chart
   const months = allMonths();
   const monthlyTotals = months.map(k => (state.sto[k] || []).reduce((a, t) => a + t.amount, 0));
@@ -1748,7 +1757,7 @@ function renderSto() {
     options: chartOpts({ legend: false, money: true }),
   });
 }
- 
+
 function renderStoYear() {
   const projects = Array.from(new Set(allMonths().flatMap(k => (state.sto[k] || []).map(t => t.project || 'Bez projekta')))).sort();
   const months = allMonths();
@@ -1765,7 +1774,7 @@ function renderStoYear() {
   matrix.sort((a, b) => b.total - a.total);
   const grandTotal = matrix.reduce((a, r) => a + r.total, 0);
   const monthlyTotals = months.reduce((a, k) => { a[k] = matrix.reduce((s, r) => s + r.byMonth[k], 0); return a; }, {});
- 
+
   const panel = document.getElementById('panel-sto');
   panel.innerHTML = `
     <div class="page-head">
@@ -1780,7 +1789,7 @@ function renderStoYear() {
         </div>
       </div>
     </div>
- 
+
     <div class="flourish">
       <div class="flourish-grid">
         <div>
@@ -1796,7 +1805,7 @@ function renderStoYear() {
         </div>
       </div>
     </div>
- 
+
     <div class="card" style="margin: 24px 0;">
       <div class="card-head">
         <div>
@@ -1806,7 +1815,7 @@ function renderStoYear() {
       </div>
       <div class="chart-box tall"><canvas id="sto-y-chart"></canvas></div>
     </div>
- 
+
     <div class="card">
       <div class="card-head">
         <div>
@@ -1846,12 +1855,12 @@ function renderStoYear() {
       </div>
     </div>
   `;
- 
+
   panel.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => {
     stoView = b.dataset.view;
     renderSto();
   }));
- 
+
   // Donut by project YTD
   const ctx = document.getElementById('sto-y-chart');
   charts.stoYear = new Chart(ctx, {
@@ -1876,7 +1885,7 @@ function renderStoYear() {
     },
   });
 }
- 
+
 function stoModal(idx = null) {
   ensureMonth(activeMonth);
   const t = idx !== null ? state.sto[activeMonth][idx] : { date: new Date().toISOString().slice(0, 10), amount: 0, project: '', note: '' };
@@ -1942,7 +1951,7 @@ function stoModal(idx = null) {
     }
   });
 }
- 
+
 /* ============================================================
    RENDER: SETTINGS
    ============================================================ */
@@ -1955,7 +1964,7 @@ function renderSettings() {
         <h1 class="page-title">Postavke <em>i backup</em></h1>
       </div>
     </div>
- 
+
     <div class="grid grid-2" style="margin-bottom: 24px;">
       <div class="card">
         <div class="card-head">
@@ -1976,7 +1985,7 @@ function renderSettings() {
         </div>
         ${isAdmin ? `<div style="margin-top: 16px;"><button class="btn btn-primary" id="save-general">Spremi promjene</button></div>` : ''}
       </div>
- 
+
       <div class="card">
         <div class="card-head">
           <div>
@@ -2005,7 +2014,7 @@ function renderSettings() {
         </div>
       </div>
     </div>
- 
+
     <div class="card" style="margin-bottom: 24px;">
       <div class="card-head">
         <div>
@@ -2053,7 +2062,7 @@ function renderSettings() {
       </div>
       ${isAdmin ? '<div style="margin-top: 16px;"><button class="btn btn-primary" id="save-workers">Spremi promjene radnika</button></div>' : ''}
     </div>
- 
+
     <div class="card">
       <div class="card-head">
         <div>
@@ -2079,7 +2088,7 @@ function renderSettings() {
       </div>
     </div>
   `;
- 
+
   // Wire up
   panel.querySelector('#dl-json')?.addEventListener('click', downloadJson);
   panel.querySelector('#dl-xlsx')?.addEventListener('click', downloadXlsx);
@@ -2137,7 +2146,7 @@ function renderSettings() {
     });
   }
 }
- 
+
 /* ============================================================
    EXPORT FUNCTIONS
    ============================================================ */
@@ -2151,7 +2160,7 @@ function downloadJson() {
   URL.revokeObjectURL(url);
   toast('Backup preuzet', 'success');
 }
- 
+
 function downloadXlsx() {
   // Lazy-load SheetJS
   if (typeof XLSX === 'undefined') {
@@ -2162,9 +2171,9 @@ function downloadXlsx() {
     toast('Učitavam Excel modul…');
     return;
   }
- 
+
   const wb = XLSX.utils.book_new();
- 
+
   // CASHFLOW summary sheet
   const summary = computeCashflowSummary();
   const months = allMonths();
@@ -2178,14 +2187,14 @@ function downloadXlsx() {
     cfRows.push([monthLabel(k), s.prihodi, s.tekuci, s.nepredvideni, s.sto, s.radnici, s.troskoviUkupno, s.neto]);
   }
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(cfRows), 'CASHFLOW');
- 
+
   // Settings
   const setRows = [['Radnik', 'Satnica', 'Marenda', 'Prijevoz', 'Stan', 'Fiksno']];
   for (const w of state.settings.workers) {
     setRows.push([w.name, w.satnica, w.marenda, w.prijevoz, w.stan, w.fiksno]);
   }
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(setRows), 'Postavke');
- 
+
   // TRX per month
   for (const k of months) {
     const items = (state.trx[k] || []);
@@ -2194,7 +2203,7 @@ function downloadXlsx() {
     for (const t of items) rows.push([t.date, t.type, t.partner, t.amount, t.category, t.group]);
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), `Trx ${monthLabelShort(k)}`);
   }
- 
+
   // STO per month
   for (const k of months) {
     const items = (state.sto[k] || []);
@@ -2203,7 +2212,7 @@ function downloadXlsx() {
     for (const t of items) rows.push([t.date, t.amount, t.project, t.note]);
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), `STO ${monthLabelShort(k)}`);
   }
- 
+
   // Hours per month
   for (const k of Object.keys(state.hours || {})) {
     const h = state.hours[k];
@@ -2216,11 +2225,11 @@ function downloadXlsx() {
     rows.push(['Dodatno', '', ...workers.flatMap(n => [h.extras?.[n] || 0, ''])]);
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), `Sati ${monthLabelShort(k)}`);
   }
- 
+
   XLSX.writeFile(wb, `stara-rijeka-cashflow-${new Date().toISOString().slice(0,10)}.xlsx`);
   toast('Excel preuzet', 'success');
 }
- 
+
 /* ============================================================
    BOOT
    ============================================================ */
@@ -2239,7 +2248,7 @@ async function boot() {
     } catch (e) {}
   }
   updateAdminButton();
- 
+
   try {
     state = await API.load();
     if (!state || !state.settings) throw new Error('Invalid state');
@@ -2257,25 +2266,24 @@ async function boot() {
     `;
     return;
   }
- 
+
   // Default activeMonth = latest available
   const months = allMonths();
   if (months.length) activeMonth = months[months.length - 1];
- 
+
   // Wire tabs
   document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
- 
+
   // Wire admin button
   document.getElementById('adminBtn').addEventListener('click', showPinModal);
- 
+
   // Hide boot
   setTimeout(() => document.getElementById('boot').classList.add('hidden'), 200);
- 
+
   // Initial render
   rerenderActive();
 }
- 
+
 document.addEventListener('DOMContentLoaded', boot);
- 
+
 })();
- 
