@@ -315,39 +315,37 @@ function computeWorkerStats(monthKey) {
   const h = state.hours[monthKey];
   if (!h || !h.days) return [];
   return state.settings.workers.map(w => {
-    let totalHours = 0, totalMarenda = 0, daysWorked = 0;
+    let autoTotalHours = 0, totalMarenda = 0, daysWorked = 0;
     for (const d of h.days) {
       const wd = d.workers && d.workers[w.name];
       if (wd && wd.hours > 0) {
-        totalHours += wd.hours;
+        autoTotalHours += wd.hours;
         totalMarenda += wd.marenda || 0;
         daysWorked++;
       }
     }
+    // Sati override: stored as { hoursOverride: number } in extras[name]
+    const extra = h.extras && h.extras[w.name];
+    let totalHours = autoTotalHours;
+    let isHoursOverridden = false;
+    if (extra !== null && extra !== undefined && typeof extra === 'object' && 'hoursOverride' in extra) {
+      totalHours = Number(extra.hoursOverride) || 0;
+      isHoursOverridden = Math.abs(totalHours - autoTotalHours) > 0.005;
+    }
+
     const zaradaSati = totalHours * w.satnica;
     // Auto-formula: ako radnik ima satnicu > 0 → Dodatno = Zarada + Marenda − Fiksno
-    //               ako satnica = 0 (npr. Dragan) → Dodatno je uvijek ručni unos
+    //               ako satnica = 0 (npr. Dragan) → Dodatno je ručni unos (legacy plain number u extras)
     const isAutoCalculated = w.satnica > 0;
-    const autoDodatno = isAutoCalculated ? (zaradaSati + totalMarenda - w.fiksno) : 0;
-    // Manual override is stored in extras[name]. Special object shape: { override: number } means user manually set it.
-    // For backward compat / non-auto workers, plain number in extras means manual.
-    const extra = h.extras && h.extras[w.name];
-    let dodatno, isOverridden = false;
-    if (extra !== null && extra !== undefined && typeof extra === 'object' && 'override' in extra) {
-      dodatno = Number(extra.override) || 0;
-      isOverridden = isAutoCalculated && Math.abs(dodatno - autoDodatno) > 0.005;
+    let dodatno;
+    if (isAutoCalculated) {
+      dodatno = zaradaSati + totalMarenda - w.fiksno;
     } else if (typeof extra === 'number') {
-      // For non-auto worker (Dragan): plain number = manual unos
-      // For auto worker: legacy plain number — treat as override only if it differs from auto
-      if (isAutoCalculated) {
-        dodatno = extra;
-        isOverridden = Math.abs(dodatno - autoDodatno) > 0.005;
-      } else {
-        dodatno = extra;
-        isOverridden = false;
-      }
+      dodatno = extra;
+    } else if (extra && typeof extra === 'object' && 'manual' in extra) {
+      dodatno = Number(extra.manual) || 0;
     } else {
-      dodatno = autoDodatno;
+      dodatno = 0;
     }
     // Sveukupno = Dodatno + Fiksno + Prijevoz + Stan
     const sveukupno = dodatno + w.fiksno + w.prijevoz + w.stan;
@@ -355,6 +353,8 @@ function computeWorkerStats(monthKey) {
       name: w.name,
       satnica: w.satnica,
       totalHours,
+      autoTotalHours,
+      isHoursOverridden,
       totalMarenda,
       daysWorked,
       zaradaSati,
@@ -362,8 +362,6 @@ function computeWorkerStats(monthKey) {
       stan: w.stan,
       fiksno: w.fiksno,
       dodatno,
-      autoDodatno,
-      isOverridden,
       isAutoCalculated,
       sveukupno,
     };
@@ -792,7 +790,7 @@ function renderHours() {
       <div class="card-head">
         <div>
           <div class="card-title">Sažetak isplate · ${monthLabelShort(activeMonth)}</div>
-          <div class="card-sub">Po radniku · <span style="font-style: italic;">Dodatno = Zarada + Marenda − Fiksno</span></div>
+          <div class="card-sub">Po radniku · <span style="font-style: italic;">Dodatno = Zarada + Marenda − Fiksno · Sati klikni za ručnu izmjenu</span></div>
         </div>
         <div class="page-actions">
           <span class="pill green">Σ Sveukupno: <strong style="margin-left: 4px;">${eur(stats.reduce((a, s) => a + s.sveukupno, 0), 0)}</strong></span>
@@ -820,33 +818,32 @@ function renderHours() {
               <tr>
                 <td><strong>${escapeHtml(s.name)}</strong></td>
                 <td class="num text-right">${eur(s.satnica, 2)}</td>
-                <td class="num text-right">${s.totalHours}</td>
+                <td class="num text-right">
+                  ${(() => {
+                    if (!isAdmin) {
+                      return `<strong>${s.totalHours}</strong>${s.isHoursOverridden ? ` <span class="dodatno-mark-readonly" title="Ručno postavljeno · auto bi bilo ${s.autoTotalHours}">✎</span>` : ''}`;
+                    }
+                    const tooltipText = s.isHoursOverridden
+                      ? `Auto bi bilo: ${s.autoTotalHours} · klikni × za reset`
+                      : `Auto: zbroj iz dnevne tablice · klikni za ručnu izmjenu`;
+                    return `<div class="dodatno-cell ${s.isHoursOverridden ? 'overridden' : ''}" title="${escapeHtml(tooltipText)}">
+                      ${s.isHoursOverridden ? `<button class="dodatno-reset" data-reset-hours="${escapeHtml(s.name)}" title="Vrati na auto (${s.autoTotalHours})" aria-label="Reset">×</button>` : ''}
+                      <input class="input cell-edit hours-input" type="number" step="0.5" value="${s.totalHours}" data-hours-worker="${escapeHtml(s.name)}" data-auto-hours="${s.autoTotalHours}" style="width: 80px;">
+                      ${s.isHoursOverridden ? `<span class="dodatno-mark" title="Ručno postavljeno">✎</span>` : ''}
+                    </div>`;
+                  })()}
+                </td>
                 <td class="num text-right">${eur(s.zaradaSati, 2)}</td>
                 <td class="num text-right">${eur(s.totalMarenda, 0)}</td>
                 <td class="num text-right">${eur(s.prijevoz, 0)}</td>
                 <td class="num text-right">${eur(s.stan, 0)}</td>
                 <td class="num text-right">${eur(s.fiksno, 0)}</td>
                 <td class="num text-right">
-                  ${(() => {
-                    if (!s.isAutoCalculated) {
-                      // Dragan-style: pure manual
-                      return isAdmin
+                  ${s.isAutoCalculated
+                    ? `<strong>${eur(s.dodatno, 2)}</strong>`
+                    : (isAdmin
                         ? `<input class="input cell-edit" type="number" step="any" value="${s.dodatno}" data-extra-worker="${escapeHtml(s.name)}" data-extra-mode="manual" style="width: 100px; margin-left: auto;">`
-                        : `<strong>${eur(s.dodatno, 0)}</strong>`;
-                    }
-                    // Auto-calculated worker
-                    if (isAdmin) {
-                      const tooltipText = s.isOverridden
-                        ? `Auto bi bilo: ${eur(s.autoDodatno, 2)} · klikni × za reset`
-                        : `Auto: Zarada + Marenda − Fiksno · klikni za ručnu izmjenu`;
-                      return `<div class="dodatno-cell ${s.isOverridden ? 'overridden' : ''}" title="${escapeHtml(tooltipText)}">
-                        ${s.isOverridden ? `<button class="dodatno-reset" data-reset-worker="${escapeHtml(s.name)}" title="Vrati na auto (${eur(s.autoDodatno, 2)})" aria-label="Reset">×</button>` : ''}
-                        <input class="input cell-edit dodatno-input" type="number" step="any" value="${s.dodatno}" data-extra-worker="${escapeHtml(s.name)}" data-extra-mode="auto" data-auto-value="${s.autoDodatno}" style="width: 100px;">
-                        ${s.isOverridden ? `<span class="dodatno-mark" title="Ručno postavljeno">✎</span>` : ''}
-                      </div>`;
-                    }
-                    return `<strong>${eur(s.dodatno, 2)}</strong>${s.isOverridden ? ` <span class="dodatno-mark-readonly" title="Ručno postavljeno">✎</span>` : ''}`;
-                  })()}
+                        : `<strong>${eur(s.dodatno, 0)}</strong>`)}
                 </td>
                 <td class="num text-right" style="background: var(--positive-soft); color: var(--positive); font-weight: 700;">${eur(s.sveukupno, 2)}</td>
               </tr>
@@ -880,40 +877,64 @@ function renderHours() {
         openDayModal(tr.dataset.date);
       });
     });
-    panel.querySelectorAll('input[data-extra-worker]').forEach(inp => {
+    // Sati override handler
+    panel.querySelectorAll('input[data-hours-worker]').forEach(inp => {
       inp.addEventListener('change', async () => {
-        const w = inp.dataset.extraWorker;
-        const mode = inp.dataset.extraMode;
+        const w = inp.dataset.hoursWorker;
+        const autoVal = parseFloat(inp.dataset.autoHours) || 0;
+        const newVal = parseFloat(inp.value) || 0;
         ensureMonth(activeMonth);
         if (!state.hours[activeMonth].extras) state.hours[activeMonth].extras = {};
-        const newVal = parseFloat(inp.value) || 0;
+        const cur = state.hours[activeMonth].extras[w];
 
-        if (mode === 'auto') {
-          // Auto-calculated worker: only store override if value differs from auto
-          const autoVal = parseFloat(inp.dataset.autoValue) || 0;
-          if (Math.abs(newVal - autoVal) < 0.005) {
-            // Reverted to auto value → remove override
-            delete state.hours[activeMonth].extras[w];
-          } else {
-            state.hours[activeMonth].extras[w] = { override: newVal };
+        if (Math.abs(newVal - autoVal) < 0.005) {
+          // Reverted to auto → remove hoursOverride
+          if (cur && typeof cur === 'object') {
+            delete cur.hoursOverride;
+            if (Object.keys(cur).length === 0) delete state.hours[activeMonth].extras[w];
           }
         } else {
-          // Manual worker (Dragan): store as plain number
-          state.hours[activeMonth].extras[w] = newVal;
+          // Set override, preserve other keys (e.g. manual for Dragan if exists)
+          if (cur && typeof cur === 'object') {
+            cur.hoursOverride = newVal;
+          } else if (typeof cur === 'number') {
+            // Dragan legacy: was plain number → wrap into object
+            state.hours[activeMonth].extras[w] = { manual: cur, hoursOverride: newVal };
+          } else {
+            state.hours[activeMonth].extras[w] = { hoursOverride: newVal };
+          }
         }
         if (await saveData()) renderHours();
       });
     });
-    // Reset override → delete extras[w]
-    panel.querySelectorAll('button[data-reset-worker]').forEach(btn => {
+    // Reset hours override
+    panel.querySelectorAll('button[data-reset-hours]').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        const w = btn.dataset.resetWorker;
+        const w = btn.dataset.resetHours;
         ensureMonth(activeMonth);
-        if (state.hours[activeMonth].extras && w in state.hours[activeMonth].extras) {
-          delete state.hours[activeMonth].extras[w];
+        const cur = state.hours[activeMonth].extras?.[w];
+        if (cur && typeof cur === 'object' && 'hoursOverride' in cur) {
+          delete cur.hoursOverride;
+          if (Object.keys(cur).length === 0) delete state.hours[activeMonth].extras[w];
           if (await saveData()) renderHours();
         }
+      });
+    });
+    // Manual dodatno (Dragan-style, satnica = 0)
+    panel.querySelectorAll('input[data-extra-worker][data-extra-mode="manual"]').forEach(inp => {
+      inp.addEventListener('change', async () => {
+        const w = inp.dataset.extraWorker;
+        const newVal = parseFloat(inp.value) || 0;
+        ensureMonth(activeMonth);
+        if (!state.hours[activeMonth].extras) state.hours[activeMonth].extras = {};
+        const cur = state.hours[activeMonth].extras[w];
+        if (cur && typeof cur === 'object') {
+          cur.manual = newVal;
+        } else {
+          state.hours[activeMonth].extras[w] = newVal;
+        }
+        if (await saveData()) renderHours();
       });
     });
   }
