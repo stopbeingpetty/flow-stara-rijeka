@@ -263,53 +263,144 @@ const ensureMonth = (key) => {
 };
 const cssVar = (name) => getComputedStyle(document.body).getPropertyValue(name).trim();
 const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-/* ---------- EU DATE HELPERS (DD/MM/YYYY) ---------- */
-/* Konverzija ISO YYYY-MM-DD ↔ EU DD/MM/YYYY za inpute u modalima */
+
+/* ---------- EU FORMAT HELPERS (DD/MM/YYYY · 10.000,00) ---------- */
 function isoToEU(iso) {
   if (!iso) return '';
   const [y, m, d] = iso.split('-');
   if (!y || !m || !d) return '';
   return `${d}/${m}/${y}`;
 }
-
 function euToISO(eu) {
   if (!eu) return '';
-  const digits = eu.replace(/\D/g, '');
-  if (digits.length !== 8) return '';
-  const d = digits.slice(0, 2);
-  const m = digits.slice(2, 4);
-  const y = digits.slice(4, 8);
+  const dig = String(eu).replace(/\D/g, '');
+  if (dig.length !== 8) return '';
+  const d = dig.slice(0, 2), m = dig.slice(2, 4), y = dig.slice(4, 8);
   const dn = +d, mn = +m, yn = +y;
-  if (mn < 1 || mn > 12) return '';
-  if (dn < 1 || dn > 31) return '';
-  if (yn < 2000 || yn > 2100) return '';
-  // Stvarna provjera (npr. 31.02. ne postoji)
+  if (mn < 1 || mn > 12 || dn < 1 || dn > 31 || yn < 2000 || yn > 2100) return '';
   const obj = new Date(yn, mn - 1, dn);
   if (obj.getFullYear() !== yn || obj.getMonth() !== mn - 1 || obj.getDate() !== dn) return '';
   return `${y}-${m}-${d}`;
 }
-
-/* Veže auto-formatiranje (DD/MM/YYYY) na text input */
 function attachEUDateMask(input) {
   if (!input) return;
-  const reformat = (raw, caretWasAtEnd) => {
-    let v = raw.replace(/\D/g, '').slice(0, 8);
+  input.addEventListener('input', e => {
+    let v = e.target.value.replace(/\D/g, '').slice(0, 8);
     if (v.length >= 5) v = v.slice(0, 2) + '/' + v.slice(2, 4) + '/' + v.slice(4);
     else if (v.length >= 3) v = v.slice(0, 2) + '/' + v.slice(2);
-    return v;
-  };
-  input.addEventListener('input', (e) => {
-    const before = e.target.value;
-    const next = reformat(before);
-    if (next !== before) e.target.value = next;
+    e.target.value = v;
     e.target.classList.remove('invalid');
   });
-  input.addEventListener('blur', (e) => {
+  input.addEventListener('blur', e => {
     const v = e.target.value.trim();
     if (v && !euToISO(v)) e.target.classList.add('invalid');
     else e.target.classList.remove('invalid');
   });
 }
+
+/* Parsira EU iznose: "10.000,50" → 10000.5; toleria i "10000", "10.000", "10000,5", "10,000.50" itd. */
+function parseEUAmount(str) {
+  if (str === null || str === undefined) return 0;
+  if (typeof str === 'number') return str;
+  let s = String(str).trim().replace(/[\s€]/g, '');
+  if (!s) return 0;
+  const hasComma = s.includes(',');
+  const hasDot = s.includes('.');
+  if (hasComma && hasDot) {
+    // Vodeći separator je onaj koji se pojavljuje zadnji → decimala
+    const lastComma = s.lastIndexOf(',');
+    const lastDot = s.lastIndexOf('.');
+    if (lastComma > lastDot) {
+      // EU format: 10.000,50
+      s = s.replace(/\./g, '').replace(',', '.');
+    } else {
+      // US format: 10,000.50
+      s = s.replace(/,/g, '');
+    }
+  } else if (hasComma) {
+    s = s.replace(',', '.');
+  } else if (hasDot) {
+    // Više točaka → tisućice. Jedna točka + 3 znamenke iza → tisućice. Inače decimala.
+    const parts = s.split('.');
+    if (parts.length > 2) s = parts.join('');
+    else if (parts.length === 2 && parts[1].length === 3 && parts[0].length > 0) s = parts.join('');
+  }
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
+function formatEUAmount(n) {
+  if (n === null || n === undefined || isNaN(n) || n === '') return '';
+  return FMT.format(Number(n));
+}
+function attachEUAmountMask(input, opts = {}) {
+  if (!input) return;
+  const initial = parseEUAmount(input.value);
+  if (!isNaN(initial) && input.value !== '') {
+    input.value = formatEUAmount(initial);
+  }
+  input.addEventListener('focus', e => {
+    const n = parseEUAmount(e.target.value);
+    if (n || e.target.value.trim()) {
+      // Plain EU prikaz bez tisućica radi lakšeg uređivanja
+      const fixed = (Math.round(n * 100) / 100);
+      const str = (fixed === Math.floor(fixed)) ? String(fixed) : fixed.toFixed(2);
+      e.target.value = str.replace('.', ',');
+    }
+    setTimeout(() => e.target.select?.(), 0);
+  });
+  input.addEventListener('input', e => {
+    // Dopusti samo brojke, jednu zarezu, jednu točku, minus na početku
+    let v = e.target.value;
+    v = v.replace(/[^\d,\.\-]/g, '');
+    // Minus samo na poziciji 0
+    v = v.replace(/(?!^)-/g, '');
+    // Maks jedan zarez
+    const ci = v.indexOf(',');
+    if (ci >= 0) v = v.slice(0, ci + 1) + v.slice(ci + 1).replace(/,/g, '');
+    e.target.value = v;
+  });
+  input.addEventListener('blur', e => {
+    const n = parseEUAmount(e.target.value);
+    e.target.value = (n || e.target.value.trim()) ? formatEUAmount(n) : '';
+  });
+}
+
+/* ---------- MONTH ARITHMETIC + PRUNE ---------- */
+function addCalendarMonths(key, delta) {
+  const [y, m] = key.split('-').map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+function isMonthEmpty(key) {
+  const trxEmpty = !state.trx[key] || state.trx[key].length === 0;
+  const stoEmpty = !state.sto[key] || state.sto[key].length === 0;
+  const h = state.hours[key];
+  const hoursDayDataEmpty = !h || !h.days || h.days.length === 0 ||
+    h.days.every(d => !d.workers || Object.keys(d.workers).every(n => {
+      const w = d.workers[n];
+      return !w || (!w.hours && !w.marenda);
+    }));
+  const extrasEmpty = !h || !h.extras || Object.keys(h.extras).length === 0;
+  return trxEmpty && stoEmpty && hoursDayDataEmpty && extrasEmpty;
+}
+function pruneEmptyMonths() {
+  const keys = new Set([
+    ...Object.keys(state.trx || {}),
+    ...Object.keys(state.sto || {}),
+    ...Object.keys(state.hours || {}),
+  ]);
+  // Sačuvaj barem aktivni mjesec (da se ne sruši UI ako je trenutno otvoren prazan mjesec)
+  for (const k of keys) {
+    if (k === activeMonth) continue;
+    if (isMonthEmpty(k)) {
+      delete state.trx[k];
+      delete state.sto[k];
+      delete state.hours[k];
+    }
+  }
+}
+
+
 /* Build day list for a given month */
 function daysInMonth(monthKey) {
   const [y, m] = monthKey.split('-').map(Number);
@@ -453,6 +544,7 @@ function setTab(tab) {
 
 function rerenderActive() {
   if (activeTab === 'cashflow') renderCashflow();
+  else if (activeTab === 'forecast') renderForecast();
   else if (activeTab === 'hours') renderHours();
   else if (activeTab === 'trx') renderTrx();
   else if (activeTab === 'sto') renderSto();
@@ -464,21 +556,17 @@ function rerenderActive() {
    ============================================================ */
 function buildMonthPicker(currentKey, _onChange, options = {}) {
   // Returns HTML only. Use bindMonthPicker(panel, ...) after innerHTML.
-  const months = options.months || allMonths();
-  if (!months.includes(currentKey)) {
-    if (months.length) currentKey = months[months.length - 1];
-  }
-  const idx = months.indexOf(currentKey);
+  // Navigacija ide po kalendaru (±1 mjesec), neovisno o tome postoje li podaci.
   return `
     <div class="month-picker" data-month="${currentKey}">
-      <button data-act="prev" ${idx <= 0 ? 'disabled' : ''} aria-label="Prethodni">
+      <button data-act="prev" aria-label="Prethodni">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
       </button>
       <span class="month-label">${monthLabel(currentKey)}</span>
-      <button data-act="next" ${idx === months.length - 1 ? 'disabled' : ''} aria-label="Sljedeći">
+      <button data-act="next" aria-label="Sljedeći">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
       </button>
-      ${options.allowAdd && isAdmin ? `<button data-act="add" title="Dodaj mjesec" aria-label="Dodaj">
+      ${options.allowAdd && isAdmin ? `<button data-act="add" title="Skok na sljedeći nepostojeći mjesec" aria-label="Dodaj">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       </button>` : ''}
     </div>
@@ -486,37 +574,27 @@ function buildMonthPicker(currentKey, _onChange, options = {}) {
 }
 
 function bindMonthPicker(panel, currentKey, onChange, options = {}) {
-  const months = options.months || allMonths();
-  const idx = months.indexOf(currentKey);
   const root = panel.querySelector('.month-picker');
   if (!root) return;
   root.addEventListener('click', e => {
     const btn = e.target.closest('button');
     if (!btn || btn.disabled) return;
     const act = btn.dataset.act;
-    if (act === 'prev' && idx > 0) onChange(months[idx - 1]);
-    else if (act === 'next' && idx < months.length - 1) onChange(months[idx + 1]);
+    if (act === 'prev') onChange(addCalendarMonths(currentKey, -1));
+    else if (act === 'next') onChange(addCalendarMonths(currentKey, 1));
     else if (act === 'add') addNewMonth(onChange);
   });
 }
 
 function addNewMonth(onChange) {
+  // Skok na sljedeći mjesec koji nema podataka — koristan za eksplicitno otvaranje budućeg mjeseca
   const months = allMonths();
-  const last = months[months.length - 1] || '2026-01';
-  const [y, m] = last.split('-').map(Number);
-  let ny = y, nm = m + 1;
-  if (nm > 12) { nm = 1; ny++; }
-  const newKey = `${ny}-${String(nm).padStart(2, '0')}`;
-  if (months.includes(newKey)) {
-    toast('Mjesec već postoji', 'error');
-    return;
-  }
+  const last = months.length ? months[months.length - 1] : '2026-01';
+  const newKey = addCalendarMonths(last, 1);
   ensureMonth(newKey);
-  saveData().then(() => {
-    activeMonth = newKey;
-    onChange(newKey);
-    toast(`Dodan mjesec ${monthLabel(newKey)}`, 'success');
-  });
+  activeMonth = newKey;
+  onChange(newKey);
+  toast(`Otvoren mjesec ${monthLabel(newKey)}`, 'success');
 }
 
 /* ============================================================
@@ -524,6 +602,8 @@ function addNewMonth(onChange) {
    ============================================================ */
 async function saveData() {
   try {
+    if (!state.forecast) state.forecast = [];
+    pruneEmptyMonths();
     await API.save(state);
     toast('Spremljeno', 'success', 1500);
     return true;
@@ -1703,7 +1783,7 @@ function trxModal(idx = null) {
         <input class="input" id="t-partner" list="t-partners" value="${escapeHtml(t.partner)}" placeholder="Npr. Hrvatski Telekom">
         <datalist id="t-partners">${partners.map(p => `<option value="${escapeHtml(p)}"></option>`).join('')}</datalist>
       </div>
-      <div class="field"><label class="field-label">Iznos (€)</label><input class="input" id="t-amount" type="number" step="0.01" value="${t.amount}"></div>
+      <div class="field"><label class="field-label">Iznos (€)</label><input class="input num" id="t-amount" type="text" inputmode="decimal" placeholder="0,00" value="${formatEUAmount(t.amount)}"></div>
       <div class="field"><label class="field-label">Grupa</label>
         <select class="select" id="t-group">${TRX_GROUPS.map(x => `<option ${x === t.group ? 'selected' : ''}>${x}</option>`).join('')}</select>
       </div>
@@ -1721,6 +1801,16 @@ function trxModal(idx = null) {
   `;
   const m = modal(html);
   attachEUDateMask(m.root.querySelector('#t-date'));
+  attachEUAmountMask(m.root.querySelector('#t-amount'));
+
+  // Auto-postavi grupu na "Prihodi" kad je tip "Prihod"; ako se mijenja sa Prihod na nešto drugo, vrati na Tekući
+  const typeSel = m.root.querySelector('#t-type');
+  const groupSel = m.root.querySelector('#t-group');
+  typeSel.addEventListener('change', () => {
+    if (typeSel.value === 'Prihod') groupSel.value = 'Prihodi';
+    else if (groupSel.value === 'Prihodi') groupSel.value = 'Tekući';
+  });
+
   m.root.addEventListener('click', async e => {
     const btn = e.target.closest('button[data-act]');
     if (!btn) return;
@@ -1731,15 +1821,21 @@ function trxModal(idx = null) {
         if (await saveData()) { m.close(); renderTrx(); }
       }
     } else if (btn.dataset.act === 'save') {
-      const date = euToISO(m.root.querySelector('#t-date').value);
-      if (!date) { toast('Datum mora biti DD/MM/YYYY', 'error'); m.root.querySelector('#t-date').classList.add('invalid'); return; }
+      const dateEU = m.root.querySelector('#t-date').value.trim();
+      const date = euToISO(dateEU);
+      if (!date) {
+        toast('Datum mora biti u formatu DD/MM/YYYY', 'error');
+        m.root.querySelector('#t-date').classList.add('invalid');
+        m.root.querySelector('#t-date').focus();
+        return;
+      }
       const newT = {
         date,
-        type: m.root.querySelector('#t-type').value,
+        type: typeSel.value,
         partner: m.root.querySelector('#t-partner').value.trim(),
-        amount: parseFloat(m.root.querySelector('#t-amount').value) || 0,
+        amount: parseEUAmount(m.root.querySelector('#t-amount').value),
         category: m.root.querySelector('#t-category').value.trim(),
-        group: m.root.querySelector('#t-group').value,
+        group: groupSel.value,
       };
       if (!newT.partner) { toast('Unesi partnera', 'error'); return; }
       if (!newT.amount) { toast('Unesi iznos', 'error'); return; }
@@ -2101,7 +2197,7 @@ function stoModal(idx = null) {
     <div class="modal-sub">${monthLabel(activeMonth)}</div>
     <div class="grid grid-2" style="gap: 14px;">
       <div class="field"><label class="field-label">Datum</label><input class="input" id="s-date" type="text" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" value="${isoToEU(t.date)}"></div>
-      <div class="field"><label class="field-label">Iznos (€)</label><input class="input" id="s-amount" type="number" step="0.01" value="${t.amount}"></div>
+      <div class="field"><label class="field-label">Iznos (€)</label><input class="input num" id="s-amount" type="text" inputmode="decimal" placeholder="0,00" value="${formatEUAmount(t.amount)}"></div>
       <div class="field" style="grid-column: 1 / -1;">
         <label class="field-label">Projekt</label>
         <input class="input" id="s-project" list="s-projs" value="${escapeHtml(t.project)}" placeholder="Npr. Grižane">
@@ -2117,6 +2213,8 @@ function stoModal(idx = null) {
   `;
   const m = modal(html);
   attachEUDateMask(m.root.querySelector('#s-date'));
+  attachEUAmountMask(m.root.querySelector('#s-amount'));
+
   m.root.addEventListener('click', async e => {
     const btn = e.target.closest('button[data-act]');
     if (!btn) return;
@@ -2127,11 +2225,17 @@ function stoModal(idx = null) {
         if (await saveData()) { m.close(); renderSto(); }
       }
     } else if (btn.dataset.act === 'save') {
-      const date = euToISO(m.root.querySelector('#s-date').value);
-      if (!date) { toast('Datum mora biti DD/MM/YYYY', 'error'); m.root.querySelector('#s-date').classList.add('invalid'); return; }
+      const dateEU = m.root.querySelector('#s-date').value.trim();
+      const date = euToISO(dateEU);
+      if (!date) {
+        toast('Datum mora biti u formatu DD/MM/YYYY', 'error');
+        m.root.querySelector('#s-date').classList.add('invalid');
+        m.root.querySelector('#s-date').focus();
+        return;
+      }
       const newT = {
         date,
-        amount: parseFloat(m.root.querySelector('#s-amount').value) || 0,
+        amount: parseEUAmount(m.root.querySelector('#s-amount').value),
         project: m.root.querySelector('#s-project').value.trim(),
         note: m.root.querySelector('#s-note').value.trim(),
       };
@@ -2184,7 +2288,7 @@ function renderSettings() {
         <div class="grid grid-2" style="gap: 14px;">
           <div class="field">
             <label class="field-label">Limit računa (€)</label>
-            <input class="input" id="set-limit" type="number" step="100" value="${state.company?.limit_racuna || 30000}" ${isAdmin ? '' : 'disabled'}>
+            <input class="input num" id="set-limit" type="text" inputmode="decimal" placeholder="0,00" value="${formatEUAmount(state.company?.limit_racuna || 30000)}" ${isAdmin ? '' : 'disabled'}>
           </div>
           <div class="field">
             <label class="field-label">Naziv firme</label>
@@ -2298,6 +2402,7 @@ function renderSettings() {
   `;
 
   // Wire up
+  attachEUAmountMask(panel.querySelector('#set-limit'));
   panel.querySelector('#dl-json')?.addEventListener('click', downloadJson);
   panel.querySelector('#dl-xlsx')?.addEventListener('click', downloadXlsx);
   panel.querySelector('#toggle-admin')?.addEventListener('click', showPinModal);
@@ -2310,7 +2415,7 @@ function renderSettings() {
   });
   if (isAdmin) {
     panel.querySelector('#save-general')?.addEventListener('click', async () => {
-      const limit = parseFloat(panel.querySelector('#set-limit').value) || 30000;
+      const limit = parseEUAmount(panel.querySelector('#set-limit').value) || 30000;
       state.company.limit_racuna = limit;
       if (await saveData()) renderSettings();
     });
@@ -2444,6 +2549,484 @@ function downloadXlsx() {
 }
 
 /* ============================================================
+   RENDER: PROGNOZA
+   ============================================================ */
+
+/* Kategorije za prognozu (slično TRX_CATEGORIES, prilagođeno za tekuće troškove) */
+const FORECAST_CATEGORIES = [
+  'Leasing','Smještaj','Komunalije','Telekomunikacije','Knjigovodstvo','Bankovne naknade',
+  'Gorivo','Osiguranje','Plaće','Doprinosi','Porez','e-poslovanje','Najam','Ostalo'
+];
+
+/* Default seed za prognozu — koristi se prvi put kad korisnikov state nema forecast polje.
+   Korisnik može uređivati (dodati / promijeniti / obrisati) preko UI. Promjene se spremaju u Blob. */
+const DEFAULT_FORECAST_SEED = [
+  { label: 'Porsche Leasing (aktualno vozilo)', category: 'Leasing', amount: 1666.76, validFrom: '2026-05', validTo: '', note: 'Mjesečna rata leasinga novog vozila — od 5. mjeseca', active: true },
+  { label: 'Porsche Leasing (prethodno vozilo)', category: 'Leasing', amount: 1329.54, validFrom: '2026-02', validTo: '2026-04', note: 'Staro vozilo — vidi se u Trx za Veljaču-Travanj', active: true },
+  { label: 'Stan — najam', category: 'Smještaj', amount: 2500.00, validFrom: '2026-02', validTo: '', note: 'Mjesečno (kombinirana stavka)', active: true },
+  { label: 'Adria Oil — gorivo (procjena)', category: 'Gorivo', amount: 1000.00, validFrom: '2026-02', validTo: '', note: 'Prosjek 2 punjenja mjesečno · varira', active: true },
+  { label: 'Hrvatski Telekom (stari operater)', category: 'Telekomunikacije', amount: 385.00, validFrom: '2026-02', validTo: '2026-04', note: 'Prosjek viđenih računa · prešli na A1', active: true },
+  { label: 'A1 telekomunikacije', category: 'Telekomunikacije', amount: 0.00, validFrom: '2026-05', validTo: '', note: 'UNESI STVARAN IZNOS čim stigne prvi račun', active: true },
+  { label: 'Knjigovodstvo (Jojo)', category: 'Knjigovodstvo', amount: 300.00, validFrom: '2026-02', validTo: '', note: 'Mjesečna naknada za knjigovodstvo', active: true },
+  { label: 'PBZ — bankovne naknade', category: 'Bankovne naknade', amount: 40.00, validFrom: '2026-02', validTo: '', note: 'Mjesečno održavanje računa. Veće naknade su nepredviđene.', active: true },
+  { label: 'HRT pristojba', category: 'Komunalije', amount: 10.62, validFrom: '2026-02', validTo: '', note: '', active: true },
+  { label: 'Pondi e-poslovanje', category: 'e-poslovanje', amount: 5.00, validFrom: '2026-02', validTo: '', note: '', active: true },
+];
+
+let forecastView = 'month';  // 'month' | 'year'
+let forecastYear = 2026;     // godina za year view
+
+function ensureForecast() {
+  if (!state.forecast) state.forecast = [];
+}
+
+/* Da li je item aktivan u danom mjesecu (YYYY-MM) */
+function forecastItemActiveIn(item, monthKey) {
+  if (!item) return false;
+  if (item.active === false) return false;
+  if (item.validFrom && monthKey < item.validFrom) return false;
+  if (item.validTo && monthKey > item.validTo) return false;
+  return true;
+}
+
+/* Vrati listu aktivnih items za mjesec, sortirano po kategoriji i nazivu */
+function forecastItemsForMonth(monthKey) {
+  ensureForecast();
+  return state.forecast
+    .filter(it => forecastItemActiveIn(it, monthKey))
+    .slice()
+    .sort((a, b) => (a.category || '').localeCompare(b.category || '') || (a.label || '').localeCompare(b.label || ''));
+}
+
+function forecastMonthTotal(monthKey) {
+  return forecastItemsForMonth(monthKey).reduce((s, it) => s + (Number(it.amount) || 0), 0);
+}
+
+/* Stvarni tekući troškovi za mjesec (za usporedbu) */
+function actualTekuciForMonth(monthKey) {
+  return (state.trx[monthKey] || [])
+    .filter(t => t.group === 'Tekući' && t.type !== 'Prihod')
+    .reduce((s, t) => s + (Number(t.amount) || 0), 0);
+}
+
+function renderForecast() {
+  ensureForecast();
+  const panel = document.getElementById('panel-forecast');
+  if (forecastView === 'year') return renderForecastYear(panel);
+
+  const items = forecastItemsForMonth(activeMonth);
+  const total = forecastMonthTotal(activeMonth);
+  const actual = actualTekuciForMonth(activeMonth);
+  const delta = actual - total;
+  const allItems = state.forecast || [];
+  const inactiveCount = allItems.filter(it => !forecastItemActiveIn(it, activeMonth)).length;
+
+  // Grupiraj po kategoriji
+  const byCat = {};
+  for (const it of items) {
+    const c = it.category || 'Ostalo';
+    if (!byCat[c]) byCat[c] = [];
+    byCat[c].push(it);
+  }
+  const catKeys = Object.keys(byCat).sort();
+
+  panel.innerHTML = `
+    <div class="page-head">
+      <div class="page-title-block">
+        <div class="page-eyebrow">Planirani tekući troškovi · ${monthLabel(activeMonth)}</div>
+        <h1 class="page-title">Prognoza <em>troškova</em></h1>
+      </div>
+      <div class="page-actions">
+        <div class="view-toggle" role="tablist">
+          <button class="view-toggle-btn active" data-view="month">Mjesec</button>
+          <button class="view-toggle-btn" data-view="year">Godina</button>
+        </div>
+        ${buildMonthPicker(activeMonth, null, { allowAdd: false })}
+        ${isAdmin ? `<button class="btn btn-primary" id="new-forecast">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Nova stavka
+        </button>` : ''}
+      </div>
+    </div>
+
+    <div class="grid grid-3" style="margin-bottom: 24px;">
+      <div class="stat-card">
+        <div class="stat-label">Prognoza za mjesec</div>
+        <div class="stat-value">${eur(total, 0)}</div>
+        <div class="stat-sub">${items.length} stavki · ${monthLabelShort(activeMonth)}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Stvarno (Tekući)</div>
+        <div class="stat-value">${actual ? eur(actual, 0) : '—'}</div>
+        <div class="stat-sub">${actual ? 'iz Trx tab-a' : 'nema unesenih'}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Odstupanje</div>
+        <div class="stat-value ${delta > 0 ? 'negative' : delta < 0 ? 'positive' : ''}">${actual ? (delta >= 0 ? '+' : '') + eur(delta, 0) : '—'}</div>
+        <div class="stat-sub">${actual ? (delta > 0 ? 'iznad prognoze' : delta < 0 ? 'ispod prognoze' : 'po prognozi') : '—'}</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div>
+          <div class="card-title">Tekući troškovi koje očekujemo</div>
+          <div class="card-sub">${items.length} aktivnih · ${inactiveCount} neaktivnih izvan ovog mjeseca</div>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Kategorija</th>
+              <th>Stavka</th>
+              <th class="text-right">Iznos (€)</th>
+              <th>Vrijedi od</th>
+              <th>Vrijedi do</th>
+              <th>Napomena</th>
+              ${isAdmin ? '<th class="text-right">Akcije</th>' : ''}
+            </tr>
+          </thead>
+          <tbody>
+            ${items.length === 0 ? `<tr><td colspan="${isAdmin ? 7 : 6}" style="text-align: center; padding: 36px 12px; color: var(--muted);">
+              ${isAdmin ? 'Nema prognoziranih stavki za ovaj mjesec. Klikni „Nova stavka" za dodavanje.' : 'Admin još nije unio prognozu za ovaj mjesec.'}
+            </td></tr>` : catKeys.map(cat => {
+              const list = byCat[cat];
+              const subTotal = list.reduce((s, it) => s + (Number(it.amount) || 0), 0);
+              return list.map((it, j) => {
+                const realIdx = state.forecast.indexOf(it);
+                return `
+                <tr ${isAdmin ? `class="clickable" data-idx="${realIdx}"` : ''}>
+                  ${j === 0 ? `<td rowspan="${list.length}" style="vertical-align: top; font-weight: 600; color: var(--acc); border-right: 1px solid var(--line);">${escapeHtml(cat)}</td>` : ''}
+                  <td>${escapeHtml(it.label || '')}</td>
+                  <td class="num text-right" style="font-weight: 600;">${eur(it.amount)}</td>
+                  <td class="col-date">${it.validFrom ? monthLabel(it.validFrom) : '—'}</td>
+                  <td class="col-date">${it.validTo ? monthLabel(it.validTo) : '<span style="color: var(--muted-2);">otvoreno</span>'}</td>
+                  <td style="color: var(--muted); font-size: 13px;">${escapeHtml(it.note || '')}</td>
+                  ${isAdmin ? `<td class="text-right">
+                    <button class="btn btn-ghost btn-sm" data-edit-fc="${realIdx}" title="Uredi">
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                    </button>
+                  </td>` : ''}
+                </tr>`;
+              }).join('') + `
+                <tr class="subtotal-row" style="background: var(--surface-2);">
+                  <td></td>
+                  <td style="font-weight: 600; color: var(--muted);">Σ ${escapeHtml(cat)}</td>
+                  <td class="num text-right" style="font-weight: 700;">${eur(subTotal)}</td>
+                  <td colspan="${isAdmin ? 4 : 3}"></td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+          ${items.length > 0 ? `<tfoot>
+            <tr>
+              <td colspan="2" style="font-weight: 700;">Ukupna prognoza za ${monthLabel(activeMonth)}</td>
+              <td class="num text-right" style="font-weight: 700; font-size: 16px;">${eur(total)}</td>
+              <td colspan="${isAdmin ? 4 : 3}"></td>
+            </tr>
+          </tfoot>` : ''}
+        </table>
+      </div>
+    </div>
+
+    ${isAdmin && allItems.length > 0 ? `
+    <div class="card" style="margin-top: 24px;">
+      <div class="card-head">
+        <div>
+          <div class="card-title">Sve prognozne stavke (cijeli registar)</div>
+          <div class="card-sub">Uključujući one koje ne vrijede u ${monthLabelShort(activeMonth)} ${activeMonth.slice(0,4)}</div>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>Kategorija</th>
+              <th>Stavka</th>
+              <th class="text-right">Iznos (€)</th>
+              <th>Razdoblje</th>
+              <th class="text-right">Akcije</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${allItems.map((it, i) => {
+              const isActive = forecastItemActiveIn(it, activeMonth);
+              const period = (it.validFrom ? monthLabel(it.validFrom) : 'oduvijek') + ' → ' + (it.validTo ? monthLabel(it.validTo) : 'otvoreno');
+              return `
+              <tr class="clickable" data-idx="${i}" style="opacity: ${isActive ? 1 : 0.55};">
+                <td>${isActive ? '<span class="pill green">aktivno</span>' : '<span class="pill gray">izvan razdoblja</span>'}</td>
+                <td style="color: var(--acc);">${escapeHtml(it.category || '—')}</td>
+                <td>${escapeHtml(it.label || '')}</td>
+                <td class="num text-right">${eur(it.amount)}</td>
+                <td class="col-date" style="font-size: 12px;">${period}</td>
+                <td class="text-right">
+                  <button class="btn btn-ghost btn-sm" data-edit-fc="${i}" title="Uredi">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                  </button>
+                </td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>` : ''}
+  `;
+
+  bindMonthPicker(panel, activeMonth, (m) => { activeMonth = m; ensureMonth(m); renderForecast(); }, { allowAdd: false });
+
+  panel.querySelectorAll('.view-toggle-btn').forEach(b => b.addEventListener('click', () => {
+    forecastView = b.dataset.view;
+    renderForecast();
+  }));
+
+  if (isAdmin) {
+    panel.querySelector('#new-forecast')?.addEventListener('click', () => forecastModal(null));
+    panel.querySelectorAll('[data-edit-fc]').forEach(b => b.addEventListener('click', e => {
+      e.stopPropagation();
+      forecastModal(parseInt(b.dataset.editFc));
+    }));
+    panel.querySelectorAll('tr.clickable[data-idx]').forEach(tr => tr.addEventListener('click', e => {
+      if (e.target.closest('button')) return;
+      forecastModal(parseInt(tr.dataset.idx));
+    }));
+  }
+}
+
+function renderForecastYear(panel) {
+  ensureForecast();
+  const year = forecastYear;
+  const months = [];
+  for (let m = 1; m <= 12; m++) {
+    months.push(`${year}-${String(m).padStart(2, '0')}`);
+  }
+
+  // Skup svih item-a koji su barem u jednom mjesecu te godine aktivni
+  const itemsInYear = (state.forecast || []).filter(it => months.some(mk => forecastItemActiveIn(it, mk)));
+  // Grupiraj po kategoriji
+  const byCat = {};
+  for (const it of itemsInYear) {
+    const c = it.category || 'Ostalo';
+    if (!byCat[c]) byCat[c] = [];
+    byCat[c].push(it);
+  }
+  const catKeys = Object.keys(byCat).sort();
+
+  // Mjesečne sume
+  const monthlyTotals = months.map(mk => forecastMonthTotal(mk));
+  const yearTotal = monthlyTotals.reduce((s, x) => s + x, 0);
+  const actualByMonth = months.map(mk => actualTekuciForMonth(mk));
+  const actualYearTotal = actualByMonth.reduce((s, x) => s + x, 0);
+
+  panel.innerHTML = `
+    <div class="page-head">
+      <div class="page-title-block">
+        <div class="page-eyebrow">Godišnji pregled · ${year}</div>
+        <h1 class="page-title">Prognoza <em>${year}</em></h1>
+      </div>
+      <div class="page-actions">
+        <div class="view-toggle" role="tablist">
+          <button class="view-toggle-btn" data-view="month">Mjesec</button>
+          <button class="view-toggle-btn active" data-view="year">Godina</button>
+        </div>
+        <div class="month-picker" data-year="${year}">
+          <button data-act="year-prev" aria-label="Prethodna godina"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+          <span class="month-label">${year}</span>
+          <button data-act="year-next" aria-label="Sljedeća godina"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+        </div>
+        ${isAdmin ? `<button class="btn btn-primary" id="new-forecast-y">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Nova stavka
+        </button>` : ''}
+      </div>
+    </div>
+
+    <div class="grid grid-3" style="margin-bottom: 24px;">
+      <div class="stat-card">
+        <div class="stat-label">Prognoza godina ${year}</div>
+        <div class="stat-value">${eur(yearTotal, 0)}</div>
+        <div class="stat-sub">${itemsInYear.length} stavki</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Stvarno YTD (Tekući)</div>
+        <div class="stat-value">${actualYearTotal ? eur(actualYearTotal, 0) : '—'}</div>
+        <div class="stat-sub">${actualYearTotal ? 'iz Trx tab-a' : 'nema podataka'}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Mjesečni prosjek</div>
+        <div class="stat-value">${eur(yearTotal / 12, 0)}</div>
+        <div class="stat-sub">prognoza ÷ 12</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div>
+          <div class="card-title">Pregled po mjesecima</div>
+          <div class="card-sub">Iznos po stavki u svakom mjesecu — prazno = nije aktivno</div>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table class="table table-compact">
+          <thead>
+            <tr>
+              <th style="position: sticky; left: 0; background: var(--surface); z-index: 2;">Stavka</th>
+              ${months.map(mk => `<th class="text-right">${monthLabelShort(mk).slice(0,3)}</th>`).join('')}
+              <th class="text-right" style="background: var(--acc-soft); color: var(--acc);">Ukupno</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${catKeys.length === 0 ? `<tr><td colspan="14" style="text-align: center; padding: 36px 12px; color: var(--muted);">Nema prognoziranih stavki za ${year}.</td></tr>` : catKeys.map(cat => {
+              const list = byCat[cat];
+              return `
+                <tr class="cat-row">
+                  <td colspan="14" style="background: var(--surface-2); font-weight: 700; color: var(--acc); padding: 8px 14px;">${escapeHtml(cat)}</td>
+                </tr>
+                ${list.map(it => {
+                  const realIdx = state.forecast.indexOf(it);
+                  const itemTotal = months.reduce((s, mk) => s + (forecastItemActiveIn(it, mk) ? (Number(it.amount) || 0) : 0), 0);
+                  return `
+                  <tr ${isAdmin ? `class="clickable" data-idx="${realIdx}"` : ''}>
+                    <td style="position: sticky; left: 0; background: var(--surface); z-index: 1;">${escapeHtml(it.label || '')}</td>
+                    ${months.map(mk => {
+                      const active = forecastItemActiveIn(it, mk);
+                      return `<td class="num text-right" style="color: ${active ? 'var(--ink)' : 'var(--muted-2)'};">${active ? eur(it.amount, 0) : '—'}</td>`;
+                    }).join('')}
+                    <td class="num text-right" style="background: var(--acc-soft); color: var(--acc); font-weight: 700;">${eur(itemTotal, 0)}</td>
+                  </tr>`;
+                }).join('')}
+              `;
+            }).join('')}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td style="position: sticky; left: 0; background: var(--surface); font-weight: 700;">Ukupno prognoza</td>
+              ${monthlyTotals.map(t => `<td class="num text-right" style="font-weight: 700;">${t ? eur(t, 0) : '—'}</td>`).join('')}
+              <td class="num text-right" style="background: var(--acc); color: var(--acc-ink); font-weight: 700;">${eur(yearTotal, 0)}</td>
+            </tr>
+            <tr style="opacity: 0.85;">
+              <td style="position: sticky; left: 0; background: var(--surface); color: var(--muted);">Stvarno (Tekući)</td>
+              ${actualByMonth.map(a => `<td class="num text-right" style="color: var(--muted);">${a ? eur(a, 0) : '—'}</td>`).join('')}
+              <td class="num text-right" style="color: var(--muted); font-weight: 600;">${actualYearTotal ? eur(actualYearTotal, 0) : '—'}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  `;
+
+  panel.querySelectorAll('.view-toggle-btn').forEach(b => b.addEventListener('click', () => {
+    forecastView = b.dataset.view;
+    renderForecast();
+  }));
+  panel.querySelector('[data-act="year-prev"]')?.addEventListener('click', () => { forecastYear--; renderForecast(); });
+  panel.querySelector('[data-act="year-next"]')?.addEventListener('click', () => { forecastYear++; renderForecast(); });
+
+  if (isAdmin) {
+    panel.querySelector('#new-forecast-y')?.addEventListener('click', () => forecastModal(null));
+    panel.querySelectorAll('tr.clickable[data-idx]').forEach(tr => tr.addEventListener('click', e => {
+      if (e.target.closest('button')) return;
+      forecastModal(parseInt(tr.dataset.idx));
+    }));
+  }
+}
+
+function forecastModal(idx = null) {
+  ensureForecast();
+  const it = idx !== null ? state.forecast[idx] : { label: '', category: 'Ostalo', amount: 0, validFrom: activeMonth, validTo: '', note: '', active: true };
+  const allCats = Array.from(new Set([...FORECAST_CATEGORIES, ...(state.forecast || []).map(x => x.category).filter(Boolean)])).sort();
+  const allLabels = Array.from(new Set((state.forecast || []).map(x => x.label).filter(Boolean))).sort();
+
+  const html = `
+    <div class="modal-title">${idx !== null ? 'Uredi' : 'Nova'} prognozu</div>
+    <div class="modal-sub">Tekući trošak koji se ponavlja</div>
+    <div class="grid grid-2" style="gap: 14px;">
+      <div class="field" style="grid-column: 1 / -1;">
+        <label class="field-label">Naziv stavke</label>
+        <input class="input" id="fc-label" list="fc-labels" value="${escapeHtml(it.label || '')}" placeholder="Npr. Porsche Leasing">
+        <datalist id="fc-labels">${allLabels.map(l => `<option value="${escapeHtml(l)}"></option>`).join('')}</datalist>
+      </div>
+      <div class="field">
+        <label class="field-label">Kategorija</label>
+        <input class="input" id="fc-category" list="fc-cats" value="${escapeHtml(it.category || '')}" placeholder="Npr. Leasing">
+        <datalist id="fc-cats">${allCats.map(c => `<option value="${escapeHtml(c)}"></option>`).join('')}</datalist>
+      </div>
+      <div class="field">
+        <label class="field-label">Iznos mjesečno (€)</label>
+        <input class="input num" id="fc-amount" type="text" inputmode="decimal" placeholder="0,00" value="${formatEUAmount(it.amount)}">
+      </div>
+      <div class="field">
+        <label class="field-label">Vrijedi od (mjesec)</label>
+        <input class="input" id="fc-from" type="month" value="${it.validFrom || ''}">
+        <div class="field-hint">YYYY-MM. Prazno = oduvijek.</div>
+      </div>
+      <div class="field">
+        <label class="field-label">Vrijedi do (mjesec)</label>
+        <input class="input" id="fc-to" type="month" value="${it.validTo || ''}">
+        <div class="field-hint">YYYY-MM. Prazno = otvoreno (neograničeno).</div>
+      </div>
+      <div class="field" style="grid-column: 1 / -1;">
+        <label class="field-label">Napomena (opcionalno)</label>
+        <input class="input" id="fc-note" value="${escapeHtml(it.note || '')}" placeholder="Npr. Aneks ugovora od 1.10.2026.">
+      </div>
+      <div class="field" style="grid-column: 1 / -1;">
+        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+          <input type="checkbox" id="fc-active" ${it.active !== false ? 'checked' : ''} style="width: 18px; height: 18px;">
+          <span>Stavka je aktivna (uključi u izračune)</span>
+        </label>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-act="cancel">Odustani</button>
+      ${idx !== null ? '<button class="btn btn-danger" data-act="del">Obriši</button>' : ''}
+      <button class="btn btn-primary" data-act="save">${idx !== null ? 'Spremi' : 'Dodaj'}</button>
+    </div>
+  `;
+  const m = modal(html);
+  attachEUAmountMask(m.root.querySelector('#fc-amount'));
+
+  m.root.addEventListener('click', async e => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    if (btn.dataset.act === 'cancel') m.close();
+    else if (btn.dataset.act === 'del') {
+      if (confirm('Obrisati ovu prognoznu stavku?')) {
+        state.forecast.splice(idx, 1);
+        if (await saveData()) { m.close(); renderForecast(); }
+      }
+    } else if (btn.dataset.act === 'save') {
+      const label = m.root.querySelector('#fc-label').value.trim();
+      const amount = parseEUAmount(m.root.querySelector('#fc-amount').value);
+      if (!label) { toast('Unesi naziv stavke', 'error'); return; }
+      if (!amount) { toast('Unesi iznos', 'error'); return; }
+      const validFrom = m.root.querySelector('#fc-from').value || '';
+      const validTo = m.root.querySelector('#fc-to').value || '';
+      if (validFrom && validTo && validFrom > validTo) {
+        toast('„Vrijedi od" mora biti prije „Vrijedi do"', 'error');
+        return;
+      }
+      const newIt = {
+        label,
+        category: m.root.querySelector('#fc-category').value.trim() || 'Ostalo',
+        amount,
+        validFrom,
+        validTo,
+        note: m.root.querySelector('#fc-note').value.trim(),
+        active: m.root.querySelector('#fc-active').checked,
+      };
+      if (idx !== null) state.forecast[idx] = newIt;
+      else state.forecast.push(newIt);
+      if (await saveData()) {
+        m.close();
+        renderForecast();
+        toast(idx !== null ? 'Stavka ažurirana' : 'Stavka dodana', 'success');
+      }
+    }
+  });
+}
+
+/* ============================================================
    BOOT
    ============================================================ */
 async function boot() {
@@ -2480,9 +3063,26 @@ async function boot() {
     return;
   }
 
-  // Default activeMonth = latest available
+  // Osiguraj forecast field u stateu + napuni default ako prazan
+  if (!state.forecast || !Array.isArray(state.forecast)) state.forecast = [];
+  if (state.forecast.length === 0) {
+    state.forecast = DEFAULT_FORECAST_SEED.map(x => ({ ...x }));
+    // NAPOMENA: nije pozvan saveData() — popunjavanje se sprema tek nakon prve admin izmjene
+  }
+
+  // Defaultiraj na trenutni kalendarski mjesec (a ne na zadnji mjesec u podacima),
+  // tako da ako je netko slučajno otvorio buduće mjesece, navigacija počinje "danas"
+  const today = new Date();
+  const currentKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
   const months = allMonths();
-  if (months.length) activeMonth = months[months.length - 1];
+  if (months.includes(currentKey)) activeMonth = currentKey;
+  else if (months.length) {
+    // Ako trenutni mjesec još nema podataka, idi na najnoviji koji ih ima
+    activeMonth = months[months.length - 1];
+  } else {
+    activeMonth = currentKey;
+    ensureMonth(currentKey);
+  }
 
   // Wire tabs
   document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
