@@ -1731,7 +1731,8 @@ function trxModal(idx = null) {
         if (await saveData()) { m.close(); renderTrx(); }
       }
     } else if (btn.dataset.act === 'save') {
-      const date = m.root.querySelector('#t-date').value;
+      const date = euToISO(m.root.querySelector('#t-date').value);
+      if (!date) { toast('Datum mora biti DD/MM/YYYY', 'error'); m.root.querySelector('#t-date').classList.add('invalid'); return; }
       const newT = {
         date,
         type: m.root.querySelector('#t-type').value,
