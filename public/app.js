@@ -263,7 +263,53 @@ const ensureMonth = (key) => {
 };
 const cssVar = (name) => getComputedStyle(document.body).getPropertyValue(name).trim();
 const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+/* ---------- EU DATE HELPERS (DD/MM/YYYY) ---------- */
+/* Konverzija ISO YYYY-MM-DD ↔ EU DD/MM/YYYY za inpute u modalima */
+function isoToEU(iso) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
+  if (!y || !m || !d) return '';
+  return `${d}/${m}/${y}`;
+}
 
+function euToISO(eu) {
+  if (!eu) return '';
+  const digits = eu.replace(/\D/g, '');
+  if (digits.length !== 8) return '';
+  const d = digits.slice(0, 2);
+  const m = digits.slice(2, 4);
+  const y = digits.slice(4, 8);
+  const dn = +d, mn = +m, yn = +y;
+  if (mn < 1 || mn > 12) return '';
+  if (dn < 1 || dn > 31) return '';
+  if (yn < 2000 || yn > 2100) return '';
+  // Stvarna provjera (npr. 31.02. ne postoji)
+  const obj = new Date(yn, mn - 1, dn);
+  if (obj.getFullYear() !== yn || obj.getMonth() !== mn - 1 || obj.getDate() !== dn) return '';
+  return `${y}-${m}-${d}`;
+}
+
+/* Veže auto-formatiranje (DD/MM/YYYY) na text input */
+function attachEUDateMask(input) {
+  if (!input) return;
+  const reformat = (raw, caretWasAtEnd) => {
+    let v = raw.replace(/\D/g, '').slice(0, 8);
+    if (v.length >= 5) v = v.slice(0, 2) + '/' + v.slice(2, 4) + '/' + v.slice(4);
+    else if (v.length >= 3) v = v.slice(0, 2) + '/' + v.slice(2);
+    return v;
+  };
+  input.addEventListener('input', (e) => {
+    const before = e.target.value;
+    const next = reformat(before);
+    if (next !== before) e.target.value = next;
+    e.target.classList.remove('invalid');
+  });
+  input.addEventListener('blur', (e) => {
+    const v = e.target.value.trim();
+    if (v && !euToISO(v)) e.target.classList.add('invalid');
+    else e.target.classList.remove('invalid');
+  });
+}
 /* Build day list for a given month */
 function daysInMonth(monthKey) {
   const [y, m] = monthKey.split('-').map(Number);
