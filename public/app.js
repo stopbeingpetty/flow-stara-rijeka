@@ -1720,6 +1720,7 @@ function trxModal(idx = null) {
     </div>
   `;
   const m = modal(html);
+  attachEUDateMask(m.root.querySelector('#t-date'));
   m.root.addEventListener('click', async e => {
     const btn = e.target.closest('button[data-act]');
     if (!btn) return;
