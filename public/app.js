@@ -1694,7 +1694,7 @@ function trxModal(idx = null) {
     <div class="modal-title">${idx !== null ? 'Uredi' : 'Nova'} transakciju</div>
     <div class="modal-sub">${monthLabel(activeMonth)}</div>
     <div class="grid grid-2" style="gap: 14px;">
-      <div class="field"><label class="field-label">Datum</label><input class="input" id="t-date" type="date" value="${t.date}"></div>
+      <div class="field"><label class="field-label">Datum</label><input class="input" id="t-date" type="text" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" value="${isoToEU(t.date)}"></div>
       <div class="field"><label class="field-label">Tip</label>
         <select class="select" id="t-type">${TRX_TYPES.map(x => `<option ${x === t.type ? 'selected' : ''}>${x}</option>`).join('')}</select>
       </div>
