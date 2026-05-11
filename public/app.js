@@ -2127,7 +2127,8 @@ function stoModal(idx = null) {
         if (await saveData()) { m.close(); renderSto(); }
       }
     } else if (btn.dataset.act === 'save') {
-      const date = m.root.querySelector('#s-date').value;
+      const date = euToISO(m.root.querySelector('#s-date').value);
+      if (!date) { toast('Datum mora biti DD/MM/YYYY', 'error'); m.root.querySelector('#s-date').classList.add('invalid'); return; }
       const newT = {
         date,
         amount: parseFloat(m.root.querySelector('#s-amount').value) || 0,
