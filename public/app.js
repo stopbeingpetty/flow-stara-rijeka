@@ -2100,7 +2100,7 @@ function stoModal(idx = null) {
     <div class="modal-title">${idx !== null ? 'Uredi' : 'Nova'} STO stavku</div>
     <div class="modal-sub">${monthLabel(activeMonth)}</div>
     <div class="grid grid-2" style="gap: 14px;">
-      <div class="field"><label class="field-label">Datum</label><input class="input" id="s-date" type="date" value="${t.date}"></div>
+      <div class="field"><label class="field-label">Datum</label><input class="input" id="s-date" type="text" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" value="${isoToEU(t.date)}"></div>
       <div class="field"><label class="field-label">Iznos (€)</label><input class="input" id="s-amount" type="number" step="0.01" value="${t.amount}"></div>
       <div class="field" style="grid-column: 1 / -1;">
         <label class="field-label">Projekt</label>
