@@ -44,6 +44,8 @@
   --acc-sto-soft: #fff8d1;
   --acc-settings: #2c5f5d;
   --acc-settings-soft: #e1ecec;
+  --acc-forecast: #4a3a5f;
+  --acc-forecast-soft: #ede8f3;
 
   /* Semantics */
   --positive: #1f6b3a;
@@ -76,6 +78,7 @@ body[data-tab="hours"]    { --acc: var(--acc-hours);    --acc-soft: var(--acc-ho
 body[data-tab="trx"]      { --acc: var(--acc-trx);      --acc-soft: var(--acc-trx-soft);      --acc-ink: #fff; }
 body[data-tab="sto"]      { --acc: var(--acc-sto);      --acc-soft: var(--acc-sto-soft);      --acc-ink: var(--acc-sto-ink); }
 body[data-tab="settings"] { --acc: var(--acc-settings); --acc-soft: var(--acc-settings-soft); --acc-ink: #fff; }
+body[data-tab="forecast"] { --acc: var(--acc-forecast); --acc-soft: var(--acc-forecast-soft); --acc-ink: #fff; }
 
 /* ============================================================
    RESET
@@ -233,6 +236,7 @@ img, svg { display: block; max-width: 100%; }
 .tab[data-tab="trx"]       .tab-dot { background: var(--acc-trx); }
 .tab[data-tab="sto"]       .tab-dot { background: var(--acc-sto); border: 1px solid var(--ink); }
 .tab[data-tab="settings"]  .tab-dot { background: var(--acc-settings); }
+.tab[data-tab="forecast"]  .tab-dot { background: var(--acc-forecast); }
 
 /* ============================================================
    MAIN CONTENT
@@ -1169,6 +1173,18 @@ body[data-tab="sto"] .page-title strong {
   .card, .table-wrap, .hours-table-wrap { box-shadow: none; border: 1px solid #ccc; }
   body { background: white; }
 }
+
+/* EU format helpers */
+.input.invalid { border-color: var(--negative) !important; background: var(--negative-soft); }
+.input.invalid:focus { box-shadow: 0 0 0 3px rgba(155, 44, 44, 0.15); }
+.field-hint { font-size: 11px; color: var(--muted); margin-top: 4px; font-style: italic; }
+
+/* Table compact (Prognoza godišnji) */
+.table.table-compact th, .table.table-compact td { padding: 8px 10px; font-size: 13px; }
+
+/* Subtotal & cat rows */
+.subtotal-row td { border-top: 1px solid var(--line); padding-top: 10px; padding-bottom: 10px; }
+tr.cat-row td { letter-spacing: 0.4px; font-size: 12px; text-transform: uppercase; }
 </style>
 </head>
 <body data-tab="cashflow">
@@ -1213,6 +1229,9 @@ body[data-tab="sto"] .page-title strong {
       <button class="tab active" data-tab="cashflow" role="tab">
         <span class="tab-dot"></span>Cashflow
       </button>
+      <button class="tab" data-tab="forecast" role="tab">
+        <span class="tab-dot"></span>Prognoza
+      </button>
       <button class="tab" data-tab="hours" role="tab">
         <span class="tab-dot"></span>Evidencija sati
       </button>
@@ -1233,6 +1252,9 @@ body[data-tab="sto"] .page-title strong {
 
     <!-- ========== TAB: CASHFLOW ========== -->
     <section id="panel-cashflow" class="tab-panel active" role="tabpanel"></section>
+
+    <!-- ========== TAB: PROGNOZA ========== -->
+    <section id="panel-forecast" class="tab-panel" role="tabpanel"></section>
 
     <!-- ========== TAB: HOURS ========== -->
     <section id="panel-hours" class="tab-panel" role="tabpanel"></section>
