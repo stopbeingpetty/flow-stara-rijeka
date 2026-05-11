@@ -3004,5 +3004,97 @@
         "Dragan": 1300.0
       }
     }
-  }
+  },
+  "forecast": [
+    {
+      "label": "Porsche Leasing (aktualno vozilo)",
+      "category": "Leasing",
+      "amount": 1666.76,
+      "validFrom": "2026-05",
+      "validTo": "",
+      "note": "Mjesečna rata leasinga novog vozila — od 5. mjeseca",
+      "active": true
+    },
+    {
+      "label": "Porsche Leasing (prethodno vozilo)",
+      "category": "Leasing",
+      "amount": 1329.54,
+      "validFrom": "2026-02",
+      "validTo": "2026-04",
+      "note": "Staro vozilo — vidi se u Trx za Veljaču-Travanj",
+      "active": true
+    },
+    {
+      "label": "Stan — najam",
+      "category": "Smještaj",
+      "amount": 2500.0,
+      "validFrom": "2026-02",
+      "validTo": "",
+      "note": "Mjesečno (kombinirana stavka)",
+      "active": true
+    },
+    {
+      "label": "Adria Oil — gorivo (procjena)",
+      "category": "Gorivo",
+      "amount": 1000.0,
+      "validFrom": "2026-02",
+      "validTo": "",
+      "note": "Prosjek 2 punjenja mjesečno · varira",
+      "active": true
+    },
+    {
+      "label": "Hrvatski Telekom (stari operater)",
+      "category": "Telekomunikacije",
+      "amount": 385.0,
+      "validFrom": "2026-02",
+      "validTo": "2026-04",
+      "note": "Prosjek viđenih računa · prešli na A1",
+      "active": true
+    },
+    {
+      "label": "A1 telekomunikacije",
+      "category": "Telekomunikacije",
+      "amount": 0.0,
+      "validFrom": "2026-05",
+      "validTo": "",
+      "note": "UNESI STVARAN IZNOS čim stigne prvi račun",
+      "active": true
+    },
+    {
+      "label": "Knjigovodstvo (Jojo)",
+      "category": "Knjigovodstvo",
+      "amount": 300.0,
+      "validFrom": "2026-02",
+      "validTo": "",
+      "note": "Mjesečna naknada za knjigovodstvo",
+      "active": true
+    },
+    {
+      "label": "PBZ — bankovne naknade",
+      "category": "Bankovne naknade",
+      "amount": 40.0,
+      "validFrom": "2026-02",
+      "validTo": "",
+      "note": "Mjesečno održavanje računa. Veće naknade su nepredviđene.",
+      "active": true
+    },
+    {
+      "label": "HRT pristojba",
+      "category": "Komunalije",
+      "amount": 10.62,
+      "validFrom": "2026-02",
+      "validTo": "",
+      "note": "",
+      "active": true
+    },
+    {
+      "label": "Pondi e-poslovanje",
+      "category": "e-poslovanje",
+      "amount": 5.0,
+      "validFrom": "2026-02",
+      "validTo": "",
+      "note": "",
+      "active": true
+    }
+  ]
 }
