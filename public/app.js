@@ -284,13 +284,73 @@ function euToISO(eu) {
 }
 function attachEUDateMask(input) {
   if (!input) return;
-  input.addEventListener('input', e => {
-    let v = e.target.value.replace(/\D/g, '').slice(0, 8);
-    if (v.length >= 5) v = v.slice(0, 2) + '/' + v.slice(2, 4) + '/' + v.slice(4);
-    else if (v.length >= 3) v = v.slice(0, 2) + '/' + v.slice(2);
-    e.target.value = v;
-    e.target.classList.remove('invalid');
+  // Pratimo prethodnu vrijednost i poziciju kareta da bismo mogli odbiti
+  // unose koji nisu brojke ili '/' bez da bacimo postojeći sadržaj.
+  let lastValue = input.value;
+  let lastSelStart = input.selectionStart || 0;
+
+  // Snapshot prije svake izmjene
+  input.addEventListener('keydown', () => {
+    lastValue = input.value;
+    lastSelStart = input.selectionStart || 0;
   });
+
+  input.addEventListener('input', (e) => {
+    const el = e.target;
+    const inputType = e.inputType || '';
+    const isDelete = inputType.startsWith('delete');
+    let v = el.value;
+    let pos = el.selectionStart || 0;
+
+    el.classList.remove('invalid');
+
+    // BRISANJE → samo ograniči duljinu i pusti korisnika.
+    // NE preformatiraj — tako "18/05/2026" - "8" postaje "1/05/2026" (ne "10/52/026").
+    if (isDelete) {
+      if (v.length > 10) v = v.slice(0, 10);
+      el.value = v;
+      try { el.setSelectionRange(pos, pos); } catch {}
+      lastValue = v;
+      lastSelStart = pos;
+      return;
+    }
+
+    // PASTE → preformatiraj agresivno iz samih brojki
+    if (inputType === 'insertFromPaste') {
+      const digits = v.replace(/\D/g, '').slice(0, 8);
+      let out = digits;
+      if (digits.length >= 5) out = digits.slice(0, 2) + '/' + digits.slice(2, 4) + '/' + digits.slice(4);
+      else if (digits.length >= 3) out = digits.slice(0, 2) + '/' + digits.slice(2);
+      el.value = out;
+      try { el.setSelectionRange(out.length, out.length); } catch {}
+      lastValue = out;
+      lastSelStart = out.length;
+      return;
+    }
+
+    // OBIČNO TIPKANJE — odbij sve što nije brojka ili '/'
+    const lastChar = v.charAt(pos - 1);
+    if (lastChar && !/[\d/]/.test(lastChar)) {
+      el.value = lastValue;
+      try { el.setSelectionRange(lastSelStart, lastSelStart); } catch {}
+      return;
+    }
+
+    // Limitiraj na max 10 znakova (DD/MM/YYYY)
+    if (v.length > 10) v = v.slice(0, 10);
+
+    // Auto-insert '/' na granicama 2 i 5 dok korisnik dodaje brojke na kraj
+    if ((pos === 2 || pos === 5) && /\d/.test(lastChar) && v.charAt(pos) !== '/' && v.length === pos) {
+      v = v + '/';
+      pos = pos + 1;
+    }
+
+    el.value = v;
+    try { el.setSelectionRange(pos, pos); } catch {}
+    lastValue = v;
+    lastSelStart = pos;
+  });
+
   input.addEventListener('blur', e => {
     const v = e.target.value.trim();
     if (v && !euToISO(v)) e.target.classList.add('invalid');
