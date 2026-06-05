@@ -508,6 +508,26 @@ function computeWorkersTotal(monthKey) {
   return stats.reduce((a, s) => a + (s.mjesecniTrosak || 0), 0);
 }
 
+/* Vrati fiksno za radnika za zadani mjesec (YYYY-MM), uvažavajući povijest promjena.
+   w.fiksnoHistory = [{ from: 'YYYY-MM', amount: number }, ...] (opcionalno).
+   Ako nema povijesti, koristi se w.fiksno kao i dosad.
+   Prikaz u tablici ostaje JEDNA brojka — povijest se rješava u pozadini. */
+function fiksnoForMonth(w, monthKey) {
+  const base = Number(w.fiksno) || 0;
+  const hist = Array.isArray(w.fiksnoHistory) ? w.fiksnoHistory : null;
+  if (!hist || hist.length === 0) return base;
+  // Sortiraj po datumu uzlazno, nađi zadnji unos čiji 'from' <= monthKey
+  const sorted = hist.slice().filter(e => e && e.from).sort((a, b) => a.from.localeCompare(b.from));
+  let val = base;
+  let matched = false;
+  for (const e of sorted) {
+    if (e.from <= monthKey) { val = Number(e.amount) || 0; matched = true; }
+    else break;
+  }
+  // Ako nijedan 'from' nije <= monthKey, ostaje base (vrijednost prije prve promjene)
+  return matched ? val : base;
+}
+
 function computeWorkerStats(monthKey) {
   const h = state.hours[monthKey];
   if (!h || !h.days) return [];
@@ -530,13 +550,16 @@ function computeWorkerStats(monthKey) {
       isHoursOverridden = Math.abs(totalHours - autoTotalHours) > 0.005;
     }
 
+    // Fiksno za OVAJ mjesec (uvažava povijest promjena)
+    const fiksno = fiksnoForMonth(w, monthKey);
+
     const zaradaSati = totalHours * w.satnica;
     // Auto-formula: ako radnik ima satnicu > 0 → Dodatno = Zarada + Marenda − Fiksno
     //               ako satnica = 0 (npr. Dragan) → Dodatno je ručni unos (legacy plain number u extras)
     const isAutoCalculated = w.satnica > 0;
     let dodatno;
     if (isAutoCalculated) {
-      dodatno = zaradaSati + totalMarenda - w.fiksno;
+      dodatno = zaradaSati + totalMarenda - fiksno;
     } else if (typeof extra === 'number') {
       dodatno = extra;
     } else if (extra && typeof extra === 'object' && 'manual' in extra) {
@@ -544,11 +567,10 @@ function computeWorkerStats(monthKey) {
     } else {
       dodatno = 0;
     }
-    // Mjesečni trošak (ukupni mjesečni izdatak firme za radnika) = Dodatno + Fiksno + Prijevoz + Stan
-    const mjesecniTrosak = dodatno + w.fiksno + w.prijevoz + w.stan;
-    // Za isplatu (ono što radnik prima na ruke ovaj mjesec) = Dodatno + Prijevoz + Stan
-    // (Fiksno ide preko bankovnog računa, ne ulazi u keš isplatu)
-    const zaIsplatu = dodatno + w.prijevoz + w.stan;
+    // Za isplatu = Dodatno + Prijevoz (Marenda je već u Dodatno; Stan ide preko firme, NE ovdje)
+    const zaIsplatu = dodatno + w.prijevoz;
+    // Mjesečni trošak (ukupni izdatak firme) = Za isplatu + Fiksno + Stan
+    const mjesecniTrosak = zaIsplatu + fiksno + w.stan;
     // Dug radnika (ako postoji) — ne utječe na izračune, samo prikaz
     const dug = Number(w.dug) || 0;
     return {
@@ -562,7 +584,7 @@ function computeWorkerStats(monthKey) {
       zaradaSati,
       prijevoz: w.prijevoz,
       stan: w.stan,
-      fiksno: w.fiksno,
+      fiksno,
       dodatno,
       isAutoCalculated,
       mjesecniTrosak,
@@ -983,27 +1005,27 @@ function renderHours() {
       <div class="card-head">
         <div>
           <div class="card-title">Sažetak isplate · ${monthLabelShort(activeMonth)}</div>
-          <div class="card-sub">Po radniku · <span style="font-style: italic;">Dodatno = Zarada + Marenda − Fiksno · Za isplatu = Dodatno + Prijevoz + Stan (na ruke) · Mj. trošak = Za isplatu + Fiksno (ukupno za firmu)</span></div>
+          <div class="card-sub">Po radniku</div>
         </div>
         <div class="page-actions">
-          <span class="pill gray">Σ Mj. trošak: <strong style="margin-left: 4px;">${eur(stats.reduce((a, s) => a + s.mjesecniTrosak, 0), 0)}</strong></span>
           <span class="pill green">Σ Za isplatu: <strong style="margin-left: 4px;">${eur(stats.reduce((a, s) => a + s.zaIsplatu, 0), 0)}</strong></span>
+          <span class="pill gray">Σ Mj. trošak: <strong style="margin-left: 4px;">${eur(stats.reduce((a, s) => a + s.mjesecniTrosak, 0), 0)}</strong></span>
         </div>
       </div>
       <div class="table-scroll">
-        <table class="table">
+        <table class="table payroll-table">
           <thead>
             <tr>
               <th>Radnik</th>
-              <th class="text-right">Satnica</th>
               <th class="text-right">Sati</th>
-              <th class="text-right">Zarada (sati)</th>
-              <th class="text-right">Marenda</th>
-              <th class="text-right">Prijevoz</th>
-              <th class="text-right">Stan</th>
-              <th class="text-right">Fiksno/mj.</th>
-              <th class="text-right">Dodatno</th>
-              <th class="text-right">Za isplatu</th>
+              <th class="text-right">Satnica</th>
+              <th class="text-right">Zarada</th>
+              <th class="text-right zone-kes zone-kes-first">Marenda</th>
+              <th class="text-right zone-kes">Prijevoz</th>
+              <th class="text-right zone-kes">Dodatno</th>
+              <th class="text-right zone-kes zone-kes-total">Za isplatu</th>
+              <th class="text-right zone-firma zone-firma-first">Fiksno</th>
+              <th class="text-right zone-firma">Stan</th>
               <th class="text-right">Mj. trošak</th>
             </tr>
           </thead>
@@ -1017,7 +1039,6 @@ function renderHours() {
                     ? `<span class="dug-badge ${isAdmin ? 'editable' : ''}" data-dug-worker="${escapeHtml(s.name)}" title="${isAdmin ? 'Klikni za izmjenu duga' : 'Dug radnika'}">dug ${eur(s.dug, 0)}</span>`
                     : (isAdmin ? `<span class="dug-badge add editable" data-dug-worker="${escapeHtml(s.name)}" title="Dodaj dug">+ dug</span>` : '')}
                 </td>
-                <td class="num text-right">${eur(s.satnica, 2)}</td>
                 <td class="num text-right">
                   ${(() => {
                     if (!isAdmin) {
@@ -1028,44 +1049,48 @@ function renderHours() {
                       : `Auto: zbroj iz dnevne tablice · klikni za ručnu izmjenu`;
                     return `<div class="dodatno-cell ${s.isHoursOverridden ? 'overridden' : ''}" title="${escapeHtml(tooltipText)}">
                       ${s.isHoursOverridden ? `<button class="dodatno-reset" data-reset-hours="${escapeHtml(s.name)}" title="Vrati na auto (${s.autoTotalHours})" aria-label="Reset">×</button>` : ''}
-                      <input class="input cell-edit hours-input" type="number" step="0.5" value="${s.totalHours}" data-hours-worker="${escapeHtml(s.name)}" data-auto-hours="${s.autoTotalHours}" style="width: 80px;">
+                      <input class="input cell-edit hours-input" type="number" step="0.5" value="${s.totalHours}" data-hours-worker="${escapeHtml(s.name)}" data-auto-hours="${s.autoTotalHours}" style="width: 72px;">
                       ${s.isHoursOverridden ? `<span class="dodatno-mark" title="Ručno postavljeno">✎</span>` : ''}
                     </div>`;
                   })()}
                 </td>
+                <td class="num text-right muted-cell">${eur(s.satnica, 2)}</td>
                 <td class="num text-right">${eur(s.zaradaSati, 2)}</td>
-                <td class="num text-right">${eur(s.totalMarenda, 0)}</td>
-                <td class="num text-right">${eur(s.prijevoz, 0)}</td>
-                <td class="num text-right">${eur(s.stan, 0)}</td>
-                <td class="num text-right">${eur(s.fiksno, 0)}</td>
-                <td class="num text-right">
+                <td class="num text-right zone-kes zone-kes-first">${eur(s.totalMarenda, 0)}</td>
+                <td class="num text-right zone-kes">${eur(s.prijevoz, 0)}</td>
+                <td class="num text-right zone-kes">
                   ${s.isAutoCalculated
-                    ? `<strong>${eur(s.dodatno, 2)}</strong>`
+                    ? `<span style="color: ${s.dodatno < 0 ? 'var(--muted)' : 'var(--positive)'};">${eur(s.dodatno, 2)}</span>`
                     : (isAdmin
-                        ? `<input class="input cell-edit" type="number" step="any" value="${s.dodatno}" data-extra-worker="${escapeHtml(s.name)}" data-extra-mode="manual" style="width: 100px; margin-left: auto;">`
-                        : `<strong>${eur(s.dodatno, 0)}</strong>`)}
+                        ? `<input class="input cell-edit" type="number" step="any" value="${s.dodatno}" data-extra-worker="${escapeHtml(s.name)}" data-extra-mode="manual" style="width: 92px; margin-left: auto;">`
+                        : `<span style="color: ${s.dodatno < 0 ? 'var(--muted)' : 'var(--positive)'};">${eur(s.dodatno, 0)}</span>`)}
                 </td>
-                <td class="num text-right" style="background: var(--positive-soft); color: var(--positive); font-weight: 700;">${eur(s.zaIsplatu, 2)}</td>
-                <td class="num text-right" style="color: var(--ink-2); font-weight: 600;">${eur(s.mjesecniTrosak, 2)}</td>
+                <td class="num text-right zone-kes zone-kes-total">${eur(s.zaIsplatu, 2)}</td>
+                <td class="num text-right zone-firma zone-firma-first">${eur(s.fiksno, 0)}</td>
+                <td class="num text-right zone-firma" style="${s.stan > 0 ? '' : 'color: var(--muted-2);'}">${eur(s.stan, 0)}</td>
+                <td class="num text-right" style="font-weight: 600;">${eur(s.mjesecniTrosak, 2)}</td>
               </tr>
             `;}).join('')}
           </tbody>
           <tfoot>
             <tr>
               <td>UKUPNO</td>
-              <td></td>
               <td class="num text-right"><strong>${stats.reduce((a, s) => a + s.totalHours, 0)}</strong></td>
+              <td></td>
               <td class="num text-right"><strong>${eur(stats.reduce((a, s) => a + s.zaradaSati, 0), 2)}</strong></td>
-              <td class="num text-right"><strong>${eur(stats.reduce((a, s) => a + s.totalMarenda, 0), 0)}</strong></td>
-              <td class="num text-right"><strong>${eur(stats.reduce((a, s) => a + s.prijevoz, 0), 0)}</strong></td>
-              <td class="num text-right"><strong>${eur(stats.reduce((a, s) => a + s.stan, 0), 0)}</strong></td>
-              <td class="num text-right"><strong>${eur(stats.reduce((a, s) => a + s.fiksno, 0), 0)}</strong></td>
-              <td class="num text-right"><strong>${eur(stats.reduce((a, s) => a + s.dodatno, 0), 2)}</strong></td>
-              <td class="num text-right" style="background: var(--positive-soft); color: var(--positive);"><strong>${eur(stats.reduce((a, s) => a + s.zaIsplatu, 0), 2)}</strong></td>
-              <td class="num text-right" style="color: var(--ink-2);"><strong>${eur(stats.reduce((a, s) => a + s.mjesecniTrosak, 0), 2)}</strong></td>
+              <td class="num text-right zone-kes zone-kes-first"><strong>${eur(stats.reduce((a, s) => a + s.totalMarenda, 0), 0)}</strong></td>
+              <td class="num text-right zone-kes"><strong>${eur(stats.reduce((a, s) => a + s.prijevoz, 0), 0)}</strong></td>
+              <td class="num text-right zone-kes"><strong>${eur(stats.reduce((a, s) => a + s.dodatno, 0), 2)}</strong></td>
+              <td class="num text-right zone-kes zone-kes-total"><strong>${eur(stats.reduce((a, s) => a + s.zaIsplatu, 0), 2)}</strong></td>
+              <td class="num text-right zone-firma zone-firma-first"><strong>${eur(stats.reduce((a, s) => a + s.fiksno, 0), 0)}</strong></td>
+              <td class="num text-right zone-firma"><strong>${eur(stats.reduce((a, s) => a + s.stan, 0), 0)}</strong></td>
+              <td class="num text-right"><strong>${eur(stats.reduce((a, s) => a + s.mjesecniTrosak, 0), 2)}</strong></td>
             </tr>
           </tfoot>
         </table>
+      </div>
+      <div class="payroll-formula">
+        Zarada = Sati × Satnica&nbsp;&nbsp;·&nbsp;&nbsp;Dodatno = Zarada + Marenda − Fiksno&nbsp;&nbsp;·&nbsp;&nbsp;<span style="color: var(--positive);">Za isplatu = Dodatno + Prijevoz</span>&nbsp;&nbsp;·&nbsp;&nbsp;Mj. trošak = Za isplatu + Fiksno + Stan
       </div>
     </div>
   `;
@@ -2327,6 +2352,88 @@ function stoModal(idx = null) {
 /* ============================================================
    RENDER: SETTINGS
    ============================================================ */
+function fiksnoHistoryModal(workerIdx) {
+  const w = state.settings.workers[workerIdx];
+  if (!w) return;
+  if (!Array.isArray(w.fiksnoHistory)) w.fiksnoHistory = [];
+
+  const renderRows = () => {
+    const hist = (w.fiksnoHistory || []).slice().sort((a, b) => (a.from || '').localeCompare(b.from || ''));
+    if (hist.length === 0) {
+      return `<div style="padding: 16px; text-align: center; color: var(--muted); font-size: 13px;">Nema promjena. Bazno fiksno (${eur(w.fiksno, 0)}) vrijedi za sve mjesece.</div>`;
+    }
+    return hist.map((e, idx) => `
+      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line);">
+        <input class="input" type="month" value="${e.from || ''}" data-fh-from="${idx}" style="flex: 0 0 150px;">
+        <span style="color: var(--muted); font-size: 13px;">→</span>
+        <input class="input num" type="number" step="0.5" value="${e.amount ?? ''}" data-fh-amount="${idx}" placeholder="iznos €" style="flex: 1; text-align: right;">
+        <button class="btn btn-ghost btn-sm btn-danger" data-fh-del="${idx}" title="Obriši" style="padding: 4px;">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+        </button>
+      </div>
+    `).join('');
+  };
+
+  const html = `
+    <div class="modal-title">Fiksno kroz vrijeme · ${escapeHtml(w.name)}</div>
+    <div class="modal-sub">Bazno fiksno je ${eur(w.fiksno, 0)}. Dodaj promjenu samo ako se fiksno mijenja od nekog mjeseca nadalje — raniji mjeseci ostaju na baznom iznosu.</div>
+    <div id="fh-rows" style="margin: 8px 0 4px;">${renderRows()}</div>
+    <div style="margin-top: 12px;">
+      <button class="btn" data-act="add-change">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Dodaj promjenu
+      </button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-act="cancel">Odustani</button>
+      <button class="btn btn-primary" data-act="save">Spremi</button>
+    </div>
+  `;
+  const m = modal(html);
+  const rowsEl = m.root.querySelector('#fh-rows');
+
+  const syncFromInputs = () => {
+    m.root.querySelectorAll('[data-fh-from]').forEach(inp => {
+      const idx = parseInt(inp.dataset.fhFrom);
+      if (w.fiksnoHistory[idx]) w.fiksnoHistory[idx].from = inp.value;
+    });
+    m.root.querySelectorAll('[data-fh-amount]').forEach(inp => {
+      const idx = parseInt(inp.dataset.fhAmount);
+      if (w.fiksnoHistory[idx]) w.fiksnoHistory[idx].amount = parseFloat(inp.value) || 0;
+    });
+  };
+  const redraw = () => { rowsEl.innerHTML = renderRows(); };
+
+  m.root.addEventListener('click', async e => {
+    const btn = e.target.closest('button[data-act], button[data-fh-del]');
+    if (!btn) return;
+    if (btn.dataset.fhDel !== undefined) {
+      syncFromInputs();
+      w.fiksnoHistory.splice(parseInt(btn.dataset.fhDel), 1);
+      redraw();
+      return;
+    }
+    if (btn.dataset.act === 'add-change') {
+      syncFromInputs();
+      const next = activeMonth || (new Date().toISOString().slice(0, 7));
+      w.fiksnoHistory.push({ from: next, amount: w.fiksno });
+      redraw();
+    } else if (btn.dataset.act === 'cancel') {
+      m.close();
+    } else if (btn.dataset.act === 'save') {
+      syncFromInputs();
+      // Očisti prazne/nevaljane unose
+      w.fiksnoHistory = (w.fiksnoHistory || []).filter(x => x && x.from && !isNaN(x.amount));
+      if (w.fiksnoHistory.length === 0) delete w.fiksnoHistory;
+      if (await saveData()) {
+        m.close();
+        renderSettings();
+        toast('Fiksno povijest spremljena', 'success');
+      }
+    }
+  });
+}
+
 function renderSettings() {
   const panel = document.getElementById('panel-settings');
   panel.innerHTML = `
@@ -2417,11 +2524,23 @@ function renderSettings() {
                 <td>${isAdmin
                   ? `<input class="input" value="${escapeHtml(w.name)}" data-w="${i}" data-f="name" style="max-width: 180px;">`
                   : `<strong>${escapeHtml(w.name)}</strong>`}</td>
-                ${['satnica','marenda','prijevoz','stan','fiksno'].map(f => `
-                  <td class="text-right">${isAdmin
+                ${['satnica','marenda','prijevoz','stan','fiksno'].map(f => {
+                  const histCount = (f === 'fiksno' && Array.isArray(w.fiksnoHistory)) ? w.fiksnoHistory.filter(e => e && e.from).length : 0;
+                  if (f === 'fiksno' && isAdmin) {
+                    return `<td class="text-right">
+                      <div style="display: inline-flex; align-items: center; gap: 4px; justify-content: flex-end;">
+                        <button class="btn btn-ghost btn-sm fiksno-hist-btn" data-fiksno-hist="${i}" title="Fiksno kroz vrijeme${histCount ? ' (' + histCount + ' promjena)' : ''}" style="padding: 4px;">
+                          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+                        </button>
+                        ${histCount ? `<span class="fiksno-hist-dot" title="${histCount} promjena kroz vrijeme"></span>` : ''}
+                        <input class="input num" type="number" step="0.5" value="${w[f]}" data-w="${i}" data-f="${f}" style="max-width: 90px; text-align: right;">
+                      </div>
+                    </td>`;
+                  }
+                  return `<td class="text-right">${isAdmin
                     ? `<input class="input num" type="number" step="0.5" value="${w[f]}" data-w="${i}" data-f="${f}" style="max-width: 100px; margin-left: auto; text-align: right;">`
-                    : `<span class="num">${eur(w[f], f === 'satnica' ? 2 : 0)}</span>`}</td>
-                `).join('')}
+                    : `<span class="num">${eur(w[f], f === 'satnica' ? 2 : 0)}</span>`}</td>`;
+                }).join('')}
                 ${isAdmin ? `<td class="text-right">
                   <button class="btn btn-ghost btn-sm btn-danger" data-act="del-worker" data-i="${i}" title="Obriši">
                     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
@@ -2499,6 +2618,9 @@ function renderSettings() {
       if (!confirm('Obrisati radnika? Postojeći zapisi sati će ostati.')) return;
       state.settings.workers.splice(parseInt(b.dataset.i), 1);
       if (await saveData()) renderSettings();
+    }));
+    panel.querySelectorAll('[data-fiksno-hist]').forEach(b => b.addEventListener('click', () => {
+      fiksnoHistoryModal(parseInt(b.dataset.fiksnoHist));
     }));
     panel.querySelector('#upload-json')?.addEventListener('click', () => panel.querySelector('#upload-json-input').click());
     panel.querySelector('#upload-json-input')?.addEventListener('change', async (e) => {
