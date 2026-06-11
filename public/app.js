@@ -26,6 +26,8 @@ let isAdmin = false;
 let activeTab = 'cashflow';
 let activeMonth = '2026-04';   // current default
 let stoView = 'month';   // 'month' | 'year'
+let activeProject = null;       // null = pregled svih, string = detalj projekta
+let projectsFilter = 'aktivni'; // 'aktivni' | 'svi'
 let trxView = 'month';   // 'month' | 'year'
 const charts = {};       // Chart.js instances (so we can destroy)
 
@@ -630,6 +632,7 @@ function rerenderActive() {
   else if (activeTab === 'hours') renderHours();
   else if (activeTab === 'trx') renderTrx();
   else if (activeTab === 'sto') renderSto();
+  else if (activeTab === 'projects') renderProjects();
   else if (activeTab === 'settings') renderSettings();
 }
 
@@ -2346,6 +2349,342 @@ function stoModal(idx = null) {
         renderSto();
       }
     }
+  });
+}
+
+/* ============================================================
+   RENDER: PROJEKTI
+   Materijal (STO) + rad (sati × satnica + marenda, po danu)
+   spojeni po nazivu projekta. Radnici sa satnicom 0 (npr.
+   Dragan) ne ulaze u obračun rada. Čisto izračunato iz
+   postojećih podataka — ništa se ne sprema.
+   ============================================================ */
+const PROJ_NONE = '__bez_projekta__';
+
+function computeProjectsData() {
+  const map = {};
+  const ensure = (name) => {
+    if (!map[name]) map[name] = { name, materijal: 0, rad: 0, sati: 0, months: {}, workers: {}, stoCount: 0, lastActivity: '' };
+    return map[name];
+  };
+  const mEnsure = (p, k) => {
+    if (!p.months[k]) p.months[k] = { materijal: 0, rad: 0, sati: 0 };
+    return p.months[k];
+  };
+  const months = allMonths();
+  for (const k of months) {
+    for (const t of (state.sto[k] || [])) {
+      const name = (t.project || '').trim() || PROJ_NONE;
+      const p = ensure(name);
+      p.materijal += t.amount;
+      p.stoCount++;
+      mEnsure(p, k).materijal += t.amount;
+      if (k > p.lastActivity) p.lastActivity = k;
+    }
+    const h = state.hours[k];
+    if (h && h.days) {
+      for (const d of h.days) {
+        for (const wName of Object.keys(d.workers || {})) {
+          const wd = d.workers[wName];
+          if (!wd || !(wd.hours > 0)) continue;
+          const w = state.settings.workers.find(x => x.name === wName);
+          if (!w || !(w.satnica > 0)) continue;
+          const name = (wd.project || '').trim() || PROJ_NONE;
+          const cost = wd.hours * w.satnica + (wd.marenda || 0);
+          const p = ensure(name);
+          p.rad += cost;
+          p.sati += wd.hours;
+          const mm = mEnsure(p, k);
+          mm.rad += cost;
+          mm.sati += wd.hours;
+          if (!p.workers[wName]) p.workers[wName] = { sati: 0, trosak: 0, satnica: w.satnica };
+          p.workers[wName].sati += wd.hours;
+          p.workers[wName].trosak += cost;
+          if (k > p.lastActivity) p.lastActivity = k;
+        }
+      }
+    }
+  }
+  const list = Object.values(map);
+  const lastKey = months.length ? months[months.length - 1] : null;
+  const prevKey = lastKey ? addCalendarMonths(lastKey, -1) : null;
+  for (const p of list) {
+    p.ukupno = p.materijal + p.rad;
+    p.isActive = !!lastKey && (p.lastActivity === lastKey || p.lastActivity === prevKey);
+    p.monthCount = Object.keys(p.months).length;
+    p.workerCount = Object.keys(p.workers).length;
+  }
+  return list;
+}
+
+function renderProjects() {
+  const all = computeProjectsData();
+  if (activeProject !== null) {
+    const p = all.find(x => x.name === activeProject);
+    if (p) return renderProjectDetail(p);
+    activeProject = null;
+  }
+
+  const panel = document.getElementById('panel-projects');
+  const real = all.filter(p => p.name !== PROJ_NONE).sort((a, b) => b.ukupno - a.ukupno);
+  const none = all.find(p => p.name === PROJ_NONE);
+
+  const totMat = all.reduce((a, p) => a + p.materijal, 0);
+  const totRad = all.reduce((a, p) => a + p.rad, 0);
+  const activeCount = real.filter(p => p.isActive).length;
+
+  // Filter: ako nema aktivnih, prikaži sve bez obzira na toggle
+  const effFilter = (projectsFilter === 'aktivni' && activeCount > 0) ? 'aktivni' : 'svi';
+  const shown = effFilter === 'aktivni' ? real.filter(p => p.isActive) : real;
+  const hiddenCount = real.length - shown.length;
+
+  panel.innerHTML = `
+    <div class="page-head">
+      <div class="page-title-block">
+        <div class="page-eyebrow">Materijal + rad · YTD 2026</div>
+        <h1 class="page-title">Projekti <em>· troškovi</em></h1>
+      </div>
+      <div class="page-actions">
+        <div class="toggle">
+          <button class="${effFilter === 'aktivni' ? 'active' : ''}" data-pfilter="aktivni">Aktivni</button>
+          <button class="${effFilter === 'svi' ? 'active' : ''}" data-pfilter="svi">Svi</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="kpi-row" style="margin-bottom: 24px;">
+      <div class="kpi-cell">
+        <div class="stat-label">Ukupno</div>
+        <div class="stat-value">${eur(totMat + totRad, 0)}</div>
+        <div class="stat-sub">materijal + rad</div>
+      </div>
+      <div class="kpi-cell">
+        <div class="stat-label">Materijal (STO)</div>
+        <div class="stat-value">${eur(totMat, 0)}</div>
+      </div>
+      <div class="kpi-cell">
+        <div class="stat-label">Rad (sati)</div>
+        <div class="stat-value">${eur(totRad, 0)}</div>
+      </div>
+      <div class="kpi-cell">
+        <div class="stat-label">Aktivnih projekata</div>
+        <div class="stat-value">${activeCount}</div>
+        <div class="stat-sub">od ukupno ${real.length}</div>
+      </div>
+    </div>
+
+    <div class="proj-grid">
+      ${shown.length === 0 ? `<div class="empty">Nema projekata za prikaz.</div>` : shown.map(p => {
+        const pctMat = p.ukupno > 0 ? (p.materijal / p.ukupno) * 100 : 0;
+        return `
+        <div class="proj-card" data-proj="${escapeHtml(p.name)}">
+          <div class="proj-card-head">
+            <div class="proj-card-name">
+              ${escapeHtml(p.name)}
+              ${p.isActive ? '<span class="pill green">aktivan</span>' : ''}
+            </div>
+            <div class="proj-card-total">${eur(p.ukupno, 0)}</div>
+          </div>
+          <div class="proj-split-bar">
+            <div class="proj-split-mat" style="width: ${pctMat.toFixed(1)}%;"></div>
+            <div class="proj-split-rad" style="width: ${(100 - pctMat).toFixed(1)}%;"></div>
+          </div>
+          <div class="proj-card-meta">
+            <span><span class="proj-legend-dot proj-split-mat"></span>Materijal ${eur(p.materijal, 0)} · <span class="proj-legend-dot proj-split-rad"></span>Rad ${eur(p.rad, 0)}</span>
+            <span>${p.sati > 0 ? FMT_INT.format(p.sati) + ' h · ' : ''}${p.monthCount} mj.${p.workerCount > 0 ? ' · ' + p.workerCount + ' radnika' : ''}</span>
+          </div>
+        </div>`;
+      }).join('')}
+
+      ${effFilter === 'aktivni' && hiddenCount > 0 ? `
+        <button class="btn" data-pfilter="svi" style="align-self: center;">Prikaži sve projekte (još ${hiddenCount})</button>
+      ` : ''}
+
+      ${none ? `
+        <div class="proj-card proj-none-card" data-proj="${PROJ_NONE}">
+          <div class="proj-card-head" style="margin-bottom: 0;">
+            <div class="proj-card-name">Bez projekta — stavke i sati bez upisanog naziva</div>
+            <div class="proj-card-total">${eur(none.ukupno, 0)}</div>
+          </div>
+        </div>
+      ` : ''}
+    </div>
+  `;
+
+  panel.querySelectorAll('[data-pfilter]').forEach(b => b.addEventListener('click', () => {
+    projectsFilter = b.dataset.pfilter;
+    renderProjects();
+  }));
+  panel.querySelectorAll('.proj-card[data-proj]').forEach(card => card.addEventListener('click', () => {
+    activeProject = card.dataset.proj;
+    renderProjects();
+  }));
+}
+
+function renderProjectDetail(p) {
+  const panel = document.getElementById('panel-projects');
+  const isNone = p.name === PROJ_NONE;
+  const displayName = isNone ? 'Bez projekta' : p.name;
+  const mKeys = Object.keys(p.months).sort();
+  const workers = Object.entries(p.workers)
+    .map(([name, w]) => ({ name, ...w }))
+    .sort((a, b) => b.trosak - a.trosak);
+
+  panel.innerHTML = `
+    <div class="page-head">
+      <div class="page-title-block">
+        <button class="proj-back" id="proj-back">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          Svi projekti
+        </button>
+        <h1 class="page-title">${escapeHtml(displayName)} ${p.isActive && !isNone ? '<span class="pill green" style="vertical-align: middle;">aktivan</span>' : ''}</h1>
+        ${isNone ? '<div class="card-sub" style="margin-top: 4px;">STO stavke bez naziva projekta i radni sati bez upisanog projekta</div>' : ''}
+      </div>
+    </div>
+
+    <div class="kpi-row" style="margin-bottom: 24px;">
+      <div class="kpi-cell">
+        <div class="stat-label">Materijal (STO)</div>
+        <div class="stat-value">${eur(p.materijal, 0)}</div>
+        <div class="stat-sub">${p.stoCount} stavki</div>
+      </div>
+      <div class="kpi-cell">
+        <div class="stat-label">Rad</div>
+        <div class="stat-value">${eur(p.rad, 0)}</div>
+        <div class="stat-sub">${FMT_INT.format(p.sati)} h ukupno</div>
+      </div>
+      <div class="kpi-cell" style="background: var(--acc-projects-soft);">
+        <div class="stat-label" style="color: var(--acc-projects);">Ukupno</div>
+        <div class="stat-value" style="color: var(--acc-projects);">${eur(p.ukupno, 0)}</div>
+      </div>
+      <div class="kpi-cell">
+        <div class="stat-label">Razdoblje</div>
+        <div class="stat-value" style="font-size: 18px;">${mKeys.length ? monthLabelShort(mKeys[0]) + ' – ' + monthLabelShort(mKeys[mKeys.length - 1]) : '—'}</div>
+        <div class="stat-sub">${p.monthCount} mj. aktivnosti</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom: 24px;">
+      <div class="card-head">
+        <div>
+          <div class="card-title">Trošak po mjesecima</div>
+          <div class="card-sub">Materijal i rad kroz vrijeme</div>
+        </div>
+      </div>
+      <div class="chart-box"><canvas id="proj-chart-months"></canvas></div>
+    </div>
+
+    <div class="grid grid-cf" style="margin-bottom: 24px;">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Po mjesecima</div>
+            <div class="card-sub">Razrada po izvorima</div>
+          </div>
+        </div>
+        <div class="table-scroll">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Mjesec</th>
+                <th class="text-right">Materijal</th>
+                <th class="text-right">Rad</th>
+                <th class="text-right">Sati</th>
+                <th class="text-right">Ukupno</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${mKeys.map(k => {
+                const m = p.months[k];
+                return `
+                <tr>
+                  <td><strong>${monthLabel(k)}</strong></td>
+                  <td class="num text-right">${m.materijal ? eur(m.materijal, 0) : '—'}</td>
+                  <td class="num text-right">${m.rad ? eur(m.rad, 0) : '—'}</td>
+                  <td class="num text-right">${m.sati ? FMT_INT.format(m.sati) : '—'}</td>
+                  <td class="num text-right" style="font-weight: 600;">${eur(m.materijal + m.rad, 0)}</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td>UKUPNO</td>
+                <td class="num text-right"><strong>${eur(p.materijal, 0)}</strong></td>
+                <td class="num text-right"><strong>${eur(p.rad, 0)}</strong></td>
+                <td class="num text-right"><strong>${FMT_INT.format(p.sati)}</strong></td>
+                <td class="num text-right"><strong>${eur(p.ukupno, 0)}</strong></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Rad po radniku</div>
+            <div class="card-sub">Sati × satnica + marenda</div>
+          </div>
+        </div>
+        ${workers.length === 0 ? `<div class="empty">Nema evidentiranih sati za ovaj projekt.</div>` : `
+        <div class="table-scroll">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Radnik</th>
+                <th class="text-right">Sati</th>
+                <th class="text-right">Satnica</th>
+                <th class="text-right">Trošak</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${workers.map(w => `
+                <tr>
+                  <td><strong>${escapeHtml(w.name)}</strong></td>
+                  <td class="num text-right">${FMT_INT.format(w.sati)}</td>
+                  <td class="num text-right">${eur(w.satnica, 2)}</td>
+                  <td class="num text-right" style="font-weight: 600;">${eur(w.trosak, 0)}</td>
+                </tr>`).join('')}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td>UKUPNO</td>
+                <td class="num text-right"><strong>${FMT_INT.format(p.sati)}</strong></td>
+                <td></td>
+                <td class="num text-right"><strong>${eur(p.rad, 0)}</strong></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>`}
+        <div class="proj-formula">Rad = sati × satnica + marenda, pripisano po danu iz Evidencije sati. Radnici bez satnice nisu uključeni u obračun projekta.</div>
+      </div>
+    </div>
+  `;
+
+  panel.querySelector('#proj-back').addEventListener('click', () => {
+    activeProject = null;
+    renderProjects();
+  });
+
+  // CHART: stacked bar po mjesecima
+  charts.projMonths?.destroy?.();
+  const ctx = document.getElementById('proj-chart-months');
+  charts.projMonths = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: mKeys.map(monthLabelShort),
+      datasets: [
+        { label: 'Materijal', data: mKeys.map(k => p.months[k].materijal), backgroundColor: cssVar('--acc-sto'), borderRadius: 6, stack: 's' },
+        { label: 'Rad', data: mKeys.map(k => p.months[k].rad), backgroundColor: cssVar('--acc-hours'), borderRadius: 6, stack: 's' },
+      ],
+    },
+    options: {
+      ...chartOpts({ legend: true, money: true }),
+      scales: {
+        x: { stacked: true, grid: { display: false }, ticks: { font: { family: cssVar('--font-body'), size: 11 }, color: cssVar('--muted') } },
+        y: { stacked: true, grid: { color: cssVar('--line'), drawBorder: false }, ticks: { font: { family: cssVar('--font-mono'), size: 11 }, color: cssVar('--muted'), callback: v => eurShort(v) } },
+      },
+    },
   });
 }
 
