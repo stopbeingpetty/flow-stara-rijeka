@@ -42,6 +42,8 @@
   --acc-sto: #ffd500;
   --acc-sto-ink: #0a0a0a;
   --acc-sto-soft: #fff8d1;
+  --acc-projects: #8a4a2c;
+  --acc-projects-soft: #f3e6de;
   --acc-settings: #2c5f5d;
   --acc-settings-soft: #e1ecec;
   --acc-forecast: #4a3a5f;
@@ -77,6 +79,7 @@ body[data-tab="cashflow"] { --acc: var(--acc-cashflow); --acc-soft: var(--acc-ca
 body[data-tab="hours"]    { --acc: var(--acc-hours);    --acc-soft: var(--acc-hours-soft);    --acc-ink: #fff; }
 body[data-tab="trx"]      { --acc: var(--acc-trx);      --acc-soft: var(--acc-trx-soft);      --acc-ink: #fff; }
 body[data-tab="sto"]      { --acc: var(--acc-sto);      --acc-soft: var(--acc-sto-soft);      --acc-ink: var(--acc-sto-ink); }
+body[data-tab="projects"] { --acc: var(--acc-projects); --acc-soft: var(--acc-projects-soft); --acc-ink: #fff; }
 body[data-tab="settings"] { --acc: var(--acc-settings); --acc-soft: var(--acc-settings-soft); --acc-ink: #fff; }
 body[data-tab="forecast"] { --acc: var(--acc-forecast); --acc-soft: var(--acc-forecast-soft); --acc-ink: #fff; }
 
@@ -235,6 +238,7 @@ img, svg { display: block; max-width: 100%; }
 .tab[data-tab="hours"]     .tab-dot { background: var(--acc-hours); }
 .tab[data-tab="trx"]       .tab-dot { background: var(--acc-trx); }
 .tab[data-tab="sto"]       .tab-dot { background: var(--acc-sto); border: 1px solid var(--ink); }
+.tab[data-tab="projects"]  .tab-dot { background: var(--acc-projects); }
 .tab[data-tab="settings"]  .tab-dot { background: var(--acc-settings); }
 .tab[data-tab="forecast"]  .tab-dot { background: var(--acc-forecast); }
 
@@ -956,6 +960,45 @@ body[data-tab="sto"] .page-title strong {
   font-style: normal;
 }
 
+/* ============================================================
+   PROJEKTI tab
+   ============================================================ */
+.proj-grid { display: flex; flex-direction: column; gap: 12px; }
+.proj-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px 18px;
+  cursor: pointer;
+  transition: border-color 0.18s var(--ease-snap), transform 0.18s var(--ease-snap), box-shadow 0.18s var(--ease-snap);
+}
+.proj-card:hover { border-color: var(--acc-projects); transform: translateY(-1px); }
+.proj-card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.proj-card-name { font-weight: 600; font-size: 15px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.proj-card-total { font-family: var(--font-mono); font-size: 17px; font-weight: 600; white-space: nowrap; }
+.proj-split-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--surface-2); margin-bottom: 9px; }
+.proj-split-mat { background: var(--acc-sto); }
+.proj-split-rad { background: var(--acc-hours); }
+.proj-card-meta { display: flex; justify-content: space-between; gap: 6px 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+.proj-legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; vertical-align: baseline; margin-right: 4px; }
+.proj-none-card { border-style: dashed; }
+.proj-none-card .proj-card-name { font-weight: 500; color: var(--muted); font-size: 13px; }
+.proj-none-card .proj-card-total { font-size: 14px; color: var(--muted); }
+.proj-back {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 500; color: var(--muted);
+  background: none; padding: 6px 0; cursor: pointer;
+}
+.proj-back:hover { color: var(--ink); }
+.proj-formula {
+  font-size: 12px; color: var(--muted); font-style: italic;
+  margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--line);
+}
+@media (max-width: 640px) {
+  .proj-card { padding: 14px; }
+  .proj-card-total { font-size: 15px; }
+}
+
 /* Toggle pills (e.g. month vs year for STO) */
 .toggle {
   display: inline-flex;
@@ -1259,6 +1302,9 @@ tr.cat-row td { letter-spacing: 0.4px; font-size: 12px; text-transform: uppercas
       <button class="tab" data-tab="sto" role="tab">
         <span class="tab-dot"></span>STO troškovi
       </button>
+      <button class="tab" data-tab="projects" role="tab">
+        <span class="tab-dot"></span>Projekti
+      </button>
       <button class="tab" data-tab="settings" role="tab">
         <span class="tab-dot"></span>Postavke
       </button>
@@ -1282,6 +1328,9 @@ tr.cat-row td { letter-spacing: 0.4px; font-size: 12px; text-transform: uppercas
 
     <!-- ========== TAB: STO ========== -->
     <section id="panel-sto" class="tab-panel" role="tabpanel"></section>
+
+    <!-- PROJEKTI -->
+    <section id="panel-projects" class="tab-panel" role="tabpanel"></section>
 
     <!-- ========== TAB: SETTINGS ========== -->
     <section id="panel-settings" class="tab-panel" role="tabpanel"></section>
