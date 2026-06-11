@@ -2426,11 +2426,16 @@ function renderProjects() {
   }
 
   const panel = document.getElementById('panel-projects');
-  const real = all.filter(p => p.name !== PROJ_NONE).sort((a, b) => b.ukupno - a.ukupno);
+  const hiddenSet = new Set(state.hiddenProjects || []);
+  const realAll = all.filter(p => p.name !== PROJ_NONE).sort((a, b) => b.ukupno - a.ukupno);
+  const real = realAll.filter(p => !hiddenSet.has(p.name));
+  const removed = realAll.filter(p => hiddenSet.has(p.name));
+  const removedTotal = removed.reduce((a, p) => a + p.ukupno, 0);
   const none = all.find(p => p.name === PROJ_NONE);
 
-  const totMat = all.reduce((a, p) => a + p.materijal, 0);
-  const totRad = all.reduce((a, p) => a + p.rad, 0);
+  const visible = none ? [...real, none] : real;
+  const totMat = visible.reduce((a, p) => a + p.materijal, 0);
+  const totRad = visible.reduce((a, p) => a + p.rad, 0);
   const activeCount = real.filter(p => p.isActive).length;
 
   // Filter: ako nema aktivnih, prikaži sve bez obzira na toggle
@@ -2456,7 +2461,7 @@ function renderProjects() {
       <div class="kpi-cell">
         <div class="stat-label">Ukupno</div>
         <div class="stat-value">${eur(totMat + totRad, 0)}</div>
-        <div class="stat-sub">materijal + rad</div>
+        <div class="stat-sub">materijal + rad${removed.length ? ` · bez ${removed.length} uklonjenih (${eur(removedTotal, 0)})` : ''}</div>
       </div>
       <div class="kpi-cell">
         <div class="stat-label">Materijal (STO)</div>
@@ -2509,6 +2514,29 @@ function renderProjects() {
         </div>
       ` : ''}
     </div>
+
+    ${removed.length ? `
+    <div class="card" style="margin-top: 24px;">
+      <div class="card-head">
+        <div>
+          <div class="card-title">Uklonjeni projekti (${removed.length})</div>
+          <div class="card-sub">Skriveni s pregleda · podaci (STO stavke i sati) ostaju netaknuti · ukupno ${eur(removedTotal, 0)}</div>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table class="table">
+          <tbody>
+            ${removed.map(p => `
+              <tr>
+                <td><strong>${escapeHtml(p.name)}</strong></td>
+                <td class="num text-right" style="color: var(--muted);">${eur(p.ukupno, 0)}</td>
+                ${isAdmin ? `<td class="text-right" style="width: 90px;"><button class="btn btn-sm" data-restore-proj="${escapeHtml(p.name)}">Vrati</button></td>` : ''}
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    ` : ''}
   `;
 
   panel.querySelectorAll('[data-pfilter]').forEach(b => b.addEventListener('click', () => {
@@ -2519,6 +2547,52 @@ function renderProjects() {
     activeProject = card.dataset.proj;
     renderProjects();
   }));
+  panel.querySelectorAll('[data-restore-proj]').forEach(b => b.addEventListener('click', async () => {
+    const name = b.dataset.restoreProj;
+    state.hiddenProjects = (state.hiddenProjects || []).filter(n => n !== name);
+    if (await saveData()) {
+      toast(`Projekt „${name}" vraćen na pregled`, 'success');
+      renderProjects();
+    }
+  }));
+}
+
+/* Dvostruka potvrda uklanjanja projekta s pregleda */
+function removeProjectModal(name) {
+  const step1 = `
+    <div class="modal-title">Ukloniti projekt?</div>
+    <div class="modal-sub">Jesi li siguran da želiš ukloniti projekt <strong>„${escapeHtml(name)}"</strong> s pregleda?</div>
+    <div class="modal-actions">
+      <button class="btn" data-act="cancel">Odustani</button>
+      <button class="btn btn-primary" data-act="next">Nastavi</button>
+    </div>
+  `;
+  const m = modal(step1);
+  m.root.addEventListener('click', async e => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    if (btn.dataset.act === 'cancel') m.close();
+    else if (btn.dataset.act === 'next') {
+      m.root.querySelector('.modal').innerHTML = `
+        <div class="modal-title">Posljednja potvrda</div>
+        <div class="modal-sub">Ovim klikom ćeš ukloniti projekt <strong>„${escapeHtml(name)}"</strong> s pregleda.<br><br>
+        STO stavke i evidentirani sati ostaju netaknuti — projekt se samo skriva i možeš ga bilo kad vratiti iz sekcije „Uklonjeni projekti" na dnu pregleda.</div>
+        <div class="modal-actions">
+          <button class="btn" data-act="cancel">Odustani</button>
+          <button class="btn btn-danger" data-act="confirm">Ukloni projekt „${escapeHtml(name)}"</button>
+        </div>
+      `;
+    } else if (btn.dataset.act === 'confirm') {
+      if (!Array.isArray(state.hiddenProjects)) state.hiddenProjects = [];
+      if (!state.hiddenProjects.includes(name)) state.hiddenProjects.push(name);
+      if (await saveData()) {
+        m.close();
+        activeProject = null;
+        toast(`Projekt „${name}" uklonjen s pregleda`, 'success');
+        renderProjects();
+      }
+    }
+  });
 }
 
 function renderProjectDetail(p) {
@@ -2540,6 +2614,13 @@ function renderProjectDetail(p) {
         <h1 class="page-title">${escapeHtml(displayName)} ${p.isActive && !isNone ? '<span class="pill green" style="vertical-align: middle;">aktivan</span>' : ''}</h1>
         ${isNone ? '<div class="card-sub" style="margin-top: 4px;">STO stavke bez naziva projekta i radni sati bez upisanog projekta</div>' : ''}
       </div>
+      ${isAdmin && !isNone ? `
+      <div class="page-actions">
+        <button class="btn btn-danger" id="proj-remove">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;"><path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+          Ukloni s pregleda
+        </button>
+      </div>` : ''}
     </div>
 
     <div class="kpi-row" style="margin-bottom: 24px;">
@@ -2665,6 +2746,7 @@ function renderProjectDetail(p) {
     activeProject = null;
     renderProjects();
   });
+  panel.querySelector('#proj-remove')?.addEventListener('click', () => removeProjectModal(p.name));
 
   // CHART: stacked bar po mjesecima
   charts.projMonths?.destroy?.();
