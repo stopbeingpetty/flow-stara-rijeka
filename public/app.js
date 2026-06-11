@@ -753,7 +753,35 @@ function renderCashflow() {
           <div class="card-sub">Klikni mjesec za detaljan pregled u Trx tabu</div>
         </div>
       </div>
-      <div class="table-scroll">
+      <div class="cf-mcards mob-only">
+        ${months.map(k => {
+          const s = summary[k];
+          const total = s.prihodi + s.troskoviUkupno;
+          const pctIn = total > 0 ? (s.prihodi / total) * 100 : 0;
+          const netoColor = s.neto < 0 ? 'var(--negative)' : s.neto > 0 ? 'var(--positive)' : 'var(--muted)';
+          return `
+          <div class="cf-mcard" data-month="${k}">
+            <div class="cf-mcard-head">
+              <span class="cf-mcard-month">${monthLabelShort(k)}</span>
+              <span class="cf-mcard-neto" style="color: ${netoColor};">${s.neto >= 0 ? '+' : ''}${eur(s.neto, 0)}</span>
+            </div>
+            <div class="cf-mcard-line">
+              <span>Prihodi <span class="num" style="color: var(--positive);">${FMT_INT.format(s.prihodi)}</span></span>
+              <span>Troškovi <span class="num" style="color: var(--negative);">${FMT_INT.format(s.troskoviUkupno)}</span></span>
+            </div>
+            <div class="cf-mcard-bar">
+              <div class="in" style="width: ${pctIn.toFixed(1)}%;"></div>
+              <div class="out" style="width: ${(100 - pctIn).toFixed(1)}%;"></div>
+            </div>
+            <div class="cf-mcard-breakdown">Tekući ${FMT_INT.format(s.tekuci)} · Nepr. ${FMT_INT.format(s.nepredvideni)} · STO ${FMT_INT.format(s.sto)} · Radnici ${FMT_INT.format(s.radnici)}</div>
+          </div>`;
+        }).join('')}
+        <div class="cf-mcard ytd">
+          <span class="cf-mcard-month">YTD ukupno</span>
+          <span class="cf-mcard-neto" style="color: var(--${ytd.neto < 0 ? 'negative' : 'positive'});">${ytd.neto >= 0 ? '+' : ''}${eur(ytd.neto, 0)}</span>
+        </div>
+      </div>
+      <div class="table-scroll desk-only">
         <table class="table">
           <thead>
             <tr>
@@ -803,7 +831,7 @@ function renderCashflow() {
   `;
 
   // Click row → switch to Trx tab
-  panel.querySelectorAll('tbody tr[data-month]').forEach(tr => {
+  panel.querySelectorAll('tbody tr[data-month], .cf-mcard[data-month]').forEach(tr => {
     tr.addEventListener('click', () => {
       activeMonth = tr.dataset.month;
       setTab('trx');
@@ -939,7 +967,40 @@ function renderHours() {
           <div class="card-sub">${isAdmin ? 'Klikni red dana za brzi unos · Tab za navigaciju · Cmd+← / Cmd+→ za prethodni/sljedeći dan' : 'Pregled · za izmjene aktiviraj admin mod'}</div>
         </div>
       </div>
-      <div class="hours-table-wrap">
+      <div class="hrs-mcards mob-only">
+        ${days.map(d => {
+          const dayData = h.days.find(x => x.date === d.date);
+          const isToday = d.date === today;
+          const note = dayData?.note || '';
+          let sum = 0;
+          const chips = workers.map(w => {
+            const wd = (dayData?.workers || {})[w.name];
+            if (!wd || !(wd.hours > 0)) return '';
+            sum += wd.hours;
+            return `<span class="hrs-chip">${escapeHtml(w.name)} ${wd.hours}</span>`;
+          }).join('');
+          const isEmpty = sum === 0 && !note;
+          if (isEmpty) {
+            return `
+            <div class="hrs-mcard empty ${isAdmin ? 'clickable' : ''}" data-mdate="${d.date}">
+              <div class="hrs-mcard-head">
+                <span class="hrs-mday"><strong>${d.day}.</strong> ${d.dayName}</span>
+                <span style="font-size: 12px; color: var(--muted-2);">—</span>
+              </div>
+            </div>`;
+          }
+          return `
+          <div class="hrs-mcard ${isToday ? 'today' : ''} ${isAdmin ? 'clickable' : ''}" data-mdate="${d.date}">
+            <div class="hrs-mcard-head">
+              <span class="hrs-mday"><strong>${d.day}.</strong> <span style="color: var(--muted);">${d.dayName}</span>${isToday ? '<span class="hrs-today-pill">danas</span>' : ''}</span>
+              <span class="hrs-msum">${sum} h</span>
+            </div>
+            ${chips ? `<div class="hrs-chips">${chips}</div>` : ''}
+            ${note ? `<div class="hrs-mnote">📝 ${escapeHtml(note)}</div>` : ''}
+          </div>`;
+        }).join('')}
+      </div>
+      <div class="hours-table-wrap desk-only">
         <div class="hours-scroll">
           <table class="hours-table hours-table-v2">
             <thead>
@@ -1106,6 +1167,9 @@ function renderHours() {
         if (e.target.closest('input, button, select')) return;
         openDayModal(tr.dataset.date);
       });
+    });
+    panel.querySelectorAll('.hrs-mcard.clickable').forEach(c => {
+      c.addEventListener('click', () => openDayModal(c.dataset.mdate));
     });
     // Sati override handler
     panel.querySelectorAll('input[data-hours-worker]').forEach(inp => {
