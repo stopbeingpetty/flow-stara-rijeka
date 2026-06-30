@@ -3765,11 +3765,25 @@ function renderRaspored() {
     body += '<div class="rsp-sec">U tijeku</div>' + active.map(cardHTML).join('');
   }
   if (upcoming.length) {
-    let curKey = '';
+    const monthSet = new Set();
     for (const it of upcoming) {
-      const key = (it.start || '').slice(0, 7);
-      if (key !== curKey) { curKey = key; body += `<div class="rsp-sec">${rspMonthLabel(it.start, refYear)}</div>`; }
-      body += cardHTML(it);
+      if (!it.start || !it.end) continue;
+      let [yy, mm] = it.start.split('-').map(Number);
+      const endKey = it.end.slice(0, 7);
+      for (let guard = 0; guard < 240; guard++) {
+        const key = `${yy}-${String(mm).padStart(2, '0')}`;
+        monthSet.add(key);
+        if (key >= endKey) break;
+        mm++; if (mm > 12) { mm = 1; yy++; }
+      }
+    }
+    for (const mk of Array.from(monthSet).sort()) {
+      const inMonth = upcoming
+        .filter(it => it.start && it.end && it.start.slice(0, 7) <= mk && it.end.slice(0, 7) >= mk)
+        .sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+      if (!inMonth.length) continue;
+      body += `<div class="rsp-sec">${rspMonthLabel(mk + '-01', refYear)}</div>`;
+      body += inMonth.map(cardHTML).join('');
     }
   }
   if (!active.length && !upcoming.length) {
@@ -3829,8 +3843,8 @@ function rasporedModal(idx = null) {
         <label class="field-label">Opis posla (opcionalno)</label>
         <input class="input" id="r-desc" value="${escapeHtml(it.desc || '')}" placeholder="Npr. fasada, knauf, adaptacija">
       </div>
-      <div class="field"><label class="field-label">Planirani početak</label><input class="input" id="r-start" type="text" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" value="${isoToEU(it.start)}"></div>
-      <div class="field"><label class="field-label">Planirani kraj</label><input class="input" id="r-end" type="text" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" value="${isoToEU(it.end)}"></div>
+      <div class="field"><label class="field-label">Planirani početak</label><input class="input" id="r-start" type="date" value="${it.start || ''}"></div>
+      <div class="field"><label class="field-label">Planirani kraj</label><input class="input" id="r-end" type="date" value="${it.end || ''}"></div>
       <div class="field" style="grid-column: 1 / -1;">
         <label class="field-label">Status</label>
         <select class="select" id="r-status">
@@ -3846,8 +3860,6 @@ function rasporedModal(idx = null) {
     </div>
   `;
   const m = modal(html);
-  attachEUDateMask(m.root.querySelector('#r-start'));
-  attachEUDateMask(m.root.querySelector('#r-end'));
 
   m.root.addEventListener('click', async e => {
     const btn = e.target.closest('button[data-act]');
@@ -3860,11 +3872,11 @@ function rasporedModal(idx = null) {
       }
     } else if (btn.dataset.act === 'save') {
       const project = m.root.querySelector('#r-name').value.trim();
-      const start = euToISO(m.root.querySelector('#r-start').value.trim());
-      const end = euToISO(m.root.querySelector('#r-end').value.trim());
+      const start = m.root.querySelector('#r-start').value;
+      const end = m.root.querySelector('#r-end').value;
       if (!project) { toast('Unesi naziv projekta', 'error'); return; }
-      if (!start) { toast('Početak mora biti u formatu DD/MM/YYYY', 'error'); m.root.querySelector('#r-start').classList.add('invalid'); m.root.querySelector('#r-start').focus(); return; }
-      if (!end) { toast('Kraj mora biti u formatu DD/MM/YYYY', 'error'); m.root.querySelector('#r-end').classList.add('invalid'); m.root.querySelector('#r-end').focus(); return; }
+      if (!start) { toast('Odaberi datum početka', 'error'); m.root.querySelector('#r-start').classList.add('invalid'); m.root.querySelector('#r-start').focus(); return; }
+      if (!end) { toast('Odaberi datum kraja', 'error'); m.root.querySelector('#r-end').classList.add('invalid'); m.root.querySelector('#r-end').focus(); return; }
       if (start > end) { toast('Početak mora biti prije kraja', 'error'); return; }
       const newIt = {
         project,
