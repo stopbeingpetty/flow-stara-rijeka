@@ -50,6 +50,8 @@
   --acc-settings-soft: #e1ecec;
   --acc-forecast: #4a3a5f;
   --acc-forecast-soft: #ede8f3;
+  --acc-raspored: #3d6b4d;
+  --acc-raspored-soft: #e9f1ea;
 
   /* Semantics */
   --positive: #1f6b3a;
@@ -84,6 +86,7 @@ body[data-tab="sto"]      { --acc: var(--acc-sto);      --acc-soft: var(--acc-st
 body[data-tab="projects"] { --acc: var(--acc-projects); --acc-soft: var(--acc-projects-soft); --acc-ink: #fff; }
 body[data-tab="settings"] { --acc: var(--acc-settings); --acc-soft: var(--acc-settings-soft); --acc-ink: #fff; }
 body[data-tab="forecast"] { --acc: var(--acc-forecast); --acc-soft: var(--acc-forecast-soft); --acc-ink: #fff; }
+body[data-tab="raspored"] { --acc: var(--acc-raspored); --acc-soft: var(--acc-raspored-soft); --acc-ink: #fff; }
 
 /* ============================================================
    RESET
@@ -243,6 +246,30 @@ img, svg { display: block; max-width: 100%; }
 .tab[data-tab="projects"]  .tab-dot { background: var(--acc-projects); }
 .tab[data-tab="settings"]  .tab-dot { background: var(--acc-settings); }
 .tab[data-tab="forecast"]  .tab-dot { background: var(--acc-forecast); }
+.tab[data-tab="raspored"]  .tab-dot { background: var(--acc-raspored); }
+
+/* ===== RASPORED tab ===== */
+#panel-raspored .rsp-sec{ font-size: 11px; letter-spacing: .04em; color: var(--muted); font-weight: 600; margin: 22px 0 10px; }
+#panel-raspored .rsp-card{ display: flex; align-items: center; justify-content: space-between; gap: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 18px; margin-bottom: 10px; transition: border-color .15s var(--ease); }
+#panel-raspored .rsp-card.clickable{ cursor: pointer; }
+#panel-raspored .rsp-card.clickable:hover{ border-color: var(--acc); }
+#panel-raspored .rsp-card.active{ border: 2px solid var(--acc); padding: 13px 17px; }
+#panel-raspored .rsp-name{ font-size: 15px; font-weight: 600; color: var(--ink); }
+#panel-raspored .rsp-desc{ font-size: 13px; color: var(--muted); font-weight: 400; }
+#panel-raspored .rsp-right{ display: flex; align-items: center; gap: 12px; flex: none; }
+#panel-raspored .rsp-date{ font-size: 13px; color: var(--ink-2); font-family: var(--font-mono); white-space: nowrap; }
+#panel-raspored .rsp-chip{ font-size: 11px; padding: 2px 9px; border-radius: 999px; background: var(--acc); color: var(--acc-ink); white-space: nowrap; }
+#panel-raspored .rsp-chip-o{ font-size: 11px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--acc); color: var(--muted); white-space: nowrap; }
+#panel-raspored .rsp-prog{ display: none; height: 4px; border-radius: 999px; background: var(--line); overflow: hidden; margin-top: 8px; max-width: 160px; }
+#panel-raspored .rsp-prog > span{ display: block; height: 100%; background: var(--acc); }
+#panel-raspored .rsp-done-toggle{ display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--muted); background: none; border: none; cursor: pointer; padding: 14px 4px 4px; font-family: inherit; }
+#panel-raspored .rsp-done-toggle:hover{ color: var(--ink); }
+#panel-raspored .rsp-empty{ text-align: center; color: var(--muted); padding: 48px 16px; }
+@media (max-width: 720px){
+  #panel-raspored .rsp-card{ flex-direction: column; align-items: stretch; gap: 8px; }
+  #panel-raspored .rsp-right{ justify-content: space-between; }
+  #panel-raspored .rsp-prog{ display: block; }
+}
 
 /* ============================================================
    MAIN CONTENT
@@ -1364,6 +1391,9 @@ tr.cat-row td { letter-spacing: 0.4px; font-size: 12px; text-transform: uppercas
       <button class="tab" data-tab="projects" role="tab">
         <span class="tab-dot"></span>Projekti
       </button>
+      <button class="tab" data-tab="raspored" role="tab">
+        <span class="tab-dot"></span>Raspored
+      </button>
       <button class="tab" data-tab="settings" role="tab">
         <span class="tab-dot"></span>Postavke
       </button>
@@ -1390,6 +1420,9 @@ tr.cat-row td { letter-spacing: 0.4px; font-size: 12px; text-transform: uppercas
 
     <!-- PROJEKTI -->
     <section id="panel-projects" class="tab-panel" role="tabpanel"></section>
+
+    <!-- RASPORED -->
+    <section id="panel-raspored" class="tab-panel" role="tabpanel"></section>
 
     <!-- ========== TAB: SETTINGS ========== -->
     <section id="panel-settings" class="tab-panel" role="tabpanel"></section>
