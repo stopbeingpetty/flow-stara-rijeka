@@ -633,6 +633,7 @@ function rerenderActive() {
   else if (activeTab === 'trx') renderTrx();
   else if (activeTab === 'sto') renderSto();
   else if (activeTab === 'projects') renderProjects();
+  else if (activeTab === 'raspored') renderRaspored();
   else if (activeTab === 'settings') renderSettings();
 }
 
@@ -688,6 +689,7 @@ function addNewMonth(onChange) {
 async function saveData() {
   try {
     if (!state.forecast) state.forecast = [];
+    if (!state.raspored) state.raspored = [];
     pruneEmptyMonths();
     await API.save(state);
     toast('Spremljeno', 'success', 1500);
@@ -3696,6 +3698,192 @@ function forecastModal(idx = null) {
 /* ============================================================
    BOOT
    ============================================================ */
+/* ============================================================
+   RENDER: RASPORED (plan tekucih i buducih projekata)
+   ============================================================ */
+let rasporedShowDone = false;
+
+function rspDM(iso) {
+  if (!iso) return '';
+  const p = iso.split('-');
+  if (p.length !== 3) return '';
+  return `${+p[2]}.${+p[1]}.`;
+}
+function rspMonthLabel(iso, refYear) {
+  const [y, m] = iso.split('-').map(Number);
+  const lbl = MONTH_NAMES_HR[m - 1] || '';
+  return (y !== refYear) ? `${lbl} ${y}` : lbl;
+}
+function rspStatus(it, todayISO) {
+  if (it.end && it.end < todayISO) return 'done';
+  if (it.start && it.start > todayISO) return 'upcoming';
+  return 'active';
+}
+
+function renderRaspored() {
+  const panel = document.getElementById('panel-raspored');
+  if (!Array.isArray(state.raspored)) state.raspored = [];
+  const items = state.raspored.slice();
+  const now = new Date();
+  const todayISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const refYear = now.getFullYear();
+
+  const active = items.filter(it => rspStatus(it, todayISO) === 'active').sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+  const upcoming = items.filter(it => rspStatus(it, todayISO) === 'upcoming').sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+  const done = items.filter(it => rspStatus(it, todayISO) === 'done').sort((a, b) => (b.end || '').localeCompare(a.end || ''));
+
+  const cardHTML = (it) => {
+    const idx = state.raspored.indexOf(it);
+    const st = rspStatus(it, todayISO);
+    const dateText = st === 'active' ? `do ${rspDM(it.end)}` : `${rspDM(it.start)} – ${rspDM(it.end)}`;
+    let chip = '';
+    if (st === 'active') chip = '<span class="rsp-chip">u tijeku</span>';
+    else if (it.confirmed === false) chip = '<span class="rsp-chip-o">okvirno</span>';
+    else if (st === 'done') chip = '<span class="rsp-chip-o">završeno</span>';
+    let prog = '';
+    if (st === 'active' && it.start && it.end) {
+      const s = new Date(it.start), e = new Date(it.end);
+      let pct = (e > s) ? Math.round(((now - s) / (e - s)) * 100) : 100;
+      pct = Math.max(0, Math.min(100, pct));
+      prog = `<div class="rsp-prog"><span style="width:${pct}%"></span></div>`;
+    }
+    return `
+      <div class="rsp-card ${st === 'active' ? 'active' : ''} ${isAdmin ? 'clickable' : ''}" ${isAdmin ? `data-idx="${idx}"` : ''}>
+        <div>
+          <span class="rsp-name">${escapeHtml(it.project || '')}</span>${it.desc ? `<span class="rsp-desc"> · ${escapeHtml(it.desc)}</span>` : ''}
+          ${prog}
+        </div>
+        <div class="rsp-right">
+          <span class="rsp-date">${dateText}</span>
+          ${chip}
+        </div>
+      </div>`;
+  };
+
+  let body = '';
+  if (active.length) {
+    body += '<div class="rsp-sec">U tijeku</div>' + active.map(cardHTML).join('');
+  }
+  if (upcoming.length) {
+    let curKey = '';
+    for (const it of upcoming) {
+      const key = (it.start || '').slice(0, 7);
+      if (key !== curKey) { curKey = key; body += `<div class="rsp-sec">${rspMonthLabel(it.start, refYear)}</div>`; }
+      body += cardHTML(it);
+    }
+  }
+  if (!active.length && !upcoming.length) {
+    body += `<div class="rsp-empty">${isAdmin ? 'Još nema planiranih projekata. Klikni „Dodaj projekt" za prvi unos.' : 'Još nema planiranih projekata.'}</div>`;
+  }
+  if (done.length) {
+    const pts = rasporedShowDone ? '18 15 12 9 6 15' : '6 9 12 15 18 9';
+    body += `<button class="rsp-done-toggle" id="rsp-done-toggle">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="${pts}"/></svg>
+      Završeni projekti (${done.length})
+    </button>`;
+    if (rasporedShowDone) body += done.map(cardHTML).join('');
+  }
+
+  panel.innerHTML = `
+    <div class="page-head">
+      <div class="page-title-block">
+        <div class="page-eyebrow">Plan radova</div>
+        <h1 class="page-title">Raspored <em>projekata</em></h1>
+      </div>
+      <div class="page-actions">
+        <button class="btn btn-primary admin-only" id="rsp-add">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Dodaj projekt
+        </button>
+      </div>
+    </div>
+    ${body}
+  `;
+
+  panel.querySelector('#rsp-done-toggle')?.addEventListener('click', () => { rasporedShowDone = !rasporedShowDone; renderRaspored(); });
+  if (isAdmin) {
+    panel.querySelector('#rsp-add')?.addEventListener('click', () => rasporedModal(null));
+    panel.querySelectorAll('.rsp-card.clickable[data-idx]').forEach(c => c.addEventListener('click', () => rasporedModal(parseInt(c.dataset.idx))));
+  }
+}
+
+function rasporedModal(idx = null) {
+  if (!Array.isArray(state.raspored)) state.raspored = [];
+  const it = idx !== null ? state.raspored[idx] : { project: '', desc: '', start: '', end: '', confirmed: true };
+  const names = Array.from(new Set([
+    ...allMonths().flatMap(k => (state.sto[k] || []).map(x => x.project)),
+    ...allMonths().flatMap(k => (state.hours[k]?.days || []).flatMap(d => Object.values(d.workers || {}).map(w => w.project))),
+    ...(state.raspored || []).map(x => x.project),
+  ].filter(Boolean).map(s => String(s).trim()))).sort();
+
+  const html = `
+    <div class="modal-title">${idx !== null ? 'Uredi' : 'Novi'} projekt</div>
+    <div class="modal-sub">Planirani termin radova</div>
+    <div class="grid grid-2" style="gap: 14px;">
+      <div class="field" style="grid-column: 1 / -1;">
+        <label class="field-label">Naziv projekta</label>
+        <input class="input" id="r-name" list="r-names" value="${escapeHtml(it.project || '')}" placeholder="Npr. Bivio">
+        <datalist id="r-names">${names.map(n => `<option value="${escapeHtml(n)}"></option>`).join('')}</datalist>
+      </div>
+      <div class="field" style="grid-column: 1 / -1;">
+        <label class="field-label">Opis posla (opcionalno)</label>
+        <input class="input" id="r-desc" value="${escapeHtml(it.desc || '')}" placeholder="Npr. fasada, knauf, adaptacija">
+      </div>
+      <div class="field"><label class="field-label">Planirani početak</label><input class="input" id="r-start" type="text" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" value="${isoToEU(it.start)}"></div>
+      <div class="field"><label class="field-label">Planirani kraj</label><input class="input" id="r-end" type="text" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" value="${isoToEU(it.end)}"></div>
+      <div class="field" style="grid-column: 1 / -1;">
+        <label class="field-label">Status</label>
+        <select class="select" id="r-status">
+          <option value="potvrdeno" ${it.confirmed !== false ? 'selected' : ''}>Potvrđeno</option>
+          <option value="okvirno" ${it.confirmed === false ? 'selected' : ''}>Okvirno</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-act="cancel">Odustani</button>
+      ${idx !== null ? '<button class="btn btn-danger" data-act="del">Obriši</button>' : ''}
+      <button class="btn btn-primary" data-act="save">${idx !== null ? 'Spremi' : 'Dodaj'}</button>
+    </div>
+  `;
+  const m = modal(html);
+  attachEUDateMask(m.root.querySelector('#r-start'));
+  attachEUDateMask(m.root.querySelector('#r-end'));
+
+  m.root.addEventListener('click', async e => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    if (btn.dataset.act === 'cancel') m.close();
+    else if (btn.dataset.act === 'del') {
+      if (confirm('Obrisati ovaj projekt iz rasporeda?')) {
+        state.raspored.splice(idx, 1);
+        if (await saveData()) { m.close(); renderRaspored(); }
+      }
+    } else if (btn.dataset.act === 'save') {
+      const project = m.root.querySelector('#r-name').value.trim();
+      const start = euToISO(m.root.querySelector('#r-start').value.trim());
+      const end = euToISO(m.root.querySelector('#r-end').value.trim());
+      if (!project) { toast('Unesi naziv projekta', 'error'); return; }
+      if (!start) { toast('Početak mora biti u formatu DD/MM/YYYY', 'error'); m.root.querySelector('#r-start').classList.add('invalid'); m.root.querySelector('#r-start').focus(); return; }
+      if (!end) { toast('Kraj mora biti u formatu DD/MM/YYYY', 'error'); m.root.querySelector('#r-end').classList.add('invalid'); m.root.querySelector('#r-end').focus(); return; }
+      if (start > end) { toast('Početak mora biti prije kraja', 'error'); return; }
+      const newIt = {
+        project,
+        desc: m.root.querySelector('#r-desc').value.trim(),
+        start, end,
+        confirmed: m.root.querySelector('#r-status').value !== 'okvirno',
+      };
+      if (idx !== null) state.raspored[idx] = newIt;
+      else state.raspored.push(newIt);
+      if (await saveData()) {
+        m.close();
+        renderRaspored();
+        toast(idx !== null ? 'Projekt ažuriran' : 'Projekt dodan', 'success');
+      }
+    }
+  });
+}
+
+
 async function boot() {
   // Restore admin from localStorage if exists
   if (API.pin) {
@@ -3731,6 +3919,7 @@ async function boot() {
   }
 
   // Osiguraj forecast field u stateu + napuni default ako prazan
+  if (!state.raspored || !Array.isArray(state.raspored)) state.raspored = [];
   if (!state.forecast || !Array.isArray(state.forecast)) state.forecast = [];
   if (state.forecast.length === 0) {
     state.forecast = DEFAULT_FORECAST_SEED.map(x => ({ ...x }));
