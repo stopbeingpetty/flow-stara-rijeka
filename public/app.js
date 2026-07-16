@@ -242,6 +242,9 @@ const eurShort = (n) => {
   if (Math.abs(n) >= 1e3) return (n / 1e3).toFixed(1) + 'k €';
   return Math.round(n) + ' €';
 };
+const fmtQty = (n) => new Intl.NumberFormat('hr-HR', { maximumFractionDigits: 2 }).format(Number(n) || 0);
+const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+const grossFromNet = (net, vat) => round2((Number(net) || 0) * (1 + (Number(vat) || 0) / 100));
 const monthLabel = (key) => {
   const [y, m] = key.split('-');
   return `${MONTH_NAMES_HR[parseInt(m, 10) - 1]} ${y}`;
@@ -2052,6 +2055,10 @@ function renderSto() {
           <button class="${stoView === 'year' ? 'active' : ''}" data-view="year">Godišnji</button>
         </div>
         ${buildMonthPicker(activeMonth, null, { allowAdd: true })}
+        <button class="btn admin-only" id="sto-import" title="Uvezi stavke iz PDF računa i rasporedi ih po projektima">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 12 15 15"/></svg>
+          Uvoz računa
+        </button>
         <button class="btn btn-primary admin-only" id="sto-add">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           Dodaj
@@ -2143,12 +2150,27 @@ function renderSto() {
           <tbody>
             ${items.map(t => {
               const idx = state.sto[activeMonth].indexOf(t);
+              const nItems = (t.items || []).length;
+              const itemsBadge = nItems ? `<button class="pill blue" type="button" data-act="toggle-items" data-i="${idx}" style="border: none; cursor: pointer; margin-right: 6px; font-family: inherit;" title="Prikaži stavke materijala">${nItems} ${nItems === 1 ? 'stavka' : nItems <= 4 ? 'stavke' : 'stavki'} ▾</button>` : '';
+              const detailRow = nItems ? `
+                <tr data-items-for="${idx}" style="display: none;">
+                  <td colspan="${isAdmin ? 5 : 4}" style="background: var(--surface-2); padding: 10px 14px 12px;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                      ${t.items.map(it => `
+                        <tr>
+                          <td style="padding: 3px 10px 3px 0; color: var(--ink-2);">${escapeHtml(it.name || '')}</td>
+                          <td class="num" style="padding: 3px 10px; text-align: right; white-space: nowrap; color: var(--muted);">${it.qty ? fmtQty(it.qty) + (it.unit ? ' ' + escapeHtml(it.unit) : '') : ''}</td>
+                          <td class="num" style="padding: 3px 0 3px 10px; text-align: right; white-space: nowrap; font-weight: 600; width: 110px;">${eur(it.amount, 2)}</td>
+                        </tr>`).join('')}
+                    </table>
+                  </td>
+                </tr>` : '';
               return `
                 <tr>
                   <td class="col-date num">${formatDate(t.date)}</td>
                   <td class="num text-right" style="font-weight: 600;">${eur(t.amount, 2)}</td>
                   <td><strong>${escapeHtml(t.project || '—')}</strong></td>
-                  <td style="color: var(--muted);">${escapeHtml(t.note || '')}</td>
+                  <td style="color: var(--muted);">${itemsBadge}${escapeHtml(t.note || '')}</td>
                   ${isAdmin ? `<td class="text-right">
                     <button class="btn btn-ghost btn-sm" data-act="edit-sto" data-i="${idx}" title="Uredi">
                       <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -2158,6 +2180,7 @@ function renderSto() {
                     </button>
                   </td>` : ''}
                 </tr>
+                ${detailRow}
               `;
             }).join('')}
           </tbody>
@@ -2183,8 +2206,18 @@ function renderSto() {
     renderSto();
   }));
 
+  // Razrada stavki materijala — otvaranje/zatvaranje (dostupno i bez admina, samo pregled)
+  panel.querySelectorAll('[data-act="toggle-items"]').forEach(b => b.addEventListener('click', () => {
+    const row = panel.querySelector(`tr[data-items-for="${b.dataset.i}"]`);
+    if (!row) return;
+    const open = row.style.display !== 'none';
+    row.style.display = open ? 'none' : '';
+    b.innerHTML = open ? b.innerHTML.replace('▴', '▾') : b.innerHTML.replace('▾', '▴');
+  }));
+
   if (isAdmin) {
     panel.querySelector('#sto-add')?.addEventListener('click', () => stoModal());
+    panel.querySelector('#sto-import')?.addEventListener('click', () => stoImportModal());
     panel.querySelectorAll('[data-act="edit-sto"]').forEach(b => b.addEventListener('click', () => stoModal(parseInt(b.dataset.i))));
     panel.querySelectorAll('[data-act="del-sto"]').forEach(b => b.addEventListener('click', async () => {
       if (!confirm('Obrisati ovu stavku?')) return;
@@ -2345,6 +2378,8 @@ function renderStoYear() {
 function stoModal(idx = null) {
   ensureMonth(activeMonth);
   const t = idx !== null ? state.sto[activeMonth][idx] : { date: new Date().toISOString().slice(0, 10), amount: 0, project: '', note: '' };
+  // Radna kopija stavki materijala — original se ne dira dok se ne klikne Spremi
+  const workItems = (t.items || []).map(x => ({ ...x }));
   const projects = Array.from(new Set(allMonths().flatMap(k => (state.sto[k] || []).map(x => x.project)).filter(Boolean))).sort();
   const html = `
     <div class="modal-title">${idx !== null ? 'Uredi' : 'Nova'} STO stavku</div>
@@ -2358,6 +2393,14 @@ function stoModal(idx = null) {
         <datalist id="s-projs">${projects.map(p => `<option value="${escapeHtml(p)}"></option>`).join('')}</datalist>
       </div>
       <div class="field" style="grid-column: 1 / -1;"><label class="field-label">Napomena (opcionalno)</label><input class="input" id="s-note" value="${escapeHtml(t.note || '')}"></div>
+      <div class="field" style="grid-column: 1 / -1;">
+        <label class="field-label">Stavke materijala (opcionalno · vidljive u razradi projekta)</label>
+        <div id="s-items" style="overflow-x: auto;"></div>
+        <div style="display: flex; gap: 10px; align-items: center; margin-top: 8px; flex-wrap: wrap;">
+          <button type="button" class="btn btn-sm" data-act="add-item">+ Dodaj stavku</button>
+          <span id="s-items-sum" class="field-hint" style="margin-top: 0;"></span>
+        </div>
+      </div>
     </div>
     <div class="modal-actions">
       <button class="btn" data-act="cancel">Odustani</button>
@@ -2365,13 +2408,77 @@ function stoModal(idx = null) {
       <button class="btn btn-primary" data-act="save">${idx !== null ? 'Spremi' : 'Dodaj'}</button>
     </div>
   `;
-  const m = modal(html);
+  const m = modal(html, { wide: true });
   attachEUDateMask(m.root.querySelector('#s-date'));
   attachEUAmountMask(m.root.querySelector('#s-amount'));
 
+  const itemsBox = m.root.querySelector('#s-items');
+  const sumEl = m.root.querySelector('#s-items-sum');
+  const itemsSum = () => round2(workItems.reduce((a, it) => a + (Number(it.amount) || 0), 0));
+  const updateItemsSum = () => {
+    if (!workItems.length) { sumEl.innerHTML = ''; return; }
+    const s = itemsSum();
+    const cur = parseEUAmount(m.root.querySelector('#s-amount').value);
+    sumEl.innerHTML = `Zbroj stavki: <strong>${eur(s, 2)}</strong>` +
+      (Math.abs(s - cur) > 0.005
+        ? ` · <a href="#" data-act="use-sum" style="color: var(--acc);">postavi kao iznos</a>`
+        : ' · odgovara iznosu ✓');
+  };
+  const renderItems = () => {
+    itemsBox.innerHTML = workItems.length ? workItems.map((it, i) => `
+      <div style="display: grid; grid-template-columns: minmax(130px, 1fr) 58px 46px 92px 28px; gap: 6px; margin-bottom: 6px; align-items: center; min-width: 380px;">
+        <input class="input" data-it="${i}" data-f="name" value="${escapeHtml(it.name || '')}" placeholder="Naziv artikla">
+        <input class="input num" data-it="${i}" data-f="qty" type="text" inputmode="decimal" value="${it.qty ? String(it.qty).replace('.', ',') : ''}" placeholder="Kol." style="text-align: right; padding: 10px 8px;">
+        <input class="input" data-it="${i}" data-f="unit" value="${escapeHtml(it.unit || '')}" placeholder="Jed." style="padding: 10px 8px;">
+        <input class="input num" data-it="${i}" data-f="amount" type="text" inputmode="decimal" value="${formatEUAmount(it.amount)}" placeholder="€ s PDV" style="text-align: right; padding: 10px 8px;">
+        <button type="button" class="btn btn-ghost btn-sm btn-danger" data-del-item="${i}" title="Ukloni stavku" style="padding: 6px 4px;">×</button>
+      </div>`).join('') : `<div class="field-hint" style="margin-top: 0;">Nema stavki. Za automatsko čitanje iz PDF-a koristi „Uvoz računa" u STO tabu.</div>`;
+    updateItemsSum();
+  };
+  renderItems();
+
+  itemsBox.addEventListener('input', e => {
+    const inp = e.target.closest('input[data-it]');
+    if (!inp) return;
+    const it = workItems[+inp.dataset.it];
+    if (!it) return;
+    const f = inp.dataset.f;
+    if (f === 'qty' || f === 'amount') it[f] = parseEUAmount(inp.value);
+    else it[f] = inp.value;
+    updateItemsSum();
+  });
+  itemsBox.addEventListener('focusout', e => {
+    const inp = e.target.closest('input[data-it]');
+    if (!inp) return;
+    const it = workItems[+inp.dataset.it];
+    if (!it) return;
+    if (inp.dataset.f === 'amount') inp.value = formatEUAmount(it.amount);
+    if (inp.dataset.f === 'qty') inp.value = it.qty ? String(it.qty).replace('.', ',') : '';
+  });
+  m.root.querySelector('#s-amount').addEventListener('input', updateItemsSum);
+
   m.root.addEventListener('click', async e => {
+    const sumLink = e.target.closest('a[data-act="use-sum"]');
+    if (sumLink) {
+      e.preventDefault();
+      m.root.querySelector('#s-amount').value = formatEUAmount(itemsSum());
+      updateItemsSum();
+      return;
+    }
+    const delItem = e.target.closest('button[data-del-item]');
+    if (delItem) {
+      workItems.splice(+delItem.dataset.delItem, 1);
+      renderItems();
+      return;
+    }
     const btn = e.target.closest('button[data-act]');
     if (!btn) return;
+    if (btn.dataset.act === 'add-item') {
+      workItems.push({ name: '', qty: 0, unit: '', vatPct: 25, amount: 0 });
+      renderItems();
+      itemsBox.querySelector(`input[data-it="${workItems.length - 1}"][data-f="name"]`)?.focus();
+      return;
+    }
     if (btn.dataset.act === 'cancel') m.close();
     else if (btn.dataset.act === 'del') {
       if (confirm('Obrisati?')) {
@@ -2387,12 +2494,29 @@ function stoModal(idx = null) {
         m.root.querySelector('#s-date').focus();
         return;
       }
+      // ...t na početku čuva SVA postojeća i buduća polja zapisa (npr. items)
       const newT = {
+        ...t,
         date,
         amount: parseEUAmount(m.root.querySelector('#s-amount').value),
         project: m.root.querySelector('#s-project').value.trim(),
         note: m.root.querySelector('#s-note').value.trim(),
       };
+      const cleanItems = workItems
+        .map(x => ({ ...x, name: (x.name || '').trim(), unit: (x.unit || '').trim() }))
+        .filter(x => x.name || (Number(x.amount) || 0) > 0);
+      if (cleanItems.length) {
+        newT.items = cleanItems.map(x => {
+          const it = { name: x.name || 'Stavka', qty: Number(x.qty) || 0, unit: x.unit, amount: round2(Number(x.amount) || 0) };
+          if (x.vatPct !== undefined && x.vatPct !== null) it.vatPct = Number(x.vatPct) || 0;
+          if (x.net !== undefined && x.net !== null) it.net = round2(Number(x.net) || 0);
+          if (x.code) it.code = x.code;
+          if (x.unitPrice) it.unitPrice = Number(x.unitPrice) || 0;
+          return it;
+        });
+      } else {
+        delete newT.items;
+      }
       if (!newT.amount) { toast('Unesi iznos', 'error'); return; }
       const targetMonth = date.slice(0, 7);
       ensureMonth(targetMonth);
@@ -2414,6 +2538,451 @@ function stoModal(idx = null) {
         }
         renderSto();
       }
+    }
+  });
+}
+
+/* ============================================================
+   STO · UVOZ RAČUNA
+   PDF računa (STO Gmbh) → deterministički parser → pregled →
+   spremanje kao STO zapisi grupirani po projektu, s razradom
+   stavki materijala. Iznosi se u aplikaciju spremaju S PDV-om.
+   Ništa se ne sprema automatski — sve prolazi kroz pregled.
+   ============================================================ */
+let pdfJsPromise = null;
+function loadPdfJs() {
+  if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  if (pdfJsPromise) return pdfJsPromise;
+  pdfJsPromise = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js';
+    s.onload = () => {
+      try {
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+        resolve(window.pdfjsLib);
+      } catch (err) { reject(err); }
+    };
+    s.onerror = () => { pdfJsPromise = null; reject(new Error('Ne mogu učitati PDF modul — provjeri internetsku vezu')); };
+    document.head.appendChild(s);
+  });
+  return pdfJsPromise;
+}
+
+/* Rekonstrukcija vizualnih redaka: grupiranje po Y koordinati, sortiranje po X */
+async function extractPdfRows(file) {
+  const pdfjs = await loadPdfJs();
+  const buf = await file.arrayBuffer();
+  const doc = await pdfjs.getDocument({ data: buf }).promise;
+  const rows = [];
+  for (let p = 1; p <= doc.numPages; p++) {
+    const page = await doc.getPage(p);
+    const tc = await page.getTextContent();
+    const lines = [];
+    for (const it of tc.items) {
+      const str = (it.str || '').trim();
+      if (!str) continue;
+      const x = it.transform[4], y = it.transform[5];
+      let row = lines.find(r => Math.abs(r.y - y) <= 2.5);
+      if (!row) { row = { y, parts: [] }; lines.push(row); }
+      row.parts.push({ x, str });
+    }
+    lines.sort((a, b) => b.y - a.y);
+    for (const r of lines) {
+      r.parts.sort((a, b) => a.x - b.x);
+      rows.push(r.parts.map(pt => pt.str).join(' '));
+    }
+  }
+  return rows;
+}
+
+/* SR-IMPORT-PARSER-START */
+const INV_UNIT_RE = /^(m2|m3|mm|cm|m|kom|kg|g|t|l|lit|pal|kpl|set|par|h)$/i;
+const INV_MONEY_RE = /^-?\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?$/;
+const INV_SKIP_RE = /^(Broj\b|Naziv artikla|pakir\.|Račun\b|OIB kupca|Sto Ges|STARA RIJEKA|Mavrinci|Ulica |Telefon|www\.|info\.|HR - |Oznaka operatera|Sjedište|Trgovack|Trgovačk|MBS|IBAN|Poziv na broj|Po otpremnici|Sredstvo|Valuta|Obrada dokumenta|Mjesto i datum|Voditelj|Temeljni|Molimo|Poštovani|godine|U slučaju|Hvala|Stranica|Zagreb|\d{5} )/;
+
+function invParseDate(s) {
+  const m = String(s || '').match(/^(\d{1,2})[./](\d{1,2})[./](\d{2,4})$/);
+  if (!m) return '';
+  let y = m[3];
+  if (y.length === 2) y = '20' + y;
+  return euToISO(`${m[1].padStart(2, '0')}/${m[2].padStart(2, '0')}/${y}`);
+}
+
+/* Redak artikla: "ŠIFRA NAZIV… PAKIR KOLIČINA JED CIJENA [RABAT] PDV IZNOS_BEZ_PDV" */
+function tryParseInvoiceItemRow(line) {
+  const qtyRe = /(\d+)\s+(\d+\.\d{1,2})\s*([A-Za-z0-9]{1,4})\b/g;
+  let m;
+  while ((m = qtyRe.exec(line)) !== null) {
+    if (!INV_UNIT_RE.test(m[3])) continue;
+    const rest = line.slice(m.index + m[0].length).trim();
+    if (!rest) continue;
+    const toks = rest.split(/\s+/);
+    if (toks.length < 3 || toks.length > 4) continue;
+    if (!toks.every(t2 => INV_MONEY_RE.test(t2))) continue;
+    const prefix = line.slice(0, m.index).trim();
+    const codeM = prefix.match(/^((?:HR\s+)?\d{4,6}(?:-\d{1,3})?-?)(?:\s+|$)/);
+    const code = codeM ? codeM[1].trim() : '';
+    const name = (codeM ? prefix.slice(codeM[0].length) : prefix).trim();
+    return {
+      code,
+      name: name || code || 'Stavka',
+      qty: parseFloat(m[2]) || 0,
+      unit: m[3],
+      unitPrice: parseEUAmount(toks[0]),
+      rabatPct: toks.length === 4 ? parseEUAmount(toks[1]) : null,
+      vatPct: parseEUAmount(toks[toks.length - 2]),
+      net: parseEUAmount(toks[toks.length - 1]),
+    };
+  }
+  return null;
+}
+
+function parseStoInvoiceRows(rows) {
+  const out = { invoiceNo: '', date: '', items: [], totalNet: null, totalGross: null };
+  let current = null, contCount = 0;
+  for (const raw of rows) {
+    const line = String(raw || '').replace(/\s+/g, ' ').trim();
+    if (!line) continue;
+    if (!out.invoiceNo) {
+      const meta = line.match(/\b(\d{4}-\d{2}-\d{2})\b\s+\d+\s+(\d{1,2}[./]\d{1,2}[./]\d{2,4})/);
+      if (meta) { out.invoiceNo = meta[1]; out.date = invParseDate(meta[2]); }
+    }
+    if (/UKUPNO ZA PLATITI/i.test(line)) {
+      const nums = line.match(/-?\d{1,3}(?:\.\d{3})*,\d{2}/g);
+      if (nums && out.totalGross === null) out.totalGross = parseEUAmount(nums[nums.length - 1]);
+      current = null; continue;
+    }
+    if (/^Ukupno:/.test(line)) {
+      const nums = line.match(/-?\d{1,3}(?:\.\d{3})*,\d{2}/g);
+      if (nums && out.totalNet === null) out.totalNet = parseEUAmount(nums[nums.length - 1]);
+      current = null; continue;
+    }
+    if (/^(Osnovica za PDV|PDV \d)/.test(line)) { current = null; continue; }
+    const item = tryParseInvoiceItemRow(line);
+    if (item) { out.items.push(item); current = item; contCount = 0; continue; }
+    // Nastavak naziva artikla (npr. drugi red naziva ili veličina pakiranja)
+    if (current && contCount < 3 && line.length <= 90 && !INV_SKIP_RE.test(line) && !/\d{4}-\d{2}-\d{2}\s+\d+\s+\d{1,2}[./]/.test(line)) {
+      let cont = line;
+      if (/-$/.test(current.code || '')) {
+        const cm = cont.match(/^(\d{1,4})\b\s*/);
+        if (cm) { current.code += cm[1]; cont = cont.slice(cm[0].length); }
+      }
+      if (cont) current.name = (current.name + ' ' + cont).trim().slice(0, 160);
+      contCount++;
+    }
+  }
+  return out;
+}
+/* SR-IMPORT-PARSER-END */
+
+/* Korak 1: odabir PDF-a (ili tekst / ručni unos) */
+function stoImportModal() {
+  const html = `
+    <div class="modal-title">Uvoz STO računa</div>
+    <div class="modal-sub">Ubaci PDF računa — stavke se automatski iščitaju, ti ih pregledaš i rasporediš po projektima. Iznosi se spremaju s PDV-om.</div>
+    <label id="imp-drop" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; border: 2px dashed var(--line); border-radius: 12px; padding: 28px 16px; cursor: pointer; text-align: center; color: var(--muted); transition: border-color .15s;">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 12 15 15"/></svg>
+      <span><strong style="color: var(--ink);">Odaberi PDF računa</strong> ili ga dovuci ovdje</span>
+      <span style="font-size: 12px;">Radi sa STO računima (tekstualni PDF, ne skenirana slika)</span>
+      <input type="file" id="imp-file" accept="application/pdf,.pdf" style="display: none;">
+    </label>
+    <div id="imp-status" class="field-hint" style="min-height: 16px; margin-top: 10px;"></div>
+    <div class="field" style="margin-top: 6px;">
+      <label class="field-label">…ili zalijepi tekst računa</label>
+      <textarea class="input" id="imp-text" rows="4" placeholder="Kopiraj retke artikala iz PDF preglednika i zalijepi ovdje" style="resize: vertical; min-height: 70px; font-family: inherit;"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-act="cancel">Odustani</button>
+      <button class="btn" data-act="manual">Ručni unos stavki</button>
+      <button class="btn btn-primary" data-act="parse-text">Parsiraj tekst</button>
+    </div>
+  `;
+  const m = modal(html, { wide: true });
+  const status = (msg) => { const el = m.root.querySelector('#imp-status'); if (el) el.textContent = msg; };
+
+  const handleFile = async (file) => {
+    if (!file) return;
+    if (!/pdf$/i.test(file.type || '') && !/\.pdf$/i.test(file.name || '')) {
+      toast('Odaberi PDF datoteku', 'error');
+      return;
+    }
+    try {
+      status('Učitavam PDF modul…');
+      await loadPdfJs();
+      status(`Čitam ${file.name}…`);
+      const rows = await extractPdfRows(file);
+      const parsed = parseStoInvoiceRows(rows);
+      if (!parsed.items.length) {
+        status('');
+        toast('U PDF-u nisam prepoznao nijednu stavku. Ako je skenirana slika, koristi ručni unos.', 'error', 4200);
+        return;
+      }
+      m.close();
+      setTimeout(() => stoImportReview(parsed), 30);
+    } catch (err) {
+      console.error('PDF import:', err);
+      status('');
+      toast('Greška pri čitanju PDF-a: ' + (err.message || err), 'error', 4000);
+    }
+  };
+
+  const drop = m.root.querySelector('#imp-drop');
+  const fileInp = m.root.querySelector('#imp-file');
+  fileInp.addEventListener('change', () => handleFile(fileInp.files && fileInp.files[0]));
+  drop.addEventListener('dragover', e => { e.preventDefault(); drop.style.borderColor = 'var(--acc)'; });
+  drop.addEventListener('dragleave', () => { drop.style.borderColor = 'var(--line)'; });
+  drop.addEventListener('drop', e => {
+    e.preventDefault();
+    drop.style.borderColor = 'var(--line)';
+    handleFile(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]);
+  });
+
+  m.root.addEventListener('click', e => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    if (btn.dataset.act === 'cancel') m.close();
+    else if (btn.dataset.act === 'manual') {
+      m.close();
+      setTimeout(() => stoImportReview({ invoiceNo: '', date: '', items: [], totalNet: null, totalGross: null, manual: true }), 30);
+    } else if (btn.dataset.act === 'parse-text') {
+      const txt = m.root.querySelector('#imp-text').value;
+      if (!txt.trim()) { toast('Zalijepi tekst računa ili odaberi PDF', 'error'); return; }
+      const parsed = parseStoInvoiceRows(txt.split(/\r?\n/));
+      if (!parsed.items.length) {
+        toast('Iz teksta nisam prepoznao nijednu stavku. Probaj PDF ili ručni unos.', 'error', 4000);
+        return;
+      }
+      m.close();
+      setTimeout(() => stoImportReview(parsed), 30);
+    }
+  });
+}
+
+/* Korak 2: pregled stavki, dodjela projekata, spremanje */
+function stoImportReview(parsed) {
+  const blankRow = () => ({ code: '', name: '', qty: 0, unit: '', unitPrice: 0, vatPct: 25, net: 0, gross: 0, project: '' });
+  const rows = parsed.items.length
+    ? parsed.items.map(it => ({
+        code: it.code || '',
+        name: it.name || '',
+        qty: Number(it.qty) || 0,
+        unit: it.unit || '',
+        unitPrice: Number(it.unitPrice) || 0,
+        vatPct: (it.vatPct === 0 || it.vatPct) ? Number(it.vatPct) : 25,
+        net: round2(Number(it.net) || 0),
+        gross: grossFromNet(it.net, (it.vatPct === 0 || it.vatPct) ? it.vatPct : 25),
+        project: '',
+      }))
+    : [blankRow(), blankRow(), blankRow()];
+
+  const knownProjects = Array.from(new Set([
+    ...allMonths().flatMap(k => (state.sto[k] || []).map(x => x.project)),
+    ...allMonths().flatMap(k => ((state.hours[k] || {}).days || []).flatMap(d => Object.values(d.workers || {}).map(w => w.project))),
+  ].filter(Boolean).map(s => String(s).trim()).filter(Boolean))).sort();
+
+  const html = `
+    <div class="modal-title">${parsed.manual ? 'Ručni unos stavki materijala' : 'Pregled računa' + (parsed.invoiceNo ? ' · ' + escapeHtml(parsed.invoiceNo) : '')}</div>
+    <div class="modal-sub">Provjeri stavke i svakoj dodijeli projekt — jedan račun smije ići na više projekata. Iznos s PDV-om se računa automatski.</div>
+    <div class="grid grid-2" style="gap: 14px; margin-bottom: 14px;">
+      <div class="field"><label class="field-label">Datum računa</label><input class="input" id="ir-date" type="text" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" value="${isoToEU(parsed.date || new Date().toISOString().slice(0, 10))}"></div>
+      <div class="field"><label class="field-label">Broj računa</label><input class="input" id="ir-no" value="${escapeHtml(parsed.invoiceNo || '')}" placeholder="Npr. 9094-01-91"></div>
+    </div>
+    <div class="field" style="margin-bottom: 14px;">
+      <label class="field-label">Projekt za sve stavke</label>
+      <div style="display: flex; gap: 8px;">
+        <input class="input" id="ir-all-proj" list="ir-projs" placeholder="Npr. Kostrena" style="flex: 1;">
+        <button type="button" class="btn" data-act="apply-all">Primijeni na sve</button>
+      </div>
+      <div class="field-hint">Upiši projekt, primijeni na sve, pa pojedinim stavkama po potrebi promijeni projekt u tablici.</div>
+      <datalist id="ir-projs">${knownProjects.map(p => `<option value="${escapeHtml(p)}"></option>`).join('')}</datalist>
+    </div>
+    <div class="table-scroll" style="max-height: 44vh; overflow: auto; border: 1px solid var(--line); border-radius: 10px;">
+      <table class="table" style="min-width: 760px;">
+        <thead>
+          <tr>
+            <th>Artikl</th>
+            <th class="text-right">Kol.</th>
+            <th>Jed.</th>
+            <th class="text-right">Bez PDV</th>
+            <th class="text-right">PDV %</th>
+            <th class="text-right">S PDV</th>
+            <th>Projekt</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="ir-rows"></tbody>
+      </table>
+    </div>
+    <div id="ir-summary" style="margin-top: 12px; font-size: 13px; line-height: 1.7;"></div>
+    <div class="modal-actions">
+      <button class="btn" data-act="back">Natrag</button>
+      <button type="button" class="btn" data-act="add-row">+ Dodaj red</button>
+      <button class="btn btn-primary" data-act="save">Spremi</button>
+    </div>
+  `;
+  const m = modal(html, { wide: true });
+  m.root.querySelector('.modal').style.maxWidth = 'min(1060px, 96vw)';
+  attachEUDateMask(m.root.querySelector('#ir-date'));
+
+  const tbody = m.root.querySelector('#ir-rows');
+  const summaryEl = m.root.querySelector('#ir-summary');
+
+  const updateSummary = () => {
+    const valid = rows.filter(r => (r.name || '').trim() || (Number(r.gross) || 0) > 0);
+    const totNet = round2(valid.reduce((a, r) => a + (Number(r.net) || 0), 0));
+    const totGross = round2(valid.reduce((a, r) => a + (Number(r.gross) || 0), 0));
+    const byProj = {};
+    valid.forEach(r => {
+      const p = (r.project || '').trim() || 'bez projekta';
+      byProj[p] = round2((byProj[p] || 0) + (Number(r.gross) || 0));
+    });
+    const projLine = Object.entries(byProj).map(([p, v]) =>
+      `<span class="pill ${p === 'bez projekta' ? 'red' : 'gray'}" style="margin: 2px 6px 2px 0;">${escapeHtml(p)}: <strong style="margin-left: 4px;">${eur(v, 2)}</strong></span>`
+    ).join('');
+    let check = '';
+    if (parsed.totalNet !== null && parsed.totalNet !== undefined) {
+      const ok = Math.abs(totNet - parsed.totalNet) < 0.02;
+      check = ok
+        ? `<span style="color: var(--positive);">✓ zbroj bez PDV-a odgovara računu (${eur(parsed.totalNet, 2)})</span>`
+        : `<span style="color: var(--negative);">⚠ račun kaže ${eur(parsed.totalNet, 2)} bez PDV-a, ovdje je ${eur(totNet, 2)}</span>`;
+    }
+    summaryEl.innerHTML = `<div>${projLine || '<span style="color: var(--muted);">Još nijedna stavka nema projekt.</span>'}</div>` +
+      `<div style="color: var(--ink-2);">Ukupno: <strong>${eur(totGross, 2)}</strong> s PDV-om · ${eur(totNet, 2)} bez PDV-a${check ? ' · ' + check : ''}</div>`;
+  };
+
+  const renderRows = () => {
+    tbody.innerHTML = rows.map((r, i) => `
+      <tr>
+        <td style="min-width: 220px;"><input class="input" data-i="${i}" data-f="name" value="${escapeHtml(r.name || '')}" placeholder="Naziv artikla" style="width: 100%; min-width: 210px;"></td>
+        <td><input class="input num" data-i="${i}" data-f="qty" type="text" inputmode="decimal" value="${r.qty ? String(r.qty).replace('.', ',') : ''}" style="width: 66px; text-align: right; padding: 10px 8px;"></td>
+        <td><input class="input" data-i="${i}" data-f="unit" value="${escapeHtml(r.unit || '')}" style="width: 52px; padding: 10px 8px;"></td>
+        <td><input class="input num" data-i="${i}" data-f="net" type="text" inputmode="decimal" value="${formatEUAmount(r.net)}" style="width: 92px; text-align: right; padding: 10px 8px;"></td>
+        <td><input class="input num" data-i="${i}" data-f="vatPct" type="text" inputmode="decimal" value="${String(r.vatPct).replace('.', ',')}" style="width: 56px; text-align: right; padding: 10px 8px;"></td>
+        <td><input class="input num" data-i="${i}" data-f="gross" type="text" inputmode="decimal" value="${formatEUAmount(r.gross)}" style="width: 96px; text-align: right; font-weight: 600; padding: 10px 8px;"></td>
+        <td><input class="input" data-i="${i}" data-f="project" list="ir-projs" value="${escapeHtml(r.project || '')}" placeholder="Projekt" style="width: 134px;"></td>
+        <td style="text-align: right;"><button type="button" class="btn btn-ghost btn-sm btn-danger" data-del-row="${i}" title="Ukloni red">×</button></td>
+      </tr>`).join('');
+    updateSummary();
+  };
+  renderRows();
+
+  tbody.addEventListener('input', e => {
+    const inp = e.target.closest('input[data-i]');
+    if (!inp) return;
+    const i = +inp.dataset.i, f = inp.dataset.f;
+    const r = rows[i];
+    if (!r) return;
+    if (f === 'net' || f === 'gross' || f === 'vatPct' || f === 'qty') {
+      r[f] = parseEUAmount(inp.value);
+      if (f === 'net' || f === 'vatPct') {
+        r.gross = grossFromNet(r.net, r.vatPct);
+        const g = tbody.querySelector(`input[data-i="${i}"][data-f="gross"]`);
+        if (g && g !== inp) g.value = formatEUAmount(r.gross);
+      } else if (f === 'gross') {
+        r.net = round2((Number(r.gross) || 0) / (1 + (Number(r.vatPct) || 0) / 100));
+        const n = tbody.querySelector(`input[data-i="${i}"][data-f="net"]`);
+        if (n && n !== inp) n.value = formatEUAmount(r.net);
+      }
+    } else {
+      r[f] = inp.value;
+    }
+    updateSummary();
+  });
+  tbody.addEventListener('focusout', e => {
+    const inp = e.target.closest('input[data-i]');
+    if (!inp) return;
+    const r = rows[+inp.dataset.i];
+    if (!r) return;
+    const f = inp.dataset.f;
+    if (f === 'net' || f === 'gross') inp.value = formatEUAmount(r[f]);
+    if (f === 'qty') inp.value = r.qty ? String(r.qty).replace('.', ',') : '';
+  });
+
+  const doSave = async () => {
+    const dateEU = m.root.querySelector('#ir-date').value.trim();
+    const date = euToISO(dateEU);
+    if (!date) {
+      toast('Datum mora biti u formatu DD/MM/YYYY', 'error');
+      m.root.querySelector('#ir-date').classList.add('invalid');
+      m.root.querySelector('#ir-date').focus();
+      return;
+    }
+    const invNo = m.root.querySelector('#ir-no').value.trim();
+    const clean = rows
+      .map(r => ({ ...r, name: (r.name || '').trim(), unit: (r.unit || '').trim(), project: (r.project || '').trim() }))
+      .filter(r => r.name || (Number(r.gross) || 0) > 0);
+    if (!clean.length) { toast('Nema stavki za spremanje', 'error'); return; }
+    for (const r of clean) {
+      if (!r.name) { toast('Svaka stavka mora imati naziv', 'error'); return; }
+      if (!(Number(r.gross) > 0)) { toast(`Stavka „${r.name}" nema iznos`, 'error'); return; }
+      if (!r.project) { toast(`Stavka „${r.name}" nema dodijeljen projekt`, 'error'); return; }
+    }
+    if (invNo) {
+      let dup = 0;
+      for (const k of allMonths()) {
+        for (const t of (state.sto[k] || [])) {
+          if ((t.note || '').includes(invNo)) dup++;
+        }
+      }
+      if (dup && !confirm(`Račun ${invNo} već postoji u aplikaciji (${dup} ${dup === 1 ? 'zapis' : 'zapisa'}). Svejedno spremiti ponovno?`)) return;
+    }
+    const targetMonth = date.slice(0, 7);
+    ensureMonth(targetMonth);
+    const byProj = {};
+    clean.forEach(r => { (byProj[r.project] = byProj[r.project] || []).push(r); });
+    const projNames = Object.keys(byProj);
+    // Snapshot za rollback ako spremanje na server ne uspije
+    const snapshot = JSON.stringify(state.sto[targetMonth]);
+    for (const proj of projNames) {
+      const list = byProj[proj];
+      state.sto[targetMonth].push({
+        date,
+        amount: round2(list.reduce((a, r) => a + (Number(r.gross) || 0), 0)),
+        project: proj,
+        note: invNo ? `Račun ${invNo}` : '',
+        items: list.map(r => {
+          const it = { name: r.name, qty: Number(r.qty) || 0, unit: r.unit, vatPct: Number(r.vatPct) || 0, net: round2(Number(r.net) || 0), amount: round2(Number(r.gross) || 0) };
+          if (r.code) it.code = r.code;
+          if (r.unitPrice) it.unitPrice = Number(r.unitPrice) || 0;
+          return it;
+        }),
+      });
+    }
+    if (await saveData()) {
+      m.close();
+      activeMonth = targetMonth;
+      stoView = 'month';
+      toast(`Uvezeno: ${clean.length} ${clean.length === 1 ? 'stavka' : 'stavki'} → ${projNames.length} ${projNames.length === 1 ? 'projekt' : 'projekta'}`, 'success', 3200);
+      renderSto();
+    } else {
+      state.sto[targetMonth] = JSON.parse(snapshot);
+    }
+  };
+
+  m.root.addEventListener('click', e => {
+    const delBtn = e.target.closest('button[data-del-row]');
+    if (delBtn) {
+      rows.splice(+delBtn.dataset.delRow, 1);
+      renderRows();
+      return;
+    }
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    if (btn.dataset.act === 'back') {
+      m.close();
+      setTimeout(() => stoImportModal(), 30);
+    } else if (btn.dataset.act === 'add-row') {
+      rows.push(blankRow());
+      renderRows();
+      tbody.querySelector(`input[data-i="${rows.length - 1}"][data-f="name"]`)?.focus();
+    } else if (btn.dataset.act === 'apply-all') {
+      const p = m.root.querySelector('#ir-all-proj').value.trim();
+      if (!p) { toast('Upiši naziv projekta', 'error'); return; }
+      rows.forEach(r => { r.project = p; });
+      renderRows();
+      toast(`Projekt „${p}" postavljen na sve stavke`, 'success', 1800);
+    } else if (btn.dataset.act === 'save') {
+      doSave();
     }
   });
 }
@@ -2670,6 +3239,27 @@ function renderProjectDetail(p) {
     .map(([name, w]) => ({ name, ...w }))
     .sort((a, b) => b.trosak - a.trosak);
 
+  // Razrada materijala po stavkama (iz uvezenih STO računa)
+  const matMap = {};
+  let itemizedTotal = 0;
+  for (const k of allMonths()) {
+    for (const t of (state.sto[k] || [])) {
+      const nm = (t.project || '').trim() || PROJ_NONE;
+      if (nm !== p.name) continue;
+      if (!t.items || !t.items.length) continue;
+      itemizedTotal += t.amount;
+      for (const it of t.items) {
+        const key = (it.name || 'Stavka') + '\u00a6' + (it.unit || '');
+        if (!matMap[key]) matMap[key] = { name: it.name || 'Stavka', unit: it.unit || '', qty: 0, amount: 0 };
+        matMap[key].qty += Number(it.qty) || 0;
+        matMap[key].amount += Number(it.amount) || 0;
+      }
+    }
+  }
+  const matRows = Object.values(matMap).sort((a, b) => b.amount - a.amount);
+  const matTotal = round2(matRows.reduce((a, r) => a + r.amount, 0));
+  const nonItemized = Math.max(0, round2(p.materijal - itemizedTotal));
+
   panel.innerHTML = `
     <div class="page-head">
       <div class="page-title-block">
@@ -2805,6 +3395,52 @@ function renderProjectDetail(p) {
         </div>`}
         <div class="proj-formula">Rad = sati × satnica + marenda, pripisano po danu iz Evidencije sati. Radnici bez satnice nisu uključeni u obračun projekta.</div>
       </div>
+    </div>
+
+    <div class="card" style="margin-top: 24px;">
+      <div class="card-head">
+        <div>
+          <div class="card-title">Materijal po stavkama</div>
+          <div class="card-sub">Što je točno potrošeno na projekt · iz uvezenih STO računa · iznosi s PDV-om</div>
+        </div>
+      </div>
+      ${matRows.length === 0 ? `<div class="empty">Još nema razrade po stavkama za ovaj projekt.<br>Nove račune ubacuj kroz „Uvoz računa" u STO tabu i stavke će se ovdje same zbrajati.</div>` : `
+      <div class="table-scroll">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Artikl</th>
+              <th class="text-right">Ukupna količina</th>
+              <th class="text-right">Iznos (s PDV)</th>
+              <th class="text-right">Udio u materijalu</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${matRows.map(r => `
+              <tr>
+                <td><strong>${escapeHtml(r.name)}</strong></td>
+                <td class="num text-right">${r.qty ? fmtQty(r.qty) + (r.unit ? ' ' + escapeHtml(r.unit) : '') : '—'}</td>
+                <td class="num text-right" style="font-weight: 600;">${eur(r.amount, 2)}</td>
+                <td class="num text-right" style="color: var(--muted);">${p.materijal > 0 ? ((r.amount / p.materijal) * 100).toFixed(1).replace('.', ',') + ' %' : '—'}</td>
+              </tr>`).join('')}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td>Σ razrađeno po stavkama</td>
+              <td></td>
+              <td class="num text-right"><strong>${eur(matTotal, 2)}</strong></td>
+              <td></td>
+            </tr>
+            ${nonItemized > 0.005 ? `
+            <tr>
+              <td style="color: var(--muted);">Materijal bez razrade (unosi bez stavki)</td>
+              <td></td>
+              <td class="num text-right" style="color: var(--muted);">${eur(nonItemized, 2)}</td>
+              <td></td>
+            </tr>` : ''}
+          </tfoot>
+        </table>
+      </div>`}
     </div>
   `;
 
@@ -3193,6 +3829,19 @@ function downloadXlsx() {
     const rows = [['Datum', 'Iznos', 'Projekt', 'Napomena']];
     for (const t of items) rows.push([t.date, t.amount, t.project, t.note]);
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), `STO ${monthLabelShort(k)}`);
+  }
+
+  // STO stavke — razrada materijala iz uvezenih računa (svi mjeseci)
+  const stavkeRows = [['Mjesec', 'Datum', 'Projekt', 'Napomena', 'Artikl', 'Šifra', 'Količina', 'Jedinica', 'PDV %', 'Iznos bez PDV', 'Iznos s PDV']];
+  for (const k of months) {
+    for (const t of (state.sto[k] || [])) {
+      for (const it of (t.items || [])) {
+        stavkeRows.push([monthLabel(k), t.date, t.project || '', t.note || '', it.name || '', it.code || '', Number(it.qty) || 0, it.unit || '', (it.vatPct === 0 || it.vatPct) ? it.vatPct : '', (it.net === 0 || it.net) ? it.net : '', Number(it.amount) || 0]);
+      }
+    }
+  }
+  if (stavkeRows.length > 1) {
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(stavkeRows), 'STO stavke');
   }
 
   // Hours per month
