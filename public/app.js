@@ -537,9 +537,11 @@ function computeCashflowSummary() {
 }
 
 function computeWorkersTotal(monthKey) {
-  // Total worker cost for cashflow = Σ Mjesečni trošak za sve radnike
+  // Ukupni trošak rada za cashflow = Σ Mjesečni trošak svih radnika
+  // + fiksne osobe (Postavke → Fiksni rad: Boris, Tata) — svaki mjesec.
   const stats = computeWorkerStats(monthKey);
-  return stats.reduce((a, s) => a + (s.mjesecniTrosak || 0), 0);
+  const fixedTotal = getFixedLabor().reduce((a, f) => a + (Number(f.amount) || 0), 0);
+  return stats.reduce((a, s) => a + (s.mjesecniTrosak || 0), 0) + fixedTotal;
 }
 
 /* Vrati fiksno za radnika za zadani mjesec (YYYY-MM), uvažavajući povijest promjena.
@@ -958,6 +960,8 @@ function renderHours() {
   const days = daysInMonth(activeMonth);
   const h = state.hours[activeMonth] || { days: [], extras: {} };
   const stats = computeWorkerStats(activeMonth);
+  const fixed = getFixedLabor();
+  const fixedTotal = fixed.reduce((a, f) => a + (Number(f.amount) || 0), 0);
   const today = new Date().toISOString().slice(0, 10);
   const workers = state.settings.workers;
 
@@ -1103,11 +1107,11 @@ function renderHours() {
       <div class="card-head">
         <div>
           <div class="card-title">Sažetak isplate · ${monthLabelShort(activeMonth)}</div>
-          <div class="card-sub">Po radniku</div>
+          <div class="card-sub">Po radniku · fiksne osobe (Postavke → Fiksni rad) ulaze u Mj. trošak, bez sati i bez keš isplate</div>
         </div>
         <div class="page-actions">
           <span class="pill green">Σ Za isplatu: <strong style="margin-left: 4px;">${eur(stats.reduce((a, s) => a + s.zaIsplatu, 0), 0)}</strong></span>
-          <span class="pill gray">Σ Mj. trošak: <strong style="margin-left: 4px;">${eur(stats.reduce((a, s) => a + s.mjesecniTrosak, 0), 0)}</strong></span>
+          <span class="pill gray">Σ Mj. trošak: <strong style="margin-left: 4px;">${eur(stats.reduce((a, s) => a + s.mjesecniTrosak, 0) + fixedTotal, 0)}</strong></span>
         </div>
       </div>
       <div class="table-scroll">
@@ -1169,6 +1173,20 @@ function renderHours() {
                 <td class="num text-right" style="font-weight: 600;">${eur(s.mjesecniTrosak, 2)}</td>
               </tr>
             `;}).join('')}
+              ${fixed.map(f => `
+              <tr style="background: var(--surface-2);">
+                <td><strong>${escapeHtml(f.name)}</strong> <span class="pill gray" style="margin-left: 6px;">fiksno</span></td>
+                <td class="num text-right muted-cell">—</td>
+                <td class="num text-right muted-cell">—</td>
+                <td class="num text-right muted-cell">—</td>
+                <td class="num text-right zone-kes zone-kes-first muted-cell">—</td>
+                <td class="num text-right zone-kes muted-cell">—</td>
+                <td class="num text-right zone-kes muted-cell">—</td>
+                <td class="num text-right zone-kes zone-kes-total muted-cell">—</td>
+                <td class="num text-right zone-firma zone-firma-first">${eur(f.amount, 0)}</td>
+                <td class="num text-right zone-firma muted-cell">—</td>
+                <td class="num text-right" style="font-weight: 600;">${eur(f.amount, 2)}</td>
+              </tr>`).join('')}
           </tbody>
           <tfoot>
             <tr>
@@ -1180,15 +1198,15 @@ function renderHours() {
               <td class="num text-right zone-kes"><strong>${eur(stats.reduce((a, s) => a + s.prijevoz, 0), 0)}</strong></td>
               <td class="num text-right zone-kes"><strong>${eur(stats.reduce((a, s) => a + s.dodatno, 0), 2)}</strong></td>
               <td class="num text-right zone-kes zone-kes-total"><strong>${eur(stats.reduce((a, s) => a + s.zaIsplatu, 0), 2)}</strong></td>
-              <td class="num text-right zone-firma zone-firma-first"><strong>${eur(stats.reduce((a, s) => a + s.fiksno, 0), 0)}</strong></td>
+              <td class="num text-right zone-firma zone-firma-first"><strong>${eur(stats.reduce((a, s) => a + s.fiksno, 0) + fixedTotal, 0)}</strong></td>
               <td class="num text-right zone-firma"><strong>${eur(stats.reduce((a, s) => a + s.stan, 0), 0)}</strong></td>
-              <td class="num text-right"><strong>${eur(stats.reduce((a, s) => a + s.mjesecniTrosak, 0), 2)}</strong></td>
+              <td class="num text-right"><strong>${eur(stats.reduce((a, s) => a + s.mjesecniTrosak, 0) + fixedTotal, 2)}</strong></td>
             </tr>
           </tfoot>
         </table>
       </div>
       <div class="payroll-formula">
-        Zarada = Sati × Satnica&nbsp;&nbsp;·&nbsp;&nbsp;Dodatno = Zarada + Marenda − Fiksno&nbsp;&nbsp;·&nbsp;&nbsp;<span style="color: var(--positive);">Za isplatu = Dodatno + Prijevoz</span>&nbsp;&nbsp;·&nbsp;&nbsp;Mj. trošak = Za isplatu + Fiksno + Stan
+        Zarada = Sati × Satnica&nbsp;&nbsp;·&nbsp;&nbsp;Dodatno = Zarada + Marenda − Fiksno&nbsp;&nbsp;·&nbsp;&nbsp;<span style="color: var(--positive);">Za isplatu = Dodatno + Prijevoz</span>&nbsp;&nbsp;·&nbsp;&nbsp;Mj. trošak = Za isplatu + Fiksno + Stan&nbsp;&nbsp;·&nbsp;&nbsp;Fiksne osobe: Mj. trošak = fiksni iznos (Postavke → Fiksni rad)
       </div>
     </div>
   `;
@@ -3076,11 +3094,11 @@ const PROJ_NONE = '__bez_projekta__';
 function computeProjectsData() {
   const map = {};
   const ensure = (name) => {
-    if (!map[name]) map[name] = { name, materijal: 0, rad: 0, sati: 0, fiksni: 0, fixedPeople: {}, months: {}, workers: {}, stoCount: 0, lastActivity: '' };
+    if (!map[name]) map[name] = { name, materijal: 0, rad: 0, sati: 0, months: {}, workers: {}, stoCount: 0, lastActivity: '' };
     return map[name];
   };
   const mEnsure = (p, k) => {
-    if (!p.months[k]) p.months[k] = { materijal: 0, rad: 0, sati: 0, fiksni: 0 };
+    if (!p.months[k]) p.months[k] = { materijal: 0, rad: 0, sati: 0 };
     return p.months[k];
   };
   const months = allMonths();
@@ -3116,31 +3134,12 @@ function computeProjectsData() {
         }
       }
     }
-    // Fiksni mjesečni rad (Postavke → Fiksni rad): raspodjela po projektima
-    // proporcionalno odrađenim satima u mjesecu (samo radnici sa satnicom).
-    // Mjesec bez evidentiranih sati → cijeli iznos pod „Bez projekta".
-    const fixedPeople = getFixedLabor();
-    const fixedTotal = fixedPeople.reduce((a, f) => a + (Number(f.amount) || 0), 0);
-    if (fixedTotal > 0) {
-      const withHours = Object.values(map).filter(pp => pp.months[k] && pp.months[k].sati > 0);
-      const totalH = withHours.reduce((a, pp) => a + pp.months[k].sati, 0);
-      const targets = totalH > 0 ? withHours : [ensure(PROJ_NONE)];
-      for (const pp of targets) {
-        const weight = totalH > 0 ? pp.months[k].sati / totalH : 1;
-        const mm = mEnsure(pp, k);
-        pp.fiksni += fixedTotal * weight;
-        mm.fiksni = (mm.fiksni || 0) + fixedTotal * weight;
-        for (const f of fixedPeople) {
-          pp.fixedPeople[f.name] = (pp.fixedPeople[f.name] || 0) + (Number(f.amount) || 0) * weight;
-        }
-      }
-    }
   }
   const list = Object.values(map);
   const lastKey = months.length ? months[months.length - 1] : null;
   const prevKey = lastKey ? addCalendarMonths(lastKey, -1) : null;
   for (const p of list) {
-    p.ukupno = p.materijal + p.rad + (p.fiksni || 0);
+    p.ukupno = p.materijal + p.rad;
     p.isActive = !!lastKey && (p.lastActivity === lastKey || p.lastActivity === prevKey);
     p.monthCount = Object.keys(p.months).length;
     p.workerCount = Object.keys(p.workers).length;
@@ -3167,7 +3166,6 @@ function renderProjects() {
   const visible = none ? [...real, none] : real;
   const totMat = visible.reduce((a, p) => a + p.materijal, 0);
   const totRad = visible.reduce((a, p) => a + p.rad, 0);
-  const totFiksni = visible.reduce((a, p) => a + (p.fiksni || 0), 0);
   const activeCount = real.filter(p => p.isActive).length;
 
   // Filter: ako nema aktivnih, prikaži sve bez obzira na toggle
@@ -3192,7 +3190,7 @@ function renderProjects() {
     <div class="kpi-row" style="margin-bottom: 24px;">
       <div class="kpi-cell">
         <div class="stat-label">Ukupno</div>
-        <div class="stat-value">${eur(totMat + totRad + totFiksni, 0)}</div>
+        <div class="stat-value">${eur(totMat + totRad, 0)}</div>
         <div class="stat-sub">materijal + rad${removed.length ? ` · bez ${removed.length} uklonjenih (${eur(removedTotal, 0)})` : ''}</div>
       </div>
       <div class="kpi-cell">
@@ -3200,9 +3198,8 @@ function renderProjects() {
         <div class="stat-value">${eur(totMat, 0)}</div>
       </div>
       <div class="kpi-cell">
-        <div class="stat-label">Rad</div>
-        <div class="stat-value">${eur(totRad + totFiksni, 0)}</div>
-        <div class="stat-sub">po satima ${eur(totRad, 0)} · fiksni ${eur(totFiksni, 0)}</div>
+        <div class="stat-label">Rad (sati)</div>
+        <div class="stat-value">${eur(totRad, 0)}</div>
       </div>
       <div class="kpi-cell">
         <div class="stat-label">Aktivnih projekata</div>
@@ -3228,7 +3225,7 @@ function renderProjects() {
             <div class="proj-split-rad" style="width: ${(100 - pctMat).toFixed(1)}%;"></div>
           </div>
           <div class="proj-card-meta">
-            <span><span class="proj-legend-dot proj-split-mat"></span>Materijal ${eur(p.materijal, 0)} · <span class="proj-legend-dot proj-split-rad"></span>Rad ${eur(p.rad + (p.fiksni || 0), 0)}${p.fiksni > 0.5 ? ` <span style="color: var(--muted);">(fiksni ${eur(p.fiksni, 0)})</span>` : ''}</span>
+            <span><span class="proj-legend-dot proj-split-mat"></span>Materijal ${eur(p.materijal, 0)} · <span class="proj-legend-dot proj-split-rad"></span>Rad ${eur(p.rad, 0)}</span>
             <span>${p.sati > 0 ? FMT_INT.format(p.sati) + ' h · ' : ''}${p.monthCount} mj.${p.workerCount > 0 ? ' · ' + p.workerCount + ' radnika' : ''}</span>
           </div>
         </div>`;
@@ -3241,7 +3238,7 @@ function renderProjects() {
       ${none ? `
         <div class="proj-card proj-none-card" data-proj="${PROJ_NONE}">
           <div class="proj-card-head" style="margin-bottom: 0;">
-            <div class="proj-card-name">Bez projekta — stavke i sati bez upisanog naziva${none.fiksni > 0.5 ? ' · uklj. fiksni rad iz mjeseci bez evidentiranih sati' : ''}</div>
+            <div class="proj-card-name">Bez projekta — stavke i sati bez upisanog naziva</div>
             <div class="proj-card-total">${eur(none.ukupno, 0)}</div>
           </div>
         </div>
@@ -3357,10 +3354,6 @@ function renderProjectDetail(p) {
   const matRows = Object.values(matMap).sort((a, b) => b.amount - a.amount);
   const matTotal = round2(matRows.reduce((a, r) => a + r.amount, 0));
   const nonItemized = Math.max(0, round2(p.materijal - itemizedTotal));
-  const fixedList = Object.entries(p.fixedPeople || {})
-    .map(([name, amount]) => ({ name, amount }))
-    .filter(x => x.amount > 0.005)
-    .sort((a, b) => b.amount - a.amount);
 
   panel.innerHTML = `
     <div class="page-head">
@@ -3389,8 +3382,8 @@ function renderProjectDetail(p) {
       </div>
       <div class="kpi-cell">
         <div class="stat-label">Rad</div>
-        <div class="stat-value">${eur(p.rad + (p.fiksni || 0), 0)}</div>
-        <div class="stat-sub">${FMT_INT.format(p.sati)} h · po satima ${eur(p.rad, 0)} · fiksni ${eur(p.fiksni || 0, 0)}</div>
+        <div class="stat-value">${eur(p.rad, 0)}</div>
+        <div class="stat-sub">${FMT_INT.format(p.sati)} h ukupno</div>
       </div>
       <div class="kpi-cell" style="background: var(--acc-projects-soft);">
         <div class="stat-label" style="color: var(--acc-projects);">Ukupno</div>
@@ -3428,7 +3421,6 @@ function renderProjectDetail(p) {
                 <th>Mjesec</th>
                 <th class="text-right">Materijal</th>
                 <th class="text-right">Rad</th>
-                <th class="text-right">Fiksni</th>
                 <th class="text-right">Sati</th>
                 <th class="text-right">Ukupno</th>
               </tr>
@@ -3441,9 +3433,8 @@ function renderProjectDetail(p) {
                   <td><strong>${monthLabel(k)}</strong></td>
                   <td class="num text-right">${m.materijal ? eur(m.materijal, 0) : '—'}</td>
                   <td class="num text-right">${m.rad ? eur(m.rad, 0) : '—'}</td>
-                  <td class="num text-right">${m.fiksni ? eur(m.fiksni, 0) : '—'}</td>
                   <td class="num text-right">${m.sati ? FMT_INT.format(m.sati) : '—'}</td>
-                  <td class="num text-right" style="font-weight: 600;">${eur(m.materijal + m.rad + (m.fiksni || 0), 0)}</td>
+                  <td class="num text-right" style="font-weight: 600;">${eur(m.materijal + m.rad, 0)}</td>
                 </tr>`;
               }).join('')}
             </tbody>
@@ -3452,7 +3443,6 @@ function renderProjectDetail(p) {
                 <td>UKUPNO</td>
                 <td class="num text-right"><strong>${eur(p.materijal, 0)}</strong></td>
                 <td class="num text-right"><strong>${eur(p.rad, 0)}</strong></td>
-                <td class="num text-right"><strong>${eur(p.fiksni || 0, 0)}</strong></td>
                 <td class="num text-right"><strong>${FMT_INT.format(p.sati)}</strong></td>
                 <td class="num text-right"><strong>${eur(p.ukupno, 0)}</strong></td>
               </tr>
@@ -3465,10 +3455,10 @@ function renderProjectDetail(p) {
         <div class="card-head">
           <div>
             <div class="card-title">Rad po radniku</div>
-            <div class="card-sub">Sati × satnica + marenda · plus fiksni rad (udio po satima)</div>
+            <div class="card-sub">Sati × satnica + marenda</div>
           </div>
         </div>
-        ${workers.length === 0 && fixedList.length === 0 ? `<div class="empty">Nema evidentiranih sati za ovaj projekt.</div>` : `
+        ${workers.length === 0 ? `<div class="empty">Nema evidentiranih sati za ovaj projekt.</div>` : `
         <div class="table-scroll">
           <table class="table">
             <thead>
@@ -3487,25 +3477,18 @@ function renderProjectDetail(p) {
                   <td class="num text-right">${eur(w.satnica, 2)}</td>
                   <td class="num text-right" style="font-weight: 600;">${eur(w.trosak, 0)}</td>
                 </tr>`).join('')}
-              ${fixedList.map(f => `
-                <tr>
-                  <td><strong>${escapeHtml(f.name)}</strong> <span class="pill gray" style="margin-left: 6px;">fiksno</span></td>
-                  <td class="num text-right" style="color: var(--muted);">—</td>
-                  <td class="num text-right" style="color: var(--muted);">—</td>
-                  <td class="num text-right" style="font-weight: 600;">${eur(f.amount, 0)}</td>
-                </tr>`).join('')}
             </tbody>
             <tfoot>
               <tr>
                 <td>UKUPNO</td>
                 <td class="num text-right"><strong>${FMT_INT.format(p.sati)}</strong></td>
                 <td></td>
-                <td class="num text-right"><strong>${eur(p.rad + (p.fiksni || 0), 0)}</strong></td>
+                <td class="num text-right"><strong>${eur(p.rad, 0)}</strong></td>
               </tr>
             </tfoot>
           </table>
         </div>`}
-        <div class="proj-formula">Rad = sati × satnica + marenda, pripisano po danu iz Evidencije sati. Radnici bez satnice nisu uključeni u obračun po satima. Fiksni mjesečni rad (Postavke → Fiksni rad) raspoređuje se svaki mjesec po projektima proporcionalno odrađenim satima; u mjesecima bez evidentiranih sati ide pod „Bez projekta". Cashflow i Evidencija sati se ovim ne mijenjaju.</div>
+        <div class="proj-formula">Rad = sati × satnica + marenda, pripisano po danu iz Evidencije sati. Radnici bez satnice nisu uključeni u obračun projekta.</div>
       </div>
     </div>
 
@@ -3572,7 +3555,6 @@ function renderProjectDetail(p) {
       datasets: [
         { label: 'Materijal', data: mKeys.map(k => p.months[k].materijal), backgroundColor: cssVar('--acc-sto'), borderRadius: 6, stack: 's' },
         { label: 'Rad', data: mKeys.map(k => p.months[k].rad), backgroundColor: cssVar('--acc-hours'), borderRadius: 6, stack: 's' },
-        { label: 'Fiksni rad', data: mKeys.map(k => p.months[k].fiksni || 0), backgroundColor: cssVar('--acc-projects'), borderRadius: 6, stack: 's' },
       ],
     },
     options: {
@@ -3794,7 +3776,7 @@ function renderSettings() {
       <div class="card-head">
         <div>
           <div class="card-title">Fiksni rad · mjesečno</div>
-          <div class="card-sub">Osobe s fiksnim mjesečnim troškom rada, bez satnice. Koristi se SAMO u tabu Projekti: iznos se svaki mjesec raspoređuje po projektima proporcionalno odrađenim satima. Cashflow i Evidencija sati se ne diraju (nema duplog brojanja).</div>
+          <div class="card-sub">Osobe s fiksnim mjesečnim troškom rada, bez satnice i bez dnevne evidencije (Boris, Tata). Svaki mjesec ulaze u Sažetak isplate (Evidencija sati) i u Cashflow stupac Radnici. VAŽNO: radnici koji već postoje u Evidenciji (npr. Dragan) tu NE idu — njima se fiksni dio upisuje u polje Fiksno u tablici Radnici iznad, da se ništa ne broji duplo.</div>
         </div>
         ${isAdmin ? `<button class="btn btn-primary admin-only" id="add-fixed">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -4002,6 +3984,13 @@ function downloadXlsx() {
   const setRows = [['Radnik', 'Satnica', 'Marenda', 'Prijevoz', 'Stan', 'Fiksno']];
   for (const w of state.settings.workers) {
     setRows.push([w.name, w.satnica, w.marenda, w.prijevoz, w.stan, w.fiksno]);
+  }
+  if ((state.settings.fixedLabor || []).length) {
+    setRows.push([]);
+    setRows.push(['Fiksni rad (mjesečno)', 'Iznos', 'Aktivno']);
+    for (const f of state.settings.fixedLabor) {
+      setRows.push([f.name || '', Number(f.amount) || 0, f.active === false ? 'ne' : 'da']);
+    }
   }
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(setRows), 'Postavke');
 
@@ -4780,13 +4769,14 @@ async function boot() {
     // NAPOMENA: nije pozvan saveData() — popunjavanje se sprema tek nakon prve admin izmjene
   }
 
-  // Fiksni rad (mjesečni, bez satnice): Boris, Tata, Dragan.
+  // Fiksni rad (mjesečni, bez satnice i bez dnevne evidencije): Boris i Tata.
+  // Dragan NIJE ovdje — on je radnik u Evidenciji (cash mjesečno), pa mu se
+  // fiksnih 1.100 upisuje u Postavke → Radnici → Fiksno (cash + 1.100 = ~2.000).
   // Kao i forecast seed — u Blob se sprema tek pri prvoj admin izmjeni.
   if (!Array.isArray(state.settings.fixedLabor)) {
     state.settings.fixedLabor = [
       { name: 'Boris', amount: 1100, active: true },
       { name: 'Tata', amount: 1300, active: true },
-      { name: 'Dragan', amount: 2000, active: true },
     ];
   }
 
