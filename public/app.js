@@ -245,6 +245,35 @@ const eurShort = (n) => {
 const fmtQty = (n) => new Intl.NumberFormat('hr-HR', { maximumFractionDigits: 2 }).format(Number(n) || 0);
 const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 const grossFromNet = (net, vat) => round2((Number(net) || 0) * (1 + (Number(vat) || 0) / 100));
+const isMobileView = () => {
+  try {
+    if (window.matchMedia && window.matchMedia('(max-width: 719px)').matches) return true;
+  } catch (e) {}
+  return (window.innerWidth || 1024) <= 719;
+};
+/* Aktivne osobe s fiksnim mjesečnim troškom rada (Postavke → Fiksni rad) */
+const getFixedLabor = () => (state && state.settings && Array.isArray(state.settings.fixedLabor))
+  ? state.settings.fixedLabor.filter(f => f && f.active !== false && (Number(f.amount) || 0) > 0)
+  : [];
+/* Dodatni CSS (mobilne kartice za uvoz/stavke) — ubacuje se iz app.js da deploy ostane jedan file */
+function injectExtraCss() {
+  if (document.getElementById('sr-extra-css')) return;
+  const st = document.createElement('style');
+  st.id = 'sr-extra-css';
+  st.textContent = `
+    .ir-card { border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-bottom: 10px; background: var(--surface); }
+    .ir-head-row { display: flex; gap: 8px; align-items: center; }
+    .ir-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 8px; }
+    .ir-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+    .ir-mini-label { font-size: 10px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin-bottom: 3px; font-weight: 600; }
+    @media (max-width: 719px) {
+      .mat-stavke-table th:nth-child(4), .mat-stavke-table td:nth-child(4) { display: none; }
+      .modal.modal-wide { max-width: 100%; }
+      tr[data-items-for] table { font-size: 12px; }
+    }
+  `;
+  document.head.appendChild(st);
+}
 const monthLabel = (key) => {
   const [y, m] = key.split('-');
   return `${MONTH_NAMES_HR[parseInt(m, 10) - 1]} ${y}`;
@@ -2425,14 +2454,34 @@ function stoModal(idx = null) {
         : ' · odgovara iznosu ✓');
   };
   const renderItems = () => {
-    itemsBox.innerHTML = workItems.length ? workItems.map((it, i) => `
+    if (!workItems.length) {
+      itemsBox.innerHTML = `<div class="field-hint" style="margin-top: 0;">Nema stavki. Za automatsko čitanje iz PDF-a koristi „Uvoz računa" u STO tabu.</div>`;
+      updateItemsSum();
+      return;
+    }
+    if (isMobileView()) {
+      itemsBox.innerHTML = workItems.map((it, i) => `
+      <div class="ir-card" style="padding: 10px;">
+        <div class="ir-head-row">
+          <input class="input" data-it="${i}" data-f="name" value="${escapeHtml(it.name || '')}" placeholder="Naziv artikla" style="flex: 1;">
+          <button type="button" class="btn btn-ghost btn-sm btn-danger" data-del-item="${i}" title="Ukloni stavku">×</button>
+        </div>
+        <div class="ir-grid-3">
+          <div><div class="ir-mini-label">Količina</div><input class="input num" data-it="${i}" data-f="qty" type="text" inputmode="decimal" value="${it.qty ? String(it.qty).replace('.', ',') : ''}" style="width: 100%; text-align: right;"></div>
+          <div><div class="ir-mini-label">Jed.</div><input class="input" data-it="${i}" data-f="unit" value="${escapeHtml(it.unit || '')}" style="width: 100%;"></div>
+          <div><div class="ir-mini-label">€ s PDV</div><input class="input num" data-it="${i}" data-f="amount" type="text" inputmode="decimal" value="${formatEUAmount(it.amount)}" style="width: 100%; text-align: right; font-weight: 600;"></div>
+        </div>
+      </div>`).join('');
+    } else {
+      itemsBox.innerHTML = workItems.map((it, i) => `
       <div style="display: grid; grid-template-columns: minmax(130px, 1fr) 58px 46px 92px 28px; gap: 6px; margin-bottom: 6px; align-items: center; min-width: 380px;">
         <input class="input" data-it="${i}" data-f="name" value="${escapeHtml(it.name || '')}" placeholder="Naziv artikla">
         <input class="input num" data-it="${i}" data-f="qty" type="text" inputmode="decimal" value="${it.qty ? String(it.qty).replace('.', ',') : ''}" placeholder="Kol." style="text-align: right; padding: 10px 8px;">
         <input class="input" data-it="${i}" data-f="unit" value="${escapeHtml(it.unit || '')}" placeholder="Jed." style="padding: 10px 8px;">
         <input class="input num" data-it="${i}" data-f="amount" type="text" inputmode="decimal" value="${formatEUAmount(it.amount)}" placeholder="€ s PDV" style="text-align: right; padding: 10px 8px;">
         <button type="button" class="btn btn-ghost btn-sm btn-danger" data-del-item="${i}" title="Ukloni stavku" style="padding: 6px 4px;">×</button>
-      </div>`).join('') : `<div class="field-hint" style="margin-top: 0;">Nema stavki. Za automatsko čitanje iz PDF-a koristi „Uvoz računa" u STO tabu.</div>`;
+      </div>`).join('');
+    }
     updateItemsSum();
   };
   renderItems();
@@ -2780,6 +2829,8 @@ function stoImportReview(parsed) {
     ...allMonths().flatMap(k => ((state.hours[k] || {}).days || []).flatMap(d => Object.values(d.workers || {}).map(w => w.project))),
   ].filter(Boolean).map(s => String(s).trim()).filter(Boolean))).sort();
 
+  const mobile = isMobileView();
+
   const html = `
     <div class="modal-title">${parsed.manual ? 'Ručni unos stavki materijala' : 'Pregled računa' + (parsed.invoiceNo ? ' · ' + escapeHtml(parsed.invoiceNo) : '')}</div>
     <div class="modal-sub">Provjeri stavke i svakoj dodijeli projekt — jedan račun smije ići na više projekata. Iznos s PDV-om se računa automatski.</div>
@@ -2789,13 +2840,16 @@ function stoImportReview(parsed) {
     </div>
     <div class="field" style="margin-bottom: 14px;">
       <label class="field-label">Projekt za sve stavke</label>
-      <div style="display: flex; gap: 8px;">
-        <input class="input" id="ir-all-proj" list="ir-projs" placeholder="Npr. Kostrena" style="flex: 1;">
+      <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <input class="input" id="ir-all-proj" list="ir-projs" placeholder="Npr. Kostrena" style="flex: 1; min-width: 160px;">
         <button type="button" class="btn" data-act="apply-all">Primijeni na sve</button>
       </div>
-      <div class="field-hint">Upiši projekt, primijeni na sve, pa pojedinim stavkama po potrebi promijeni projekt u tablici.</div>
+      <div class="field-hint">Upiši projekt, primijeni na sve, pa pojedinim stavkama po potrebi promijeni projekt.</div>
       <datalist id="ir-projs">${knownProjects.map(p => `<option value="${escapeHtml(p)}"></option>`).join('')}</datalist>
     </div>
+    ${mobile ? `
+    <div id="ir-rows" style="max-height: 46vh; overflow-y: auto; padding: 2px;"></div>
+    ` : `
     <div class="table-scroll" style="max-height: 44vh; overflow: auto; border: 1px solid var(--line); border-radius: 10px;">
       <table class="table" style="min-width: 760px;">
         <thead>
@@ -2812,19 +2866,19 @@ function stoImportReview(parsed) {
         </thead>
         <tbody id="ir-rows"></tbody>
       </table>
-    </div>
+    </div>`}
     <div id="ir-summary" style="margin-top: 12px; font-size: 13px; line-height: 1.7;"></div>
-    <div class="modal-actions">
+    <div class="modal-actions" style="flex-wrap: wrap;">
       <button class="btn" data-act="back">Natrag</button>
       <button type="button" class="btn" data-act="add-row">+ Dodaj red</button>
       <button class="btn btn-primary" data-act="save">Spremi</button>
     </div>
   `;
   const m = modal(html, { wide: true });
-  m.root.querySelector('.modal').style.maxWidth = 'min(1060px, 96vw)';
+  if (!mobile) m.root.querySelector('.modal').style.maxWidth = 'min(1060px, 96vw)';
   attachEUDateMask(m.root.querySelector('#ir-date'));
 
-  const tbody = m.root.querySelector('#ir-rows');
+  const listEl = m.root.querySelector('#ir-rows');
   const summaryEl = m.root.querySelector('#ir-summary');
 
   const updateSummary = () => {
@@ -2851,7 +2905,29 @@ function stoImportReview(parsed) {
   };
 
   const renderRows = () => {
-    tbody.innerHTML = rows.map((r, i) => `
+    if (mobile) {
+      listEl.innerHTML = rows.map((r, i) => `
+      <div class="ir-card">
+        <div class="ir-head-row">
+          <input class="input" data-i="${i}" data-f="name" value="${escapeHtml(r.name || '')}" placeholder="Naziv artikla" style="flex: 1;">
+          <button type="button" class="btn btn-ghost btn-sm btn-danger" data-del-row="${i}" title="Ukloni red">×</button>
+        </div>
+        <div class="ir-grid-3">
+          <div><div class="ir-mini-label">Količina</div><input class="input num" data-i="${i}" data-f="qty" type="text" inputmode="decimal" value="${r.qty ? String(r.qty).replace('.', ',') : ''}" style="width: 100%; text-align: right;"></div>
+          <div><div class="ir-mini-label">Jed.</div><input class="input" data-i="${i}" data-f="unit" value="${escapeHtml(r.unit || '')}" style="width: 100%;"></div>
+          <div><div class="ir-mini-label">PDV %</div><input class="input num" data-i="${i}" data-f="vatPct" type="text" inputmode="decimal" value="${String(r.vatPct).replace('.', ',')}" style="width: 100%; text-align: right;"></div>
+        </div>
+        <div class="ir-grid-2">
+          <div><div class="ir-mini-label">Bez PDV</div><input class="input num" data-i="${i}" data-f="net" type="text" inputmode="decimal" value="${formatEUAmount(r.net)}" style="width: 100%; text-align: right;"></div>
+          <div><div class="ir-mini-label">S PDV</div><input class="input num" data-i="${i}" data-f="gross" type="text" inputmode="decimal" value="${formatEUAmount(r.gross)}" style="width: 100%; text-align: right; font-weight: 600;"></div>
+        </div>
+        <div style="margin-top: 8px;">
+          <div class="ir-mini-label">Projekt</div>
+          <input class="input" data-i="${i}" data-f="project" list="ir-projs" value="${escapeHtml(r.project || '')}" placeholder="Projekt" style="width: 100%;">
+        </div>
+      </div>`).join('');
+    } else {
+      listEl.innerHTML = rows.map((r, i) => `
       <tr>
         <td style="min-width: 220px;"><input class="input" data-i="${i}" data-f="name" value="${escapeHtml(r.name || '')}" placeholder="Naziv artikla" style="width: 100%; min-width: 210px;"></td>
         <td><input class="input num" data-i="${i}" data-f="qty" type="text" inputmode="decimal" value="${r.qty ? String(r.qty).replace('.', ',') : ''}" style="width: 66px; text-align: right; padding: 10px 8px;"></td>
@@ -2862,11 +2938,12 @@ function stoImportReview(parsed) {
         <td><input class="input" data-i="${i}" data-f="project" list="ir-projs" value="${escapeHtml(r.project || '')}" placeholder="Projekt" style="width: 134px;"></td>
         <td style="text-align: right;"><button type="button" class="btn btn-ghost btn-sm btn-danger" data-del-row="${i}" title="Ukloni red">×</button></td>
       </tr>`).join('');
+    }
     updateSummary();
   };
   renderRows();
 
-  tbody.addEventListener('input', e => {
+  listEl.addEventListener('input', e => {
     const inp = e.target.closest('input[data-i]');
     if (!inp) return;
     const i = +inp.dataset.i, f = inp.dataset.f;
@@ -2876,11 +2953,11 @@ function stoImportReview(parsed) {
       r[f] = parseEUAmount(inp.value);
       if (f === 'net' || f === 'vatPct') {
         r.gross = grossFromNet(r.net, r.vatPct);
-        const g = tbody.querySelector(`input[data-i="${i}"][data-f="gross"]`);
+        const g = listEl.querySelector(`input[data-i="${i}"][data-f="gross"]`);
         if (g && g !== inp) g.value = formatEUAmount(r.gross);
       } else if (f === 'gross') {
         r.net = round2((Number(r.gross) || 0) / (1 + (Number(r.vatPct) || 0) / 100));
-        const n = tbody.querySelector(`input[data-i="${i}"][data-f="net"]`);
+        const n = listEl.querySelector(`input[data-i="${i}"][data-f="net"]`);
         if (n && n !== inp) n.value = formatEUAmount(r.net);
       }
     } else {
@@ -2888,7 +2965,7 @@ function stoImportReview(parsed) {
     }
     updateSummary();
   });
-  tbody.addEventListener('focusout', e => {
+  listEl.addEventListener('focusout', e => {
     const inp = e.target.closest('input[data-i]');
     if (!inp) return;
     const r = rows[+inp.dataset.i];
@@ -2974,7 +3051,7 @@ function stoImportReview(parsed) {
     } else if (btn.dataset.act === 'add-row') {
       rows.push(blankRow());
       renderRows();
-      tbody.querySelector(`input[data-i="${rows.length - 1}"][data-f="name"]`)?.focus();
+      listEl.querySelector(`input[data-i="${rows.length - 1}"][data-f="name"]`)?.focus();
     } else if (btn.dataset.act === 'apply-all') {
       const p = m.root.querySelector('#ir-all-proj').value.trim();
       if (!p) { toast('Upiši naziv projekta', 'error'); return; }
@@ -2999,11 +3076,11 @@ const PROJ_NONE = '__bez_projekta__';
 function computeProjectsData() {
   const map = {};
   const ensure = (name) => {
-    if (!map[name]) map[name] = { name, materijal: 0, rad: 0, sati: 0, months: {}, workers: {}, stoCount: 0, lastActivity: '' };
+    if (!map[name]) map[name] = { name, materijal: 0, rad: 0, sati: 0, fiksni: 0, fixedPeople: {}, months: {}, workers: {}, stoCount: 0, lastActivity: '' };
     return map[name];
   };
   const mEnsure = (p, k) => {
-    if (!p.months[k]) p.months[k] = { materijal: 0, rad: 0, sati: 0 };
+    if (!p.months[k]) p.months[k] = { materijal: 0, rad: 0, sati: 0, fiksni: 0 };
     return p.months[k];
   };
   const months = allMonths();
@@ -3039,12 +3116,31 @@ function computeProjectsData() {
         }
       }
     }
+    // Fiksni mjesečni rad (Postavke → Fiksni rad): raspodjela po projektima
+    // proporcionalno odrađenim satima u mjesecu (samo radnici sa satnicom).
+    // Mjesec bez evidentiranih sati → cijeli iznos pod „Bez projekta".
+    const fixedPeople = getFixedLabor();
+    const fixedTotal = fixedPeople.reduce((a, f) => a + (Number(f.amount) || 0), 0);
+    if (fixedTotal > 0) {
+      const withHours = Object.values(map).filter(pp => pp.months[k] && pp.months[k].sati > 0);
+      const totalH = withHours.reduce((a, pp) => a + pp.months[k].sati, 0);
+      const targets = totalH > 0 ? withHours : [ensure(PROJ_NONE)];
+      for (const pp of targets) {
+        const weight = totalH > 0 ? pp.months[k].sati / totalH : 1;
+        const mm = mEnsure(pp, k);
+        pp.fiksni += fixedTotal * weight;
+        mm.fiksni = (mm.fiksni || 0) + fixedTotal * weight;
+        for (const f of fixedPeople) {
+          pp.fixedPeople[f.name] = (pp.fixedPeople[f.name] || 0) + (Number(f.amount) || 0) * weight;
+        }
+      }
+    }
   }
   const list = Object.values(map);
   const lastKey = months.length ? months[months.length - 1] : null;
   const prevKey = lastKey ? addCalendarMonths(lastKey, -1) : null;
   for (const p of list) {
-    p.ukupno = p.materijal + p.rad;
+    p.ukupno = p.materijal + p.rad + (p.fiksni || 0);
     p.isActive = !!lastKey && (p.lastActivity === lastKey || p.lastActivity === prevKey);
     p.monthCount = Object.keys(p.months).length;
     p.workerCount = Object.keys(p.workers).length;
@@ -3071,6 +3167,7 @@ function renderProjects() {
   const visible = none ? [...real, none] : real;
   const totMat = visible.reduce((a, p) => a + p.materijal, 0);
   const totRad = visible.reduce((a, p) => a + p.rad, 0);
+  const totFiksni = visible.reduce((a, p) => a + (p.fiksni || 0), 0);
   const activeCount = real.filter(p => p.isActive).length;
 
   // Filter: ako nema aktivnih, prikaži sve bez obzira na toggle
@@ -3095,7 +3192,7 @@ function renderProjects() {
     <div class="kpi-row" style="margin-bottom: 24px;">
       <div class="kpi-cell">
         <div class="stat-label">Ukupno</div>
-        <div class="stat-value">${eur(totMat + totRad, 0)}</div>
+        <div class="stat-value">${eur(totMat + totRad + totFiksni, 0)}</div>
         <div class="stat-sub">materijal + rad${removed.length ? ` · bez ${removed.length} uklonjenih (${eur(removedTotal, 0)})` : ''}</div>
       </div>
       <div class="kpi-cell">
@@ -3103,8 +3200,9 @@ function renderProjects() {
         <div class="stat-value">${eur(totMat, 0)}</div>
       </div>
       <div class="kpi-cell">
-        <div class="stat-label">Rad (sati)</div>
-        <div class="stat-value">${eur(totRad, 0)}</div>
+        <div class="stat-label">Rad</div>
+        <div class="stat-value">${eur(totRad + totFiksni, 0)}</div>
+        <div class="stat-sub">po satima ${eur(totRad, 0)} · fiksni ${eur(totFiksni, 0)}</div>
       </div>
       <div class="kpi-cell">
         <div class="stat-label">Aktivnih projekata</div>
@@ -3130,7 +3228,7 @@ function renderProjects() {
             <div class="proj-split-rad" style="width: ${(100 - pctMat).toFixed(1)}%;"></div>
           </div>
           <div class="proj-card-meta">
-            <span><span class="proj-legend-dot proj-split-mat"></span>Materijal ${eur(p.materijal, 0)} · <span class="proj-legend-dot proj-split-rad"></span>Rad ${eur(p.rad, 0)}</span>
+            <span><span class="proj-legend-dot proj-split-mat"></span>Materijal ${eur(p.materijal, 0)} · <span class="proj-legend-dot proj-split-rad"></span>Rad ${eur(p.rad + (p.fiksni || 0), 0)}${p.fiksni > 0.5 ? ` <span style="color: var(--muted);">(fiksni ${eur(p.fiksni, 0)})</span>` : ''}</span>
             <span>${p.sati > 0 ? FMT_INT.format(p.sati) + ' h · ' : ''}${p.monthCount} mj.${p.workerCount > 0 ? ' · ' + p.workerCount + ' radnika' : ''}</span>
           </div>
         </div>`;
@@ -3143,7 +3241,7 @@ function renderProjects() {
       ${none ? `
         <div class="proj-card proj-none-card" data-proj="${PROJ_NONE}">
           <div class="proj-card-head" style="margin-bottom: 0;">
-            <div class="proj-card-name">Bez projekta — stavke i sati bez upisanog naziva</div>
+            <div class="proj-card-name">Bez projekta — stavke i sati bez upisanog naziva${none.fiksni > 0.5 ? ' · uklj. fiksni rad iz mjeseci bez evidentiranih sati' : ''}</div>
             <div class="proj-card-total">${eur(none.ukupno, 0)}</div>
           </div>
         </div>
@@ -3259,6 +3357,10 @@ function renderProjectDetail(p) {
   const matRows = Object.values(matMap).sort((a, b) => b.amount - a.amount);
   const matTotal = round2(matRows.reduce((a, r) => a + r.amount, 0));
   const nonItemized = Math.max(0, round2(p.materijal - itemizedTotal));
+  const fixedList = Object.entries(p.fixedPeople || {})
+    .map(([name, amount]) => ({ name, amount }))
+    .filter(x => x.amount > 0.005)
+    .sort((a, b) => b.amount - a.amount);
 
   panel.innerHTML = `
     <div class="page-head">
@@ -3287,8 +3389,8 @@ function renderProjectDetail(p) {
       </div>
       <div class="kpi-cell">
         <div class="stat-label">Rad</div>
-        <div class="stat-value">${eur(p.rad, 0)}</div>
-        <div class="stat-sub">${FMT_INT.format(p.sati)} h ukupno</div>
+        <div class="stat-value">${eur(p.rad + (p.fiksni || 0), 0)}</div>
+        <div class="stat-sub">${FMT_INT.format(p.sati)} h · po satima ${eur(p.rad, 0)} · fiksni ${eur(p.fiksni || 0, 0)}</div>
       </div>
       <div class="kpi-cell" style="background: var(--acc-projects-soft);">
         <div class="stat-label" style="color: var(--acc-projects);">Ukupno</div>
@@ -3326,6 +3428,7 @@ function renderProjectDetail(p) {
                 <th>Mjesec</th>
                 <th class="text-right">Materijal</th>
                 <th class="text-right">Rad</th>
+                <th class="text-right">Fiksni</th>
                 <th class="text-right">Sati</th>
                 <th class="text-right">Ukupno</th>
               </tr>
@@ -3338,8 +3441,9 @@ function renderProjectDetail(p) {
                   <td><strong>${monthLabel(k)}</strong></td>
                   <td class="num text-right">${m.materijal ? eur(m.materijal, 0) : '—'}</td>
                   <td class="num text-right">${m.rad ? eur(m.rad, 0) : '—'}</td>
+                  <td class="num text-right">${m.fiksni ? eur(m.fiksni, 0) : '—'}</td>
                   <td class="num text-right">${m.sati ? FMT_INT.format(m.sati) : '—'}</td>
-                  <td class="num text-right" style="font-weight: 600;">${eur(m.materijal + m.rad, 0)}</td>
+                  <td class="num text-right" style="font-weight: 600;">${eur(m.materijal + m.rad + (m.fiksni || 0), 0)}</td>
                 </tr>`;
               }).join('')}
             </tbody>
@@ -3348,6 +3452,7 @@ function renderProjectDetail(p) {
                 <td>UKUPNO</td>
                 <td class="num text-right"><strong>${eur(p.materijal, 0)}</strong></td>
                 <td class="num text-right"><strong>${eur(p.rad, 0)}</strong></td>
+                <td class="num text-right"><strong>${eur(p.fiksni || 0, 0)}</strong></td>
                 <td class="num text-right"><strong>${FMT_INT.format(p.sati)}</strong></td>
                 <td class="num text-right"><strong>${eur(p.ukupno, 0)}</strong></td>
               </tr>
@@ -3360,10 +3465,10 @@ function renderProjectDetail(p) {
         <div class="card-head">
           <div>
             <div class="card-title">Rad po radniku</div>
-            <div class="card-sub">Sati × satnica + marenda</div>
+            <div class="card-sub">Sati × satnica + marenda · plus fiksni rad (udio po satima)</div>
           </div>
         </div>
-        ${workers.length === 0 ? `<div class="empty">Nema evidentiranih sati za ovaj projekt.</div>` : `
+        ${workers.length === 0 && fixedList.length === 0 ? `<div class="empty">Nema evidentiranih sati za ovaj projekt.</div>` : `
         <div class="table-scroll">
           <table class="table">
             <thead>
@@ -3382,18 +3487,25 @@ function renderProjectDetail(p) {
                   <td class="num text-right">${eur(w.satnica, 2)}</td>
                   <td class="num text-right" style="font-weight: 600;">${eur(w.trosak, 0)}</td>
                 </tr>`).join('')}
+              ${fixedList.map(f => `
+                <tr>
+                  <td><strong>${escapeHtml(f.name)}</strong> <span class="pill gray" style="margin-left: 6px;">fiksno</span></td>
+                  <td class="num text-right" style="color: var(--muted);">—</td>
+                  <td class="num text-right" style="color: var(--muted);">—</td>
+                  <td class="num text-right" style="font-weight: 600;">${eur(f.amount, 0)}</td>
+                </tr>`).join('')}
             </tbody>
             <tfoot>
               <tr>
                 <td>UKUPNO</td>
                 <td class="num text-right"><strong>${FMT_INT.format(p.sati)}</strong></td>
                 <td></td>
-                <td class="num text-right"><strong>${eur(p.rad, 0)}</strong></td>
+                <td class="num text-right"><strong>${eur(p.rad + (p.fiksni || 0), 0)}</strong></td>
               </tr>
             </tfoot>
           </table>
         </div>`}
-        <div class="proj-formula">Rad = sati × satnica + marenda, pripisano po danu iz Evidencije sati. Radnici bez satnice nisu uključeni u obračun projekta.</div>
+        <div class="proj-formula">Rad = sati × satnica + marenda, pripisano po danu iz Evidencije sati. Radnici bez satnice nisu uključeni u obračun po satima. Fiksni mjesečni rad (Postavke → Fiksni rad) raspoređuje se svaki mjesec po projektima proporcionalno odrađenim satima; u mjesecima bez evidentiranih sati ide pod „Bez projekta". Cashflow i Evidencija sati se ovim ne mijenjaju.</div>
       </div>
     </div>
 
@@ -3406,7 +3518,7 @@ function renderProjectDetail(p) {
       </div>
       ${matRows.length === 0 ? `<div class="empty">Još nema razrade po stavkama za ovaj projekt.<br>Nove račune ubacuj kroz „Uvoz računa" u STO tabu i stavke će se ovdje same zbrajati.</div>` : `
       <div class="table-scroll">
-        <table class="table">
+        <table class="table mat-stavke-table">
           <thead>
             <tr>
               <th>Artikl</th>
@@ -3460,6 +3572,7 @@ function renderProjectDetail(p) {
       datasets: [
         { label: 'Materijal', data: mKeys.map(k => p.months[k].materijal), backgroundColor: cssVar('--acc-sto'), borderRadius: 6, stack: 's' },
         { label: 'Rad', data: mKeys.map(k => p.months[k].rad), backgroundColor: cssVar('--acc-hours'), borderRadius: 6, stack: 's' },
+        { label: 'Fiksni rad', data: mKeys.map(k => p.months[k].fiksni || 0), backgroundColor: cssVar('--acc-projects'), borderRadius: 6, stack: 's' },
       ],
     },
     options: {
@@ -3677,6 +3790,59 @@ function renderSettings() {
       ${isAdmin ? '<div style="margin-top: 16px;"><button class="btn btn-primary" id="save-workers">Spremi promjene radnika</button></div>' : ''}
     </div>
 
+    <div class="card" style="margin-bottom: 24px;">
+      <div class="card-head">
+        <div>
+          <div class="card-title">Fiksni rad · mjesečno</div>
+          <div class="card-sub">Osobe s fiksnim mjesečnim troškom rada, bez satnice. Koristi se SAMO u tabu Projekti: iznos se svaki mjesec raspoređuje po projektima proporcionalno odrađenim satima. Cashflow i Evidencija sati se ne diraju (nema duplog brojanja).</div>
+        </div>
+        ${isAdmin ? `<button class="btn btn-primary admin-only" id="add-fixed">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Nova osoba
+        </button>` : ''}
+      </div>
+      <div class="table-scroll">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Ime</th>
+              <th class="text-right">Iznos/mj. (€)</th>
+              <th>Aktivno</th>
+              ${isAdmin ? '<th class="text-right">Akcije</th>' : ''}
+            </tr>
+          </thead>
+          <tbody>
+            ${(state.settings.fixedLabor || []).map((f, i) => `
+              <tr style="opacity: ${f.active === false ? 0.55 : 1};">
+                <td>${isAdmin
+                  ? `<input class="input" value="${escapeHtml(f.name || '')}" data-fl="${i}" data-f="name" style="max-width: 180px;">`
+                  : `<strong>${escapeHtml(f.name || '')}</strong>`}</td>
+                <td class="text-right">${isAdmin
+                  ? `<input class="input num" type="number" step="10" value="${Number(f.amount) || 0}" data-fl="${i}" data-f="amount" style="max-width: 110px; margin-left: auto; text-align: right;">`
+                  : `<span class="num">${eur(f.amount, 0)}</span>`}</td>
+                <td>${isAdmin
+                  ? `<input type="checkbox" ${f.active !== false ? 'checked' : ''} data-fl="${i}" data-f="active" style="width: 18px; height: 18px;">`
+                  : (f.active !== false ? '<span class="pill green">aktivno</span>' : '<span class="pill gray">isključeno</span>')}</td>
+                ${isAdmin ? `<td class="text-right">
+                  <button class="btn btn-ghost btn-sm btn-danger" data-act="del-fixed" data-i="${i}" title="Obriši">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+                  </button>
+                </td>` : ''}
+              </tr>`).join('')}
+            ${(state.settings.fixedLabor || []).length === 0 ? `<tr><td colspan="${isAdmin ? 4 : 3}" style="text-align: center; color: var(--muted); padding: 24px;">Nema fiksnih osoba.</td></tr>` : ''}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td>Σ aktivno mjesečno</td>
+              <td class="num text-right"><strong>${eur(getFixedLabor().reduce((a, f) => a + (Number(f.amount) || 0), 0), 0)}</strong></td>
+              <td colspan="${isAdmin ? 2 : 1}"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      ${isAdmin ? '<div style="margin-top: 16px;"><button class="btn btn-primary" id="save-fixed">Spremi fiksni rad</button></div>' : ''}
+    </div>
+
     <div class="card">
       <div class="card-head">
         <div>
@@ -3740,6 +3906,32 @@ function renderSettings() {
     panel.querySelectorAll('[data-act="del-worker"]').forEach(b => b.addEventListener('click', async () => {
       if (!confirm('Obrisati radnika? Postojeći zapisi sati će ostati.')) return;
       state.settings.workers.splice(parseInt(b.dataset.i), 1);
+      if (await saveData()) renderSettings();
+    }));
+    panel.querySelector('#save-fixed')?.addEventListener('click', async () => {
+      const list = (state.settings.fixedLabor || []).map(f => ({ ...f }));
+      panel.querySelectorAll('[data-fl]').forEach(inp => {
+        const i = parseInt(inp.dataset.fl);
+        const f = inp.dataset.f;
+        if (!list[i]) return;
+        if (f === 'active') list[i].active = inp.checked;
+        else if (f === 'amount') list[i].amount = parseFloat(inp.value) || 0;
+        else list[i][f] = inp.value.trim();
+      });
+      state.settings.fixedLabor = list;
+      if (await saveData()) {
+        renderSettings();
+        toast('Fiksni rad ažuriran', 'success');
+      }
+    });
+    panel.querySelector('#add-fixed')?.addEventListener('click', async () => {
+      if (!Array.isArray(state.settings.fixedLabor)) state.settings.fixedLabor = [];
+      state.settings.fixedLabor.push({ name: 'Nova osoba', amount: 0, active: true });
+      if (await saveData()) renderSettings();
+    });
+    panel.querySelectorAll('[data-act="del-fixed"]').forEach(b => b.addEventListener('click', async () => {
+      if (!confirm('Obrisati osobu iz fiksnog rada? Ovo ne dira nikakve druge podatke.')) return;
+      state.settings.fixedLabor.splice(parseInt(b.dataset.i), 1);
       if (await saveData()) renderSettings();
     }));
     panel.querySelectorAll('[data-fiksno-hist]').forEach(b => b.addEventListener('click', () => {
@@ -4546,6 +4738,7 @@ function rasporedModal(idx = null) {
 
 
 async function boot() {
+  injectExtraCss();
   // Restore admin from localStorage if exists
   if (API.pin) {
     try {
@@ -4585,6 +4778,16 @@ async function boot() {
   if (state.forecast.length === 0) {
     state.forecast = DEFAULT_FORECAST_SEED.map(x => ({ ...x }));
     // NAPOMENA: nije pozvan saveData() — popunjavanje se sprema tek nakon prve admin izmjene
+  }
+
+  // Fiksni rad (mjesečni, bez satnice): Boris, Tata, Dragan.
+  // Kao i forecast seed — u Blob se sprema tek pri prvoj admin izmjeni.
+  if (!Array.isArray(state.settings.fixedLabor)) {
+    state.settings.fixedLabor = [
+      { name: 'Boris', amount: 1100, active: true },
+      { name: 'Tata', amount: 1300, active: true },
+      { name: 'Dragan', amount: 2000, active: true },
+    ];
   }
 
   // Defaultiraj na trenutni kalendarski mjesec (a ne na zadnji mjesec u podacima),
