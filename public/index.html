@@ -52,6 +52,8 @@
   --acc-forecast-soft: #ede8f3;
   --acc-raspored: #3d6b4d;
   --acc-raspored-soft: #e9f1ea;
+  --acc-registar: #6d5a1f;
+  --acc-registar-soft: #f2ecd8;
 
   /* Semantics */
   --positive: #1f6b3a;
@@ -87,6 +89,7 @@ body[data-tab="projects"] { --acc: var(--acc-projects); --acc-soft: var(--acc-pr
 body[data-tab="settings"] { --acc: var(--acc-settings); --acc-soft: var(--acc-settings-soft); --acc-ink: #fff; }
 body[data-tab="forecast"] { --acc: var(--acc-forecast); --acc-soft: var(--acc-forecast-soft); --acc-ink: #fff; }
 body[data-tab="raspored"] { --acc: var(--acc-raspored); --acc-soft: var(--acc-raspored-soft); --acc-ink: #fff; }
+body[data-tab="registar"] { --acc: var(--acc-registar); --acc-soft: var(--acc-registar-soft); --acc-ink: #fff; }
 
 /* ============================================================
    RESET
@@ -247,8 +250,21 @@ img, svg { display: block; max-width: 100%; }
 .tab[data-tab="settings"]  .tab-dot { background: var(--acc-settings); }
 .tab[data-tab="forecast"]  .tab-dot { background: var(--acc-forecast); }
 .tab[data-tab="raspored"]  .tab-dot { background: var(--acc-raspored); }
+.tab[data-tab="registar"]  .tab-dot { background: var(--acc-registar); }
 
 /* ===== RASPORED tab ===== */
+/* REGISTAR tab (godišnji odmori + rokovi i podsjetnici) */
+#panel-registar tr.clickable { cursor: pointer; }
+body.admin-mode #panel-registar tr.clickable:hover td { background: var(--surface-2); }
+.per-chip { display: inline-block; font-size: 11px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 2px 8px; margin: 2px 4px 2px 0; white-space: nowrap; font-family: var(--font-mono); }
+.pill.amber { background: #f6eeda; color: #8a6a15; }
+.zero-clamp { border-bottom: 1px dotted var(--muted-2); cursor: help; }
+.god-period-row { display: grid; grid-template-columns: 132px 132px 84px 1fr 36px; gap: 8px; margin-bottom: 8px; align-items: center; }
+@media (max-width: 640px) {
+  .god-period-row { grid-template-columns: 1fr 1fr 44px; }
+  .god-period-row .gp-note { grid-column: 1 / -1; }
+}
+
 #panel-raspored .rsp-sec{ font-size: 11px; letter-spacing: .04em; color: var(--muted); font-weight: 600; margin: 22px 0 10px; }
 #panel-raspored .rsp-card{ display: flex; align-items: center; justify-content: space-between; gap: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 18px; margin-bottom: 10px; transition: border-color .15s var(--ease); }
 #panel-raspored .rsp-card.clickable{ cursor: pointer; }
@@ -1376,9 +1392,6 @@ tr.cat-row td { letter-spacing: 0.4px; font-size: 12px; text-transform: uppercas
       <button class="tab active" data-tab="cashflow" role="tab">
         <span class="tab-dot"></span>Cashflow
       </button>
-      <button class="tab" data-tab="forecast" role="tab">
-        <span class="tab-dot"></span>Prognoza
-      </button>
       <button class="tab" data-tab="hours" role="tab">
         <span class="tab-dot"></span>Evidencija sati
       </button>
@@ -1393,6 +1406,12 @@ tr.cat-row td { letter-spacing: 0.4px; font-size: 12px; text-transform: uppercas
       </button>
       <button class="tab" data-tab="raspored" role="tab">
         <span class="tab-dot"></span>Raspored
+      </button>
+      <button class="tab" data-tab="forecast" role="tab">
+        <span class="tab-dot"></span>Prognoza
+      </button>
+      <button class="tab" data-tab="registar" role="tab">
+        <span class="tab-dot"></span>Registar
       </button>
       <button class="tab" data-tab="settings" role="tab">
         <span class="tab-dot"></span>Postavke
@@ -1423,6 +1442,9 @@ tr.cat-row td { letter-spacing: 0.4px; font-size: 12px; text-transform: uppercas
 
     <!-- RASPORED -->
     <section id="panel-raspored" class="tab-panel" role="tabpanel"></section>
+
+    <!-- REGISTAR -->
+    <section id="panel-registar" class="tab-panel" role="tabpanel"></section>
 
     <!-- ========== TAB: SETTINGS ========== -->
     <section id="panel-settings" class="tab-panel" role="tabpanel"></section>
