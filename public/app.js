@@ -4046,7 +4046,7 @@ function downloadXlsx() {
     regRows.push(['GODIŠNJI ODMORI']);
     regRows.push(['Radnik', 'Ukupno dana', 'Iskorišteno (svi periodi)', 'Periodi']);
     for (const [name, g] of Object.entries(state.registar.godisnji || {})) {
-      const per = (g.periodi || []).map(p => `${isoToEU(p.od)}-${isoToEU(p.do)} (${p.dana} d)`).join('; ');
+      const per = (g.periodi || []).map(p => p.od ? `${isoToEU(p.od)}-${isoToEU(p.do)} (${p.dana} d)` : `${p.dana} d (bez datuma${p.godina ? ', ' + p.godina : ''})`).join('; ');
       regRows.push([name, Number(g.ukupno) || 0, (g.periodi || []).reduce((a, p) => a + (Number(p.dana) || 0), 0), per]);
     }
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(regRows), 'Registar');
@@ -4796,7 +4796,6 @@ function renderRegistar() {
     if (sa.order !== sb.order) return sa.order - sb.order;
     return (a.rok || '9999-12-31').localeCompare(b.rok || '9999-12-31');
   });
-  const nLate = rokovi.filter(r => rokStatus(r).key === 'late').length;
   const nSoon = rokovi.filter(r => rokStatus(r).key === 'soon').length;
   const next = sorted.find(r => r.rok && rokStatus(r).key !== 'late');
 
@@ -4805,8 +4804,8 @@ function renderRegistar() {
   const gRows = workers.map(w => {
     const g = state.registar.godisnji[w.name] || { ukupno: 0, periodi: [] };
     const periodi = (g.periodi || [])
-      .filter(p => (p.od || '').slice(0, 4) === gYear)
-      .slice().sort((a, b) => (a.od || '').localeCompare(b.od || ''));
+      .filter(p => p.od ? p.od.slice(0, 4) === gYear : String(p.godina || '') === gYear)
+      .slice().sort((a, b) => (a.od || `${a.godina || '0000'}-00-00`).localeCompare(b.od || `${b.godina || '0000'}-00-00`));
     const iskoristeno = periodi.reduce((a, p) => a + (Number(p.dana) || 0), 0);
     const ukupno = Number(g.ukupno) || 0;
     return { name: w.name, ukupno, iskoristeno, preostalo: ukupno - iskoristeno, periodi };
@@ -4829,11 +4828,6 @@ function renderRegistar() {
 
     <div class="kpi-row" style="margin-bottom: 24px;">
       <div class="kpi-cell">
-        <div class="stat-label">Isteklo</div>
-        <div class="stat-value ${nLate > 0 ? 'negative' : ''}">${nLate}</div>
-        <div class="stat-sub">${nLate === 1 ? 'stavka čeka obradu' : 'stavki čeka obradu'}</div>
-      </div>
-      <div class="kpi-cell">
         <div class="stat-label">Unutar 30 dana</div>
         <div class="stat-value">${nSoon}</div>
         <div class="stat-sub">uskoro na redu</div>
@@ -4842,11 +4836,6 @@ function renderRegistar() {
         <div class="stat-label">Sljedeći rok</div>
         <div class="stat-value">${next ? isoToEU(next.rok) : '—'}</div>
         <div class="stat-sub">${next ? escapeHtml(next.naziv || '') : 'ništa na čekanju'}</div>
-      </div>
-      <div class="kpi-cell">
-        <div class="stat-label">Godišnji ${registarYear}</div>
-        <div class="stat-value">${gRows.reduce((a, r) => a + r.iskoristeno, 0)} / ${gRows.reduce((a, r) => a + r.ukupno, 0)}</div>
-        <div class="stat-sub">iskorišteno / ukupno dana</div>
       </div>
     </div>
 
@@ -4910,6 +4899,7 @@ function renderRegistar() {
           <div class="card-sub">Iskorišteno se zbraja iz perioda koji počinju u ${registarYear}.${isAdmin ? ' · klikni radnika za kvotu i periode' : ''}</div>
         </div>
         <div class="page-actions">
+          <span class="pill gray">Iskorišteno: <strong style="margin-left: 4px;">${gRows.reduce((a, r) => a + r.iskoristeno, 0)} / ${gRows.reduce((a, r) => a + r.ukupno, 0)} dana</strong></span>
           <div class="month-picker">
             <button data-act="reg-year-prev" aria-label="Prethodna godina">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
@@ -4940,8 +4930,8 @@ function renderRegistar() {
                 <td class="num text-right" style="font-weight: 600;">${r.iskoristeno}</td>
                 <td class="num text-right" style="font-weight: 600; color: ${r.ukupno ? (r.preostalo < 0 ? 'var(--negative)' : 'var(--positive)') : 'var(--muted-2)'};">${r.ukupno ? r.preostalo : '—'}</td>
                 <td>${r.periodi.length
-                  ? r.periodi.map(p => `<span class="per-chip" title="${escapeHtml(p.note || '')}">${isoToEU(p.od).slice(0, 5)}–${isoToEU(p.do).slice(0, 5)} · ${p.dana} d${p.note ? ' · ' + escapeHtml(p.note) : ''}</span>`).join('')
-                  : '<span style="color: var(--muted-2); font-size: 12px;">bez perioda</span>'}</td>
+                  ? r.periodi.map(p => `<span class="per-chip" title="${escapeHtml(p.note || '')}">${p.od ? `${isoToEU(p.od).slice(0, 5)}–${isoToEU(p.do).slice(0, 5)} · ` : ''}${p.dana} d${p.note ? ' · ' + escapeHtml(p.note) : ''}</span>`).join('')
+                  : '<span style="color: var(--muted-2); font-size: 12px;">bez unosa</span>'}</td>
               </tr>`).join('')}
           </tbody>
           ${gRows.length ? `<tfoot>
@@ -5076,7 +5066,7 @@ function godisnjiModal(workerName) {
   const draft = (cur.periodi || []).map(p => ({ ...p }));
 
   const rowHTML = (p) => `
-    <div class="god-period-row">
+    <div class="god-period-row" data-godina="${p.godina || ''}">
       <input class="input gp-od" type="text" inputmode="numeric" placeholder="Od DD/MM/YYYY" maxlength="10" value="${isoToEU(p.od || '')}">
       <input class="input gp-do" type="text" inputmode="numeric" placeholder="Do DD/MM/YYYY" maxlength="10" value="${isoToEU(p.do || '')}">
       <input class="input gp-dana num" type="number" step="0.5" min="0" placeholder="Dana" value="${p.dana ?? ''}" title="Broj dana godišnjeg · auto se popuni kao radni dani (pon-pet), možeš ručno ispraviti">
@@ -5088,7 +5078,7 @@ function godisnjiModal(workerName) {
 
   const html = `
     <div class="modal-title">Godišnji · ${escapeHtml(workerName)}</div>
-    <div class="modal-sub">Kvota i periodi. „Dana" se automatski računa kao radni dani (pon-pet) iz raspona, a možeš ga ručno ispraviti (npr. zbog praznika).</div>
+    <div class="modal-sub">Kvota i periodi. Datumi su opcionalni: možeš unijeti i samo broj dana bez perioda, takav unos se broji u ${registarYear}. Kad upišeš raspon, „Dana" se sam izračuna kao radni dani (pon-pet) i možeš ga ručno ispraviti.</div>
     <div class="field" style="max-width: 240px;">
       <label class="field-label">Ukupno dana godišnje (kvota)</label>
       <input class="input num" id="god-ukupno" type="number" step="1" min="0" value="${Number(cur.ukupno) || 0}">
@@ -5152,14 +5142,21 @@ function godisnjiModal(workerName) {
         const note = row.querySelector('.gp-note').value.trim();
         const danaVal = parseFloat(row.querySelector('.gp-dana').value);
         if (!odEU && !doEU && !note && !(danaVal > 0)) continue;
+        if (!odEU && !doEU) {
+          // Unos bez perioda: samo broj dana (+ opcionalna napomena), broji se u odabranu godinu
+          if (!(danaVal > 0)) { toast('Unos bez datuma treba broj dana veći od 0', 'error'); return; }
+          const godina = parseInt(row.dataset.godina) || registarYear;
+          periodi.push({ od: '', do: '', dana: danaVal, note, godina });
+          continue;
+        }
         const od = euToISO(odEU);
         const doISO = euToISO(doEU);
-        if (!od || !doISO) { toast('Svaki period treba „Od" i „Do" u formatu DD/MM/YYYY', 'error'); return; }
+        if (!od || !doISO) { toast('Period treba i „Od" i „Do" (DD/MM/YYYY), ili oba prazna uz samo broj dana', 'error'); return; }
         if (doISO < od) { toast('„Do" ne može biti prije „Od"', 'error'); return; }
         const dana = danaVal > 0 ? danaVal : radnihDana(od, doISO);
         periodi.push({ od, do: doISO, dana, note });
       }
-      periodi.sort((a, b) => (a.od || '').localeCompare(b.od || ''));
+      periodi.sort((a, b) => (a.od || `${a.godina || '0000'}-00-00`).localeCompare(b.od || `${b.godina || '0000'}-00-00`));
       state.registar.godisnji[workerName] = {
         ukupno: parseFloat(m.root.querySelector('#god-ukupno').value) || 0,
         periodi,
