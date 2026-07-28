@@ -603,8 +603,15 @@ function computeWorkerStats(monthKey) {
     } else {
       dodatno = 0;
     }
-    // Za isplatu = Dodatno + Prijevoz (Marenda je već u Dodatno; Stan ide preko firme, NE ovdje)
-    const zaIsplatu = dodatno + w.prijevoz;
+    // Fiksna isplata (npr. Dragan): ako je postavljena (> 0) u Postavke → Radnici,
+    // radnik SVAKI mjesec ima točno taj iznos za isplatu. Sati, marenda i prijevoz
+    // tada ne ulaze u obračun keš isplate (sve je uključeno u fiksni iznos).
+    const fiksnaIsplata = Number(w.fiksnaIsplata) || 0;
+    const isFixedPayout = fiksnaIsplata > 0;
+    // Za isplatu = Dodatno + Prijevoz (Marenda je već u Dodatno; Stan ide preko firme, NE ovdje).
+    // Nikad ispod 0: radnik ne može biti dužan firmi kroz isplatu.
+    const zaIsplatuRaw = isFixedPayout ? fiksnaIsplata : (dodatno + w.prijevoz);
+    const zaIsplatu = Math.max(0, zaIsplatuRaw);
     // Mjesečni trošak (ukupni izdatak firme) = Za isplatu + Fiksno + Stan
     const mjesecniTrosak = zaIsplatu + fiksno + w.stan;
     // Dug radnika (ako postoji) — ne utječe na izračune, samo prikaz
@@ -625,6 +632,9 @@ function computeWorkerStats(monthKey) {
       isAutoCalculated,
       mjesecniTrosak,
       zaIsplatu,
+      zaIsplatuRaw,
+      isFixedPayout,
+      fiksnaIsplata,
       dug,
     };
   });
@@ -668,6 +678,7 @@ function rerenderActive() {
   else if (activeTab === 'sto') renderSto();
   else if (activeTab === 'projects') renderProjects();
   else if (activeTab === 'raspored') renderRaspored();
+  else if (activeTab === 'registar') renderRegistar();
   else if (activeTab === 'settings') renderSettings();
 }
 
@@ -977,24 +988,107 @@ function renderHours() {
       </div>
     </div>
 
-    <div class="grid grid-cf" style="margin-bottom: 24px;">
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <div class="card-title">Sati po radniku</div>
-            <div class="card-sub">${monthLabelShort(activeMonth)} · ukupno odrađenih sati</div>
-          </div>
+    <div class="card" style="margin-bottom: 24px;">
+      <div class="card-head">
+        <div>
+          <div class="card-title">Sažetak isplate · ${monthLabelShort(activeMonth)}</div>
+          <div class="card-sub">Po radniku · fiksne osobe (Postavke → Fiksni rad) ulaze u Mj. trošak, bez sati i bez keš isplate</div>
         </div>
-        <div class="chart-box"><canvas id="hr-chart-bars"></canvas></div>
+        <div class="page-actions">
+          <span class="pill green">Σ Za isplatu: <strong style="margin-left: 4px;">${eur(stats.reduce((a, s) => a + s.zaIsplatu, 0), 0)}</strong></span>
+          <span class="pill gray">Σ Mj. trošak: <strong style="margin-left: 4px;">${eur(stats.reduce((a, s) => a + s.mjesecniTrosak, 0) + fixedTotal, 0)}</strong></span>
+        </div>
       </div>
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <div class="card-title">Dnevna dinamika</div>
-            <div class="card-sub">Ukupno sati svih radnika po danu</div>
-          </div>
-        </div>
-        <div class="chart-box"><canvas id="hr-chart-daily"></canvas></div>
+      <div class="table-scroll">
+        <table class="table payroll-table">
+          <thead>
+            <tr>
+              <th>Radnik</th>
+              <th class="text-right">Sati</th>
+              <th class="text-right">Satnica</th>
+              <th class="text-right">Zarada</th>
+              <th class="text-right zone-kes zone-kes-first">Marenda</th>
+              <th class="text-right zone-kes">Prijevoz</th>
+              <th class="text-right zone-kes zone-kes-total">Za isplatu</th>
+              <th class="text-right zone-firma zone-firma-first">Fiksno</th>
+              <th class="text-right zone-firma">Stan</th>
+              <th class="text-right">Mj. trošak</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${stats.map(s => {
+              return `
+              <tr>
+                <td>
+                  <strong>${escapeHtml(s.name)}</strong>
+                  ${s.isFixedPayout ? `<span class="pill gray" style="margin-left: 6px;" title="Fiksna isplata: uvijek ${eur(s.fiksnaIsplata, 0)} svaki mjesec">fiksno</span>` : ''}
+                  ${s.dug > 0
+                    ? `<span class="dug-badge ${isAdmin ? 'editable' : ''}" data-dug-worker="${escapeHtml(s.name)}" title="${isAdmin ? 'Klikni za izmjenu duga' : 'Dug radnika'}">dug ${eur(s.dug, 0)}</span>`
+                    : (isAdmin ? `<span class="dug-badge add editable" data-dug-worker="${escapeHtml(s.name)}" title="Dodaj dug">+ dug</span>` : '')}
+                </td>
+                <td class="num text-right">
+                  ${(() => {
+                    if (!isAdmin) {
+                      return `<strong>${s.totalHours}</strong>${s.isHoursOverridden ? ` <span class="dodatno-mark-readonly" title="Ručno postavljeno · auto bi bilo ${s.autoTotalHours}">✎</span>` : ''}`;
+                    }
+                    const tooltipText = s.isHoursOverridden
+                      ? `Auto bi bilo: ${s.autoTotalHours} · klikni × za reset`
+                      : `Auto: zbroj iz dnevne tablice · klikni za ručnu izmjenu`;
+                    return `<div class="dodatno-cell ${s.isHoursOverridden ? 'overridden' : ''}" title="${escapeHtml(tooltipText)}">
+                      ${s.isHoursOverridden ? `<button class="dodatno-reset" data-reset-hours="${escapeHtml(s.name)}" title="Vrati na auto (${s.autoTotalHours})" aria-label="Reset">×</button>` : ''}
+                      <input class="input cell-edit hours-input" type="number" step="0.5" value="${s.totalHours}" data-hours-worker="${escapeHtml(s.name)}" data-auto-hours="${s.autoTotalHours}" style="width: 72px;">
+                      ${s.isHoursOverridden ? `<span class="dodatno-mark" title="Ručno postavljeno">✎</span>` : ''}
+                    </div>`;
+                  })()}
+                </td>
+                <td class="num text-right muted-cell">${s.isFixedPayout ? '—' : eur(s.satnica, 2)}</td>
+                <td class="num text-right${s.isFixedPayout ? ' muted-cell' : ''}">${s.isFixedPayout ? '—' : eur(s.zaradaSati, 2)}</td>
+                <td class="num text-right zone-kes zone-kes-first${s.isFixedPayout ? ' muted-cell' : ''}">${s.isFixedPayout ? '—' : eur(s.totalMarenda, 0)}</td>
+                <td class="num text-right zone-kes${s.isFixedPayout ? ' muted-cell' : ''}">${s.isFixedPayout ? '—' : eur(s.prijevoz, 0)}</td>
+                <td class="num text-right zone-kes zone-kes-total">${
+                  s.isFixedPayout
+                    ? `<span title="Fiksna isplata: uvijek isti iznos, svaki mjesec (Postavke → Radnici)">${eur(s.zaIsplatu, 2)}</span>`
+                    : (s.zaIsplatuRaw < 0
+                        ? `<span class="zero-clamp" title="Izračun bi bio ${eur(s.zaIsplatuRaw, 2)} · isplata ne može biti negativna, pa je 0. Razlika se ne prenosi.">${eur(0, 2)}</span>`
+                        : eur(s.zaIsplatu, 2))
+                }</td>
+                <td class="num text-right zone-firma zone-firma-first">${eur(s.fiksno, 0)}</td>
+                <td class="num text-right zone-firma" style="${s.stan > 0 ? '' : 'color: var(--muted-2);'}">${eur(s.stan, 0)}</td>
+                <td class="num text-right" style="font-weight: 600;">${eur(s.mjesecniTrosak, 2)}</td>
+              </tr>
+            `;}).join('')}
+              ${fixed.map(f => `
+              <tr style="background: var(--surface-2);">
+                <td><strong>${escapeHtml(f.name)}</strong> <span class="pill gray" style="margin-left: 6px;">fiksno</span></td>
+                <td class="num text-right muted-cell">—</td>
+                <td class="num text-right muted-cell">—</td>
+                <td class="num text-right muted-cell">—</td>
+                <td class="num text-right zone-kes zone-kes-first muted-cell">—</td>
+                <td class="num text-right zone-kes muted-cell">—</td>
+                <td class="num text-right zone-kes zone-kes-total muted-cell">—</td>
+                <td class="num text-right zone-firma zone-firma-first">${eur(f.amount, 0)}</td>
+                <td class="num text-right zone-firma muted-cell">—</td>
+                <td class="num text-right" style="font-weight: 600;">${eur(f.amount, 2)}</td>
+              </tr>`).join('')}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td>UKUPNO</td>
+              <td class="num text-right"><strong>${stats.reduce((a, s) => a + s.totalHours, 0)}</strong></td>
+              <td></td>
+              <td class="num text-right"><strong>${eur(stats.reduce((a, s) => a + (s.isFixedPayout ? 0 : s.zaradaSati), 0), 2)}</strong></td>
+              <td class="num text-right zone-kes zone-kes-first"><strong>${eur(stats.reduce((a, s) => a + (s.isFixedPayout ? 0 : s.totalMarenda), 0), 0)}</strong></td>
+              <td class="num text-right zone-kes"><strong>${eur(stats.reduce((a, s) => a + (s.isFixedPayout ? 0 : s.prijevoz), 0), 0)}</strong></td>
+              <td class="num text-right zone-kes zone-kes-total"><strong>${eur(stats.reduce((a, s) => a + s.zaIsplatu, 0), 2)}</strong></td>
+              <td class="num text-right zone-firma zone-firma-first"><strong>${eur(stats.reduce((a, s) => a + s.fiksno, 0) + fixedTotal, 0)}</strong></td>
+              <td class="num text-right zone-firma"><strong>${eur(stats.reduce((a, s) => a + s.stan, 0), 0)}</strong></td>
+              <td class="num text-right"><strong>${eur(stats.reduce((a, s) => a + s.mjesecniTrosak, 0) + fixedTotal, 2)}</strong></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <div class="payroll-formula">
+        Zarada = Sati × Satnica&nbsp;&nbsp;·&nbsp;&nbsp;<span style="color: var(--positive);">Za isplatu = Zarada + Marenda + Prijevoz − Fiksno</span> (nikad ispod 0)&nbsp;&nbsp;·&nbsp;&nbsp;Mj. trošak = Za isplatu + Fiksno + Stan&nbsp;&nbsp;·&nbsp;&nbsp;Radnici s oznakom „fiksno": uvijek isti iznos za isplatu, svaki mjesec (Postavke → Radnici → Fiksna isplata)&nbsp;&nbsp;·&nbsp;&nbsp;Fiksne osobe: Mj. trošak = fiksni iznos (Postavke → Fiksni rad)
       </div>
     </div>
 
@@ -1103,110 +1197,24 @@ function renderHours() {
       </div>
     </div>
 
-    <div class="card">
-      <div class="card-head">
-        <div>
-          <div class="card-title">Sažetak isplate · ${monthLabelShort(activeMonth)}</div>
-          <div class="card-sub">Po radniku · fiksne osobe (Postavke → Fiksni rad) ulaze u Mj. trošak, bez sati i bez keš isplate</div>
+    <div class="grid grid-cf" style="margin-bottom: 24px;">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Sati po radniku</div>
+            <div class="card-sub">${monthLabelShort(activeMonth)} · ukupno odrađenih sati</div>
+          </div>
         </div>
-        <div class="page-actions">
-          <span class="pill green">Σ Za isplatu: <strong style="margin-left: 4px;">${eur(stats.reduce((a, s) => a + s.zaIsplatu, 0), 0)}</strong></span>
-          <span class="pill gray">Σ Mj. trošak: <strong style="margin-left: 4px;">${eur(stats.reduce((a, s) => a + s.mjesecniTrosak, 0) + fixedTotal, 0)}</strong></span>
+        <div class="chart-box"><canvas id="hr-chart-bars"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Dnevna dinamika</div>
+            <div class="card-sub">Ukupno sati svih radnika po danu</div>
+          </div>
         </div>
-      </div>
-      <div class="table-scroll">
-        <table class="table payroll-table">
-          <thead>
-            <tr>
-              <th>Radnik</th>
-              <th class="text-right">Sati</th>
-              <th class="text-right">Satnica</th>
-              <th class="text-right">Zarada</th>
-              <th class="text-right zone-kes zone-kes-first">Marenda</th>
-              <th class="text-right zone-kes">Prijevoz</th>
-              <th class="text-right zone-kes">Dodatno</th>
-              <th class="text-right zone-kes zone-kes-total">Za isplatu</th>
-              <th class="text-right zone-firma zone-firma-first">Fiksno</th>
-              <th class="text-right zone-firma">Stan</th>
-              <th class="text-right">Mj. trošak</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${stats.map(s => {
-              return `
-              <tr>
-                <td>
-                  <strong>${escapeHtml(s.name)}</strong>
-                  ${s.dug > 0
-                    ? `<span class="dug-badge ${isAdmin ? 'editable' : ''}" data-dug-worker="${escapeHtml(s.name)}" title="${isAdmin ? 'Klikni za izmjenu duga' : 'Dug radnika'}">dug ${eur(s.dug, 0)}</span>`
-                    : (isAdmin ? `<span class="dug-badge add editable" data-dug-worker="${escapeHtml(s.name)}" title="Dodaj dug">+ dug</span>` : '')}
-                </td>
-                <td class="num text-right">
-                  ${(() => {
-                    if (!isAdmin) {
-                      return `<strong>${s.totalHours}</strong>${s.isHoursOverridden ? ` <span class="dodatno-mark-readonly" title="Ručno postavljeno · auto bi bilo ${s.autoTotalHours}">✎</span>` : ''}`;
-                    }
-                    const tooltipText = s.isHoursOverridden
-                      ? `Auto bi bilo: ${s.autoTotalHours} · klikni × za reset`
-                      : `Auto: zbroj iz dnevne tablice · klikni za ručnu izmjenu`;
-                    return `<div class="dodatno-cell ${s.isHoursOverridden ? 'overridden' : ''}" title="${escapeHtml(tooltipText)}">
-                      ${s.isHoursOverridden ? `<button class="dodatno-reset" data-reset-hours="${escapeHtml(s.name)}" title="Vrati na auto (${s.autoTotalHours})" aria-label="Reset">×</button>` : ''}
-                      <input class="input cell-edit hours-input" type="number" step="0.5" value="${s.totalHours}" data-hours-worker="${escapeHtml(s.name)}" data-auto-hours="${s.autoTotalHours}" style="width: 72px;">
-                      ${s.isHoursOverridden ? `<span class="dodatno-mark" title="Ručno postavljeno">✎</span>` : ''}
-                    </div>`;
-                  })()}
-                </td>
-                <td class="num text-right muted-cell">${eur(s.satnica, 2)}</td>
-                <td class="num text-right">${eur(s.zaradaSati, 2)}</td>
-                <td class="num text-right zone-kes zone-kes-first">${eur(s.totalMarenda, 0)}</td>
-                <td class="num text-right zone-kes">${eur(s.prijevoz, 0)}</td>
-                <td class="num text-right zone-kes">
-                  ${s.isAutoCalculated
-                    ? `<span style="color: ${s.dodatno < 0 ? 'var(--muted)' : 'var(--positive)'};">${eur(s.dodatno, 2)}</span>`
-                    : (isAdmin
-                        ? `<input class="input cell-edit" type="number" step="any" value="${s.dodatno}" data-extra-worker="${escapeHtml(s.name)}" data-extra-mode="manual" style="width: 92px; margin-left: auto;">`
-                        : `<span style="color: ${s.dodatno < 0 ? 'var(--muted)' : 'var(--positive)'};">${eur(s.dodatno, 0)}</span>`)}
-                </td>
-                <td class="num text-right zone-kes zone-kes-total">${eur(s.zaIsplatu, 2)}</td>
-                <td class="num text-right zone-firma zone-firma-first">${eur(s.fiksno, 0)}</td>
-                <td class="num text-right zone-firma" style="${s.stan > 0 ? '' : 'color: var(--muted-2);'}">${eur(s.stan, 0)}</td>
-                <td class="num text-right" style="font-weight: 600;">${eur(s.mjesecniTrosak, 2)}</td>
-              </tr>
-            `;}).join('')}
-              ${fixed.map(f => `
-              <tr style="background: var(--surface-2);">
-                <td><strong>${escapeHtml(f.name)}</strong> <span class="pill gray" style="margin-left: 6px;">fiksno</span></td>
-                <td class="num text-right muted-cell">—</td>
-                <td class="num text-right muted-cell">—</td>
-                <td class="num text-right muted-cell">—</td>
-                <td class="num text-right zone-kes zone-kes-first muted-cell">—</td>
-                <td class="num text-right zone-kes muted-cell">—</td>
-                <td class="num text-right zone-kes muted-cell">—</td>
-                <td class="num text-right zone-kes zone-kes-total muted-cell">—</td>
-                <td class="num text-right zone-firma zone-firma-first">${eur(f.amount, 0)}</td>
-                <td class="num text-right zone-firma muted-cell">—</td>
-                <td class="num text-right" style="font-weight: 600;">${eur(f.amount, 2)}</td>
-              </tr>`).join('')}
-          </tbody>
-          <tfoot>
-            <tr>
-              <td>UKUPNO</td>
-              <td class="num text-right"><strong>${stats.reduce((a, s) => a + s.totalHours, 0)}</strong></td>
-              <td></td>
-              <td class="num text-right"><strong>${eur(stats.reduce((a, s) => a + s.zaradaSati, 0), 2)}</strong></td>
-              <td class="num text-right zone-kes zone-kes-first"><strong>${eur(stats.reduce((a, s) => a + s.totalMarenda, 0), 0)}</strong></td>
-              <td class="num text-right zone-kes"><strong>${eur(stats.reduce((a, s) => a + s.prijevoz, 0), 0)}</strong></td>
-              <td class="num text-right zone-kes"><strong>${eur(stats.reduce((a, s) => a + s.dodatno, 0), 2)}</strong></td>
-              <td class="num text-right zone-kes zone-kes-total"><strong>${eur(stats.reduce((a, s) => a + s.zaIsplatu, 0), 2)}</strong></td>
-              <td class="num text-right zone-firma zone-firma-first"><strong>${eur(stats.reduce((a, s) => a + s.fiksno, 0) + fixedTotal, 0)}</strong></td>
-              <td class="num text-right zone-firma"><strong>${eur(stats.reduce((a, s) => a + s.stan, 0), 0)}</strong></td>
-              <td class="num text-right"><strong>${eur(stats.reduce((a, s) => a + s.mjesecniTrosak, 0) + fixedTotal, 2)}</strong></td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-      <div class="payroll-formula">
-        Zarada = Sati × Satnica&nbsp;&nbsp;·&nbsp;&nbsp;Dodatno = Zarada + Marenda − Fiksno&nbsp;&nbsp;·&nbsp;&nbsp;<span style="color: var(--positive);">Za isplatu = Dodatno + Prijevoz</span>&nbsp;&nbsp;·&nbsp;&nbsp;Mj. trošak = Za isplatu + Fiksno + Stan&nbsp;&nbsp;·&nbsp;&nbsp;Fiksne osobe: Mj. trošak = fiksni iznos (Postavke → Fiksni rad)
+        <div class="chart-box"><canvas id="hr-chart-daily"></canvas></div>
       </div>
     </div>
   `;
@@ -1265,22 +1273,6 @@ function renderHours() {
           if (Object.keys(cur).length === 0) delete state.hours[activeMonth].extras[w];
           if (await saveData()) renderHours();
         }
-      });
-    });
-    // Manual dodatno (Dragan-style, satnica = 0)
-    panel.querySelectorAll('input[data-extra-worker][data-extra-mode="manual"]').forEach(inp => {
-      inp.addEventListener('change', async () => {
-        const w = inp.dataset.extraWorker;
-        const newVal = parseFloat(inp.value) || 0;
-        ensureMonth(activeMonth);
-        if (!state.hours[activeMonth].extras) state.hours[activeMonth].extras = {};
-        const cur = state.hours[activeMonth].extras[w];
-        if (cur && typeof cur === 'object') {
-          cur.manual = newVal;
-        } else {
-          state.hours[activeMonth].extras[w] = newVal;
-        }
-        if (await saveData()) renderHours();
       });
     });
     // Dug badge: click to edit
@@ -3716,7 +3708,7 @@ function renderSettings() {
       <div class="card-head">
         <div>
           <div class="card-title">Radnici</div>
-          <div class="card-sub">Satnice, marenda, prijevoz, stan, fiksno · ovi parametri se koriste za obračun</div>
+          <div class="card-sub">Satnice, marenda, prijevoz, stan, fiksno · Fiksna isplata: ako je > 0, radnik ima točno taj iznos za isplatu svaki mjesec (npr. Dragan 900), bez obzira na sate i marendu</div>
         </div>
         ${isAdmin ? `<button class="btn btn-primary admin-only" id="add-worker">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -3733,6 +3725,7 @@ function renderSettings() {
               <th class="text-right">Prijevoz/mj. (€)</th>
               <th class="text-right">Stan/mj. (€)</th>
               <th class="text-right">Fiksno/mj. (€)</th>
+              <th class="text-right">Fiksna isplata/mj. (€)</th>
               ${isAdmin ? '<th class="text-right">Akcije</th>' : ''}
             </tr>
           </thead>
@@ -3742,7 +3735,7 @@ function renderSettings() {
                 <td>${isAdmin
                   ? `<input class="input" value="${escapeHtml(w.name)}" data-w="${i}" data-f="name" style="max-width: 180px;">`
                   : `<strong>${escapeHtml(w.name)}</strong>`}</td>
-                ${['satnica','marenda','prijevoz','stan','fiksno'].map(f => {
+                ${['satnica','marenda','prijevoz','stan','fiksno','fiksnaIsplata'].map(f => {
                   const histCount = (f === 'fiksno' && Array.isArray(w.fiksnoHistory)) ? w.fiksnoHistory.filter(e => e && e.from).length : 0;
                   if (f === 'fiksno' && isAdmin) {
                     return `<td class="text-right">
@@ -3756,8 +3749,8 @@ function renderSettings() {
                     </td>`;
                   }
                   return `<td class="text-right">${isAdmin
-                    ? `<input class="input num" type="number" step="0.5" value="${w[f]}" data-w="${i}" data-f="${f}" style="max-width: 100px; margin-left: auto; text-align: right;">`
-                    : `<span class="num">${eur(w[f], f === 'satnica' ? 2 : 0)}</span>`}</td>`;
+                    ? `<input class="input num" type="number" step="0.5" value="${Number(w[f]) || 0}" data-w="${i}" data-f="${f}" style="max-width: 100px; margin-left: auto; text-align: right;">`
+                    : `<span class="num">${eur(Number(w[f]) || 0, f === 'satnica' ? 2 : 0)}</span>`}</td>`;
                 }).join('')}
                 ${isAdmin ? `<td class="text-right">
                   <button class="btn btn-ghost btn-sm btn-danger" data-act="del-worker" data-i="${i}" title="Obriši">
@@ -3882,7 +3875,7 @@ function renderSettings() {
       }
     });
     panel.querySelector('#add-worker')?.addEventListener('click', async () => {
-      state.settings.workers.push({ name: 'Novi radnik', satnica: 0, marenda: 4, prijevoz: 70, stan: 0, fiksno: 1100 });
+      state.settings.workers.push({ name: 'Novi radnik', satnica: 0, marenda: 4, prijevoz: 70, stan: 0, fiksno: 1100, fiksnaIsplata: 0 });
       if (await saveData()) renderSettings();
     });
     panel.querySelectorAll('[data-act="del-worker"]').forEach(b => b.addEventListener('click', async () => {
@@ -3981,9 +3974,9 @@ function downloadXlsx() {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(cfRows), 'CASHFLOW');
 
   // Settings
-  const setRows = [['Radnik', 'Satnica', 'Marenda', 'Prijevoz', 'Stan', 'Fiksno']];
+  const setRows = [['Radnik', 'Satnica', 'Marenda', 'Prijevoz', 'Stan', 'Fiksno', 'Fiksna isplata']];
   for (const w of state.settings.workers) {
-    setRows.push([w.name, w.satnica, w.marenda, w.prijevoz, w.stan, w.fiksno]);
+    setRows.push([w.name, w.satnica, w.marenda, w.prijevoz, w.stan, w.fiksno, Number(w.fiksnaIsplata) || 0]);
   }
   if ((state.settings.fixedLabor || []).length) {
     setRows.push([]);
@@ -4034,13 +4027,29 @@ function downloadXlsx() {
     for (const d of h.days) {
       rows.push([d.date, d.day_name, ...workers.flatMap(n => [d.workers?.[n]?.hours || 0, d.workers?.[n]?.marenda || 0])]);
     }
-    // Compute proper Dodatno (auto + override) for each worker
+    // Za isplatu po radniku (auto + override + fiksna isplata, nikad ispod 0)
     const monthStats = computeWorkerStats(k);
-    rows.push(['Dodatno', '', ...workers.flatMap(n => {
+    rows.push(['Za isplatu', '', ...workers.flatMap(n => {
       const s = monthStats.find(x => x.name === n);
-      return [s ? s.dodatno : 0, ''];
+      return [s ? s.zaIsplatu : 0, ''];
     })]);
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), `Sati ${monthLabelShort(k)}`);
+  }
+
+  // Registar: rokovi + godišnji
+  if (state.registar && ((state.registar.rokovi || []).length || Object.keys(state.registar.godisnji || {}).length)) {
+    const regRows = [['ROKOVI I PODSJETNICI'], ['Stavka', 'Kategorija', 'Zadnje obavljeno', 'Sljedeći rok', 'Napomena']];
+    for (const r of (state.registar.rokovi || [])) {
+      regRows.push([r.naziv || '', r.kategorija || '', r.zadnje || '', r.rok || '', r.note || '']);
+    }
+    regRows.push([]);
+    regRows.push(['GODIŠNJI ODMORI']);
+    regRows.push(['Radnik', 'Ukupno dana', 'Iskorišteno (svi periodi)', 'Periodi']);
+    for (const [name, g] of Object.entries(state.registar.godisnji || {})) {
+      const per = (g.periodi || []).map(p => `${isoToEU(p.od)}-${isoToEU(p.do)} (${p.dana} d)`).join('; ');
+      regRows.push([name, Number(g.ukupno) || 0, (g.periodi || []).reduce((a, p) => a + (Number(p.dana) || 0), 0), per]);
+    }
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(regRows), 'Registar');
   }
 
   XLSX.writeFile(wb, `stara-rijeka-cashflow-${new Date().toISOString().slice(0,10)}.xlsx`);
@@ -4725,6 +4734,445 @@ function rasporedModal(idx = null) {
   });
 }
 
+/* ============================================================
+   RENDER: REGISTAR · evidencija firme
+   Godišnji odmori + rokovi i podsjetnici (tehnički, liječnički…)
+   ============================================================ */
+let registarYear = new Date().getFullYear();
+
+const REGISTAR_KATEGORIJE = ['Vozila', 'Liječnički', 'Zaštita na radu', 'Atesti i certifikati', 'Servis opreme', 'Osiguranje', 'Ugovori', 'Ostalo'];
+
+function ensureRegistar() {
+  if (!state.registar || typeof state.registar !== 'object') state.registar = {};
+  if (!state.registar.godisnji || typeof state.registar.godisnji !== 'object') state.registar.godisnji = {};
+  if (!Array.isArray(state.registar.rokovi)) state.registar.rokovi = [];
+}
+
+/* Broj dana do ISO datuma. Danas = 0, sutra = 1, jučer = -1. */
+function daysUntilISO(iso) {
+  if (!iso) return null;
+  const p = String(iso).split('-').map(Number);
+  if (p.length !== 3 || !p[0] || !p[1] || !p[2]) return null;
+  const now = new Date();
+  const a = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const b = new Date(p[0], p[1] - 1, p[2]);
+  return Math.round((b - a) / 86400000);
+}
+
+/* Broj radnih dana (pon-pet) između dva ISO datuma, uključivo. */
+function radnihDana(odISO, doISO) {
+  const p1 = String(odISO || '').split('-').map(Number);
+  const p2 = String(doISO || '').split('-').map(Number);
+  if (p1.length !== 3 || p2.length !== 3 || !p1[0] || !p2[0]) return 0;
+  const a = new Date(p1[0], p1[1] - 1, p1[2]);
+  const b = new Date(p2[0], p2[1] - 1, p2[2]);
+  if (isNaN(a.getTime()) || isNaN(b.getTime()) || b < a) return 0;
+  let n = 0;
+  const cur = new Date(a);
+  while (cur <= b) {
+    const dow = cur.getDay();
+    if (dow !== 0 && dow !== 6) n++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return n;
+}
+
+/* Status roka: isteklo / uskoro (unutar 30 dana) / ok / bez roka */
+function rokStatus(item) {
+  const du = daysUntilISO(item.rok);
+  if (du === null) return { key: 'none', order: 3, du: null, pill: '<span class="pill gray">bez roka</span>' };
+  if (du < 0) return { key: 'late', order: 0, du, pill: `<span class="pill red">isteklo prije ${Math.abs(du)} d</span>` };
+  if (du === 0) return { key: 'soon', order: 1, du, pill: '<span class="pill amber">danas</span>' };
+  if (du <= 30) return { key: 'soon', order: 1, du, pill: `<span class="pill amber">za ${du} d</span>` };
+  return { key: 'ok', order: 2, du, pill: `<span class="pill green">za ${du} d</span>` };
+}
+
+function renderRegistar() {
+  ensureRegistar();
+  const workers = state.settings.workers || [];
+  const rokovi = state.registar.rokovi.map((r, i) => ({ ...r, _idx: i }));
+  const sorted = rokovi.slice().sort((a, b) => {
+    const sa = rokStatus(a), sb = rokStatus(b);
+    if (sa.order !== sb.order) return sa.order - sb.order;
+    return (a.rok || '9999-12-31').localeCompare(b.rok || '9999-12-31');
+  });
+  const nLate = rokovi.filter(r => rokStatus(r).key === 'late').length;
+  const nSoon = rokovi.filter(r => rokStatus(r).key === 'soon').length;
+  const next = sorted.find(r => r.rok && rokStatus(r).key !== 'late');
+
+  // Godišnji za odabranu godinu (period se broji u godinu u kojoj počinje)
+  const gYear = String(registarYear);
+  const gRows = workers.map(w => {
+    const g = state.registar.godisnji[w.name] || { ukupno: 0, periodi: [] };
+    const periodi = (g.periodi || [])
+      .filter(p => (p.od || '').slice(0, 4) === gYear)
+      .slice().sort((a, b) => (a.od || '').localeCompare(b.od || ''));
+    const iskoristeno = periodi.reduce((a, p) => a + (Number(p.dana) || 0), 0);
+    const ukupno = Number(g.ukupno) || 0;
+    return { name: w.name, ukupno, iskoristeno, preostalo: ukupno - iskoristeno, periodi };
+  });
+
+  const panel = document.getElementById('panel-registar');
+  panel.innerHTML = `
+    <div class="page-head">
+      <div class="page-title-block">
+        <div class="page-eyebrow">Evidencija firme · rokovi i godišnji</div>
+        <h1 class="page-title">Registar <em>firme</em></h1>
+      </div>
+      <div class="page-actions">
+        ${isAdmin ? `<button class="btn btn-primary" id="reg-add-rok">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Novi rok
+        </button>` : ''}
+      </div>
+    </div>
+
+    <div class="kpi-row" style="margin-bottom: 24px;">
+      <div class="kpi-cell">
+        <div class="stat-label">Isteklo</div>
+        <div class="stat-value ${nLate > 0 ? 'negative' : ''}">${nLate}</div>
+        <div class="stat-sub">${nLate === 1 ? 'stavka čeka obradu' : 'stavki čeka obradu'}</div>
+      </div>
+      <div class="kpi-cell">
+        <div class="stat-label">Unutar 30 dana</div>
+        <div class="stat-value">${nSoon}</div>
+        <div class="stat-sub">uskoro na redu</div>
+      </div>
+      <div class="kpi-cell">
+        <div class="stat-label">Sljedeći rok</div>
+        <div class="stat-value">${next ? isoToEU(next.rok) : '—'}</div>
+        <div class="stat-sub">${next ? escapeHtml(next.naziv || '') : 'ništa na čekanju'}</div>
+      </div>
+      <div class="kpi-cell">
+        <div class="stat-label">Godišnji ${registarYear}</div>
+        <div class="stat-value">${gRows.reduce((a, r) => a + r.iskoristeno, 0)} / ${gRows.reduce((a, r) => a + r.ukupno, 0)}</div>
+        <div class="stat-sub">iskorišteno / ukupno dana</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom: 24px;">
+      <div class="card-head">
+        <div>
+          <div class="card-title">Rokovi i podsjetnici</div>
+          <div class="card-sub">Tehnički pregledi, liječnički, atesti, servisi, osiguranja i sve što ističe · crveno = isteklo, žuto = unutar 30 dana${isAdmin ? ' · klikni red za uređivanje' : ''}</div>
+        </div>
+      </div>
+      ${rokovi.length === 0 ? `
+        <div class="empty">
+          <div class="empty-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          </div>
+          Još nema unesenih rokova.<br>
+          ${isAdmin ? 'Klikni „Novi rok" i dodaj npr. tehnički pregled, liječnički, atest skele…' : 'Admin ih dodaje preko gumba „Novi rok".'}
+        </div>
+      ` : `
+      <div class="table-scroll">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>Stavka</th>
+              <th>Kategorija</th>
+              <th>Zadnje obavljeno</th>
+              <th>Sljedeći rok</th>
+              <th>Napomena</th>
+              ${isAdmin ? '<th class="text-right">Akcije</th>' : ''}
+            </tr>
+          </thead>
+          <tbody>
+            ${sorted.map(r => {
+              const st = rokStatus(r);
+              return `
+              <tr class="rok-row ${isAdmin ? 'clickable' : ''}" data-idx="${r._idx}">
+                <td>${st.pill}</td>
+                <td><strong>${escapeHtml(r.naziv || '')}</strong></td>
+                <td>${r.kategorija ? `<span class="pill gray">${escapeHtml(r.kategorija)}</span>` : '<span style="color: var(--muted-2);">—</span>'}</td>
+                <td class="col-date num">${r.zadnje ? isoToEU(r.zadnje) : '<span style="color: var(--muted-2);">—</span>'}</td>
+                <td class="col-date num" style="font-weight: 600;">${r.rok ? isoToEU(r.rok) : '<span style="color: var(--muted-2);">—</span>'}</td>
+                <td style="color: var(--muted); font-size: 13px;">${escapeHtml(r.note || '')}</td>
+                ${isAdmin ? `<td class="text-right">
+                  <button class="btn btn-ghost btn-sm" data-edit-rok="${r._idx}" title="Uredi">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                  </button>
+                </td>` : ''}
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+      `}
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div>
+          <div class="card-title">Godišnji odmori · ${registarYear}</div>
+          <div class="card-sub">Iskorišteno se zbraja iz perioda koji počinju u ${registarYear}.${isAdmin ? ' · klikni radnika za kvotu i periode' : ''}</div>
+        </div>
+        <div class="page-actions">
+          <div class="month-picker">
+            <button data-act="reg-year-prev" aria-label="Prethodna godina">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <span class="month-label">${registarYear}</span>
+            <button data-act="reg-year-next" aria-label="Sljedeća godina">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Radnik</th>
+              <th class="text-right">Ukupno dana</th>
+              <th class="text-right">Iskorišteno</th>
+              <th class="text-right">Preostalo</th>
+              <th>Periodi</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${gRows.length === 0 ? `<tr><td colspan="5" style="text-align: center; padding: 32px 12px; color: var(--muted);">Nema radnika u Postavkama.</td></tr>` : gRows.map(r => `
+              <tr class="god-row ${isAdmin ? 'clickable' : ''}" data-worker="${escapeHtml(r.name)}">
+                <td><strong>${escapeHtml(r.name)}</strong></td>
+                <td class="num text-right">${r.ukupno ? r.ukupno : '<span style="color: var(--muted-2);">—</span>'}</td>
+                <td class="num text-right" style="font-weight: 600;">${r.iskoristeno}</td>
+                <td class="num text-right" style="font-weight: 600; color: ${r.ukupno ? (r.preostalo < 0 ? 'var(--negative)' : 'var(--positive)') : 'var(--muted-2)'};">${r.ukupno ? r.preostalo : '—'}</td>
+                <td>${r.periodi.length
+                  ? r.periodi.map(p => `<span class="per-chip" title="${escapeHtml(p.note || '')}">${isoToEU(p.od).slice(0, 5)}–${isoToEU(p.do).slice(0, 5)} · ${p.dana} d${p.note ? ' · ' + escapeHtml(p.note) : ''}</span>`).join('')
+                  : '<span style="color: var(--muted-2); font-size: 12px;">bez perioda</span>'}</td>
+              </tr>`).join('')}
+          </tbody>
+          ${gRows.length ? `<tfoot>
+            <tr>
+              <td>UKUPNO</td>
+              <td class="num text-right"><strong>${gRows.reduce((a, r) => a + r.ukupno, 0)}</strong></td>
+              <td class="num text-right"><strong>${gRows.reduce((a, r) => a + r.iskoristeno, 0)}</strong></td>
+              <td class="num text-right"><strong>${gRows.reduce((a, r) => a + (r.ukupno ? r.preostalo : 0), 0)}</strong></td>
+              <td></td>
+            </tr>
+          </tfoot>` : ''}
+        </table>
+      </div>
+    </div>
+  `;
+
+  panel.querySelector('[data-act="reg-year-prev"]')?.addEventListener('click', () => { registarYear--; renderRegistar(); });
+  panel.querySelector('[data-act="reg-year-next"]')?.addEventListener('click', () => { registarYear++; renderRegistar(); });
+
+  if (isAdmin) {
+    panel.querySelector('#reg-add-rok')?.addEventListener('click', () => rokModal(null));
+    panel.querySelectorAll('[data-edit-rok]').forEach(b => b.addEventListener('click', e => {
+      e.stopPropagation();
+      rokModal(parseInt(b.dataset.editRok));
+    }));
+    panel.querySelectorAll('tr.rok-row.clickable').forEach(tr => tr.addEventListener('click', e => {
+      if (e.target.closest('button')) return;
+      rokModal(parseInt(tr.dataset.idx));
+    }));
+    panel.querySelectorAll('tr.god-row.clickable').forEach(tr => tr.addEventListener('click', () => {
+      godisnjiModal(tr.dataset.worker);
+    }));
+  }
+}
+
+/* Modal: rok / podsjetnik */
+function rokModal(idx = null) {
+  ensureRegistar();
+  const r = idx !== null ? state.registar.rokovi[idx] : { naziv: '', kategorija: '', zadnje: '', rok: '', note: '' };
+  if (!r) return;
+  const cats = Array.from(new Set([...REGISTAR_KATEGORIJE, ...state.registar.rokovi.map(x => x.kategorija).filter(Boolean)])).sort();
+  const html = `
+    <div class="modal-title">${idx !== null ? 'Uredi' : 'Novi'} rok</div>
+    <div class="modal-sub">Npr. tehnički pregled za vozilo, liječnički, atest, servis, polica osiguranja…</div>
+    <div class="grid grid-2" style="gap: 14px;">
+      <div class="field" style="grid-column: 1 / -1;">
+        <label class="field-label">Naziv stavke</label>
+        <input class="input" id="rk-naziv" value="${escapeHtml(r.naziv || '')}" placeholder="Npr. Tehnički pregled · Caddy">
+      </div>
+      <div class="field" style="grid-column: 1 / -1;">
+        <label class="field-label">Kategorija</label>
+        <input class="input" id="rk-kat" list="rk-cats" value="${escapeHtml(r.kategorija || '')}" placeholder="Npr. Vozila">
+        <datalist id="rk-cats">${cats.map(c => `<option value="${escapeHtml(c)}"></option>`).join('')}</datalist>
+      </div>
+      <div class="field">
+        <label class="field-label">Zadnje obavljeno</label>
+        <input class="input" id="rk-zadnje" type="text" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" value="${isoToEU(r.zadnje || '')}">
+        <div class="field-hint">Opcionalno.</div>
+      </div>
+      <div class="field">
+        <label class="field-label">Sljedeći rok</label>
+        <input class="input" id="rk-rok" type="text" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" value="${isoToEU(r.rok || '')}">
+        <div class="field-hint">Datum do kojeg treba obaviti.</div>
+      </div>
+      <div class="field" style="grid-column: 1 / -1;">
+        <label class="field-label">Napomena (opcionalno)</label>
+        <input class="input" id="rk-note" value="${escapeHtml(r.note || '')}" placeholder="Npr. registracija, ime doktora, broj police…">
+      </div>
+    </div>
+    <div class="modal-actions" style="justify-content: space-between;">
+      <button class="btn" data-act="done-today" title="Upiši današnji datum u Zadnje obavljeno">Obavljeno danas</button>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn" data-act="cancel">Odustani</button>
+        ${idx !== null ? '<button class="btn btn-danger" data-act="del">Obriši</button>' : ''}
+        <button class="btn btn-primary" data-act="save">${idx !== null ? 'Spremi' : 'Dodaj'}</button>
+      </div>
+    </div>
+  `;
+  const m = modal(html);
+  attachEUDateMask(m.root.querySelector('#rk-zadnje'));
+  attachEUDateMask(m.root.querySelector('#rk-rok'));
+  setTimeout(() => m.root.querySelector('#rk-naziv')?.focus(), 50);
+
+  m.root.addEventListener('click', async e => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    if (btn.dataset.act === 'cancel') m.close();
+    else if (btn.dataset.act === 'done-today') {
+      const t = new Date();
+      const eu = `${String(t.getDate()).padStart(2, '0')}/${String(t.getMonth() + 1).padStart(2, '0')}/${t.getFullYear()}`;
+      const inp = m.root.querySelector('#rk-zadnje');
+      inp.value = eu;
+      inp.classList.remove('invalid');
+      toast('Upisano: obavljeno danas · upiši još novi „Sljedeći rok"', '', 3000);
+    }
+    else if (btn.dataset.act === 'del') {
+      if (confirm('Obrisati ovaj rok iz registra?')) {
+        state.registar.rokovi.splice(idx, 1);
+        if (await saveData()) { m.close(); renderRegistar(); }
+      }
+    } else if (btn.dataset.act === 'save') {
+      const naziv = m.root.querySelector('#rk-naziv').value.trim();
+      if (!naziv) { toast('Unesi naziv stavke', 'error'); return; }
+      const zadnjeEU = m.root.querySelector('#rk-zadnje').value.trim();
+      const rokEU = m.root.querySelector('#rk-rok').value.trim();
+      const zadnje = zadnjeEU ? euToISO(zadnjeEU) : '';
+      const rok = rokEU ? euToISO(rokEU) : '';
+      if (zadnjeEU && !zadnje) { toast('„Zadnje obavljeno" mora biti DD/MM/YYYY', 'error'); return; }
+      if (rokEU && !rok) { toast('„Sljedeći rok" mora biti DD/MM/YYYY', 'error'); return; }
+      const newR = {
+        naziv,
+        kategorija: m.root.querySelector('#rk-kat').value.trim(),
+        zadnje,
+        rok,
+        note: m.root.querySelector('#rk-note').value.trim(),
+      };
+      if (idx !== null) state.registar.rokovi[idx] = newR;
+      else state.registar.rokovi.push(newR);
+      if (await saveData()) {
+        m.close();
+        renderRegistar();
+        toast(idx !== null ? 'Rok ažuriran' : 'Rok dodan', 'success');
+      }
+    }
+  });
+}
+
+/* Modal: godišnji odmor radnika (kvota + periodi) */
+function godisnjiModal(workerName) {
+  ensureRegistar();
+  const cur = state.registar.godisnji[workerName] || { ukupno: 0, periodi: [] };
+  const draft = (cur.periodi || []).map(p => ({ ...p }));
+
+  const rowHTML = (p) => `
+    <div class="god-period-row">
+      <input class="input gp-od" type="text" inputmode="numeric" placeholder="Od DD/MM/YYYY" maxlength="10" value="${isoToEU(p.od || '')}">
+      <input class="input gp-do" type="text" inputmode="numeric" placeholder="Do DD/MM/YYYY" maxlength="10" value="${isoToEU(p.do || '')}">
+      <input class="input gp-dana num" type="number" step="0.5" min="0" placeholder="Dana" value="${p.dana ?? ''}" title="Broj dana godišnjeg · auto se popuni kao radni dani (pon-pet), možeš ručno ispraviti">
+      <input class="input gp-note" value="${escapeHtml(p.note || '')}" placeholder="Napomena (opcionalno)">
+      <button class="btn btn-ghost btn-sm btn-danger gp-del" title="Obriši period" aria-label="Obriši period">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+      </button>
+    </div>`;
+
+  const html = `
+    <div class="modal-title">Godišnji · ${escapeHtml(workerName)}</div>
+    <div class="modal-sub">Kvota i periodi. „Dana" se automatski računa kao radni dani (pon-pet) iz raspona, a možeš ga ručno ispraviti (npr. zbog praznika).</div>
+    <div class="field" style="max-width: 240px;">
+      <label class="field-label">Ukupno dana godišnje (kvota)</label>
+      <input class="input num" id="god-ukupno" type="number" step="1" min="0" value="${Number(cur.ukupno) || 0}">
+    </div>
+    <div class="field-label" style="margin: 16px 0 8px;">Periodi godišnjeg</div>
+    <div id="god-rows">${draft.map(rowHTML).join('')}</div>
+    ${draft.length === 0 ? '<div id="god-empty" style="font-size: 13px; color: var(--muted); margin: 4px 0 8px;">Još nema unesenih perioda.</div>' : ''}
+    <button class="btn" id="god-add" style="margin-top: 8px;">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Dodaj period
+    </button>
+    <div class="modal-actions">
+      <button class="btn" data-act="cancel">Odustani</button>
+      <button class="btn btn-primary" data-act="save">Spremi</button>
+    </div>
+  `;
+  const m = modal(html, { wide: true });
+  setTimeout(() => m.root.querySelector('#god-ukupno')?.focus(), 50);
+
+  const wireRow = (row) => {
+    const od = row.querySelector('.gp-od');
+    const doInp = row.querySelector('.gp-do');
+    const dana = row.querySelector('.gp-dana');
+    attachEUDateMask(od);
+    attachEUDateMask(doInp);
+    const autoDana = () => {
+      const a = euToISO(od.value.trim());
+      const b = euToISO(doInp.value.trim());
+      if (a && b && !dana.value) {
+        const n = radnihDana(a, b);
+        if (n > 0) dana.value = n;
+      }
+    };
+    od.addEventListener('blur', autoDana);
+    doInp.addEventListener('blur', autoDana);
+    row.querySelector('.gp-del').addEventListener('click', () => row.remove());
+  };
+  m.root.querySelectorAll('.god-period-row').forEach(wireRow);
+
+  m.root.querySelector('#god-add').addEventListener('click', () => {
+    m.root.querySelector('#god-empty')?.remove();
+    const wrap = m.root.querySelector('#god-rows');
+    const holder = document.createElement('div');
+    holder.innerHTML = rowHTML({ od: '', do: '', dana: '', note: '' });
+    const row = holder.firstElementChild;
+    wrap.appendChild(row);
+    wireRow(row);
+    row.querySelector('.gp-od').focus();
+  });
+
+  m.root.addEventListener('click', async e => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    if (btn.dataset.act === 'cancel') m.close();
+    else if (btn.dataset.act === 'save') {
+      const rows = Array.from(m.root.querySelectorAll('.god-period-row'));
+      const periodi = [];
+      for (const row of rows) {
+        const odEU = row.querySelector('.gp-od').value.trim();
+        const doEU = row.querySelector('.gp-do').value.trim();
+        const note = row.querySelector('.gp-note').value.trim();
+        const danaVal = parseFloat(row.querySelector('.gp-dana').value);
+        if (!odEU && !doEU && !note && !(danaVal > 0)) continue;
+        const od = euToISO(odEU);
+        const doISO = euToISO(doEU);
+        if (!od || !doISO) { toast('Svaki period treba „Od" i „Do" u formatu DD/MM/YYYY', 'error'); return; }
+        if (doISO < od) { toast('„Do" ne može biti prije „Od"', 'error'); return; }
+        const dana = danaVal > 0 ? danaVal : radnihDana(od, doISO);
+        periodi.push({ od, do: doISO, dana, note });
+      }
+      periodi.sort((a, b) => (a.od || '').localeCompare(b.od || ''));
+      state.registar.godisnji[workerName] = {
+        ukupno: parseFloat(m.root.querySelector('#god-ukupno').value) || 0,
+        periodi,
+      };
+      if (await saveData()) {
+        m.close();
+        renderRegistar();
+        toast('Godišnji ažuriran', 'success');
+      }
+    }
+  });
+}
+
 
 async function boot() {
   injectExtraCss();
@@ -4779,6 +5227,19 @@ async function boot() {
       { name: 'Tata', amount: 1300, active: true },
     ];
   }
+
+  // Fiksna isplata po radniku: ako je > 0, radnik SVAKI mjesec ima točno taj iznos
+  // za isplatu (keš), bez obzira na sate i marendu. Jednokratni seed za Dragana
+  // (900 €, njegov dogovor); kasnije se uređuje u Postavke → Radnici.
+  // Kao i ostali seedovi: u Blob se sprema tek pri prvoj admin izmjeni.
+  for (const w of (state.settings.workers || [])) {
+    if (w && (w.fiksnaIsplata === undefined || w.fiksnaIsplata === null)) {
+      w.fiksnaIsplata = (w.name === 'Dragan') ? 900 : 0;
+    }
+  }
+
+  // Registar (godišnji odmori + rokovi i podsjetnici)
+  ensureRegistar();
 
   // Defaultiraj na trenutni kalendarski mjesec (a ne na zadnji mjesec u podacima),
   // tako da ako je netko slučajno otvorio buduće mjesece, navigacija počinje "danas"
