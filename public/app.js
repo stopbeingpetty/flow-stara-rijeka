@@ -4554,6 +4554,7 @@ function rspMonthLabel(iso, refYear) {
   return (y !== refYear) ? `${lbl} ${y}` : lbl;
 }
 function rspStatus(it, todayISO) {
+  if (!it.start && !it.end) return 'queued'; // bez termina — čeka slobodan termin
   if (it.end && it.end < todayISO) return 'done';
   if (it.start && it.start > todayISO) return 'upcoming';
   return 'active';
@@ -4570,6 +4571,7 @@ function renderRaspored() {
   const active = items.filter(it => rspStatus(it, todayISO) === 'active').sort((a, b) => (a.start || '').localeCompare(b.start || ''));
   const upcoming = items.filter(it => rspStatus(it, todayISO) === 'upcoming').sort((a, b) => (a.start || '').localeCompare(b.start || ''));
   const done = items.filter(it => rspStatus(it, todayISO) === 'done').sort((a, b) => (b.end || '').localeCompare(a.end || ''));
+  const queued = items.filter(it => rspStatus(it, todayISO) === 'queued');
 
   const cardHTML = (it) => {
     const idx = state.raspored.indexOf(it);
@@ -4626,7 +4628,11 @@ function renderRaspored() {
     }
   }
   if (!active.length && !upcoming.length) {
-    body += `<div class="rsp-empty">${isAdmin ? 'Još nema planiranih projekata. Klikni „Dodaj projekt" za prvi unos.' : 'Još nema planiranih projekata.'}</div>`;
+    if (queued.length) {
+      body += `<div class="rsp-empty">Nema projekata s terminom.${isAdmin ? ' Dodijeli termin projektu s liste „Za ubaciti" ili dodaj novi.' : ''}</div>`;
+    } else {
+      body += `<div class="rsp-empty">${isAdmin ? 'Još nema planiranih projekata. Klikni „Dodaj projekt" za prvi unos.' : 'Još nema planiranih projekata.'}</div>`;
+    }
   }
   if (done.length) {
     const pts = rasporedShowDone ? '18 15 12 9 6 15' : '6 9 12 15 18 9';
@@ -4636,6 +4642,36 @@ function renderRaspored() {
     </button>`;
     if (rasporedShowDone) body += done.map(cardHTML).join('');
   }
+
+  // ----- "Za ubaciti" — projekti bez termina (popunjavanje rupa u rasporedu) -----
+  const queuedCardHTML = (it) => {
+    const idx = state.raspored.indexOf(it);
+    return `
+      <div class="rsp-card rsp-queued ${isAdmin ? 'clickable' : ''}" ${isAdmin ? `data-idx="${idx}"` : ''}>
+        <div>
+          <span class="rsp-name">${escapeHtml(it.project || '')}</span>${it.desc ? `<span class="rsp-desc"> · ${escapeHtml(it.desc)}</span>` : ''}
+        </div>
+        <div class="rsp-right">
+          ${it.confirmed === false ? '<span class="rsp-chip-o">okvirno</span>' : ''}
+          <span class="rsp-chip-q">čeka termin</span>
+        </div>
+      </div>`;
+  };
+
+  const showAside = queued.length > 0 || isAdmin;
+  const asideHTML = showAside ? `
+    <aside class="rsp-aside">
+      <div class="rsp-aside-card">
+        <div class="rsp-aside-title">
+          <span>Za ubaciti</span>
+          <button class="rsp-aside-add admin-only" id="rsp-add-queued" title="Dodaj projekt bez termina" aria-label="Dodaj projekt bez termina">+</button>
+        </div>
+        ${queued.length
+          ? queued.map(queuedCardHTML).join('')
+          : `<div class="rsp-aside-empty">Nema projekata na čekanju.</div>`}
+        <div class="rsp-aside-hint">Projekti bez datuma — ubaci ih kad se otvori rupa u rasporedu.</div>
+      </div>
+    </aside>` : '';
 
   panel.innerHTML = `
     <div class="page-head">
@@ -4650,19 +4686,22 @@ function renderRaspored() {
         </button>
       </div>
     </div>
-    ${body}
+    ${showAside ? `<div class="rsp-layout"><div class="rsp-main">${body}</div>${asideHTML}</div>` : body}
   `;
 
   panel.querySelector('#rsp-done-toggle')?.addEventListener('click', () => { rasporedShowDone = !rasporedShowDone; renderRaspored(); });
   if (isAdmin) {
     panel.querySelector('#rsp-add')?.addEventListener('click', () => rasporedModal(null));
+    panel.querySelector('#rsp-add-queued')?.addEventListener('click', () => rasporedModal(null, 'queued'));
     panel.querySelectorAll('.rsp-card.clickable[data-idx]').forEach(c => c.addEventListener('click', () => rasporedModal(parseInt(c.dataset.idx))));
   }
 }
 
-function rasporedModal(idx = null) {
+function rasporedModal(idx = null, presetMode = null) {
   if (!Array.isArray(state.raspored)) state.raspored = [];
   const it = idx !== null ? state.raspored[idx] : { project: '', desc: '', start: '', end: '', confirmed: true };
+  // 'dated' = ima termin · 'queued' = bez termina (lista "Za ubaciti")
+  let mode = (presetMode === 'queued' || (idx !== null && !it.start && !it.end)) ? 'queued' : 'dated';
   const names = Array.from(new Set([
     ...allMonths().flatMap(k => (state.sto[k] || []).map(x => x.project)),
     ...allMonths().flatMap(k => (state.hours[k]?.days || []).flatMap(d => Object.values(d.workers || {}).map(w => w.project))),
@@ -4682,8 +4721,16 @@ function rasporedModal(idx = null) {
         <label class="field-label">Opis posla (opcionalno)</label>
         <input class="input" id="r-desc" value="${escapeHtml(it.desc || '')}" placeholder="Npr. fasada, knauf, adaptacija">
       </div>
-      <div class="field"><label class="field-label">Planirani početak</label><input class="input" id="r-start" type="date" value="${it.start || ''}"></div>
-      <div class="field"><label class="field-label">Planirani kraj</label><input class="input" id="r-end" type="date" value="${it.end || ''}"></div>
+      <div class="field" style="grid-column: 1 / -1;">
+        <label class="field-label">Termin</label>
+        <div class="toggle" id="r-mode" style="align-self: flex-start;">
+          <button type="button" data-mode="dated" class="${mode === 'dated' ? 'active' : ''}">S terminom</button>
+          <button type="button" data-mode="queued" class="${mode === 'queued' ? 'active' : ''}">Bez termina · za ubaciti</button>
+        </div>
+        <div class="field-hint" id="r-mode-hint" ${mode === 'dated' ? 'hidden' : ''}>Projekt ide na listu „Za ubaciti" — termin dodijeliš kasnije klikom na projekt.</div>
+      </div>
+      <div class="field r-date-field" ${mode === 'queued' ? 'hidden' : ''}><label class="field-label">Planirani početak</label><input class="input" id="r-start" type="text" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" value="${isoToEU(it.start)}"></div>
+      <div class="field r-date-field" ${mode === 'queued' ? 'hidden' : ''}><label class="field-label">Planirani kraj</label><input class="input" id="r-end" type="text" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" value="${isoToEU(it.end)}"></div>
       <div class="field" style="grid-column: 1 / -1;">
         <label class="field-label">Status</label>
         <select class="select" id="r-status">
@@ -4700,6 +4747,19 @@ function rasporedModal(idx = null) {
   `;
   const m = modal(html);
 
+  // EU maska za datume (DD/MM/YYYY)
+  attachEUDateMask(m.root.querySelector('#r-start'));
+  attachEUDateMask(m.root.querySelector('#r-end'));
+
+  // Toggle: s terminom / bez termina
+  m.root.querySelectorAll('#r-mode button').forEach(b => b.addEventListener('click', () => {
+    mode = b.dataset.mode;
+    m.root.querySelectorAll('#r-mode button').forEach(x => x.classList.toggle('active', x === b));
+    m.root.querySelectorAll('.r-date-field').forEach(f => { f.hidden = (mode === 'queued'); });
+    const hint = m.root.querySelector('#r-mode-hint');
+    if (hint) hint.hidden = (mode === 'dated');
+  }));
+
   m.root.addEventListener('click', async e => {
     const btn = e.target.closest('button[data-act]');
     if (!btn) return;
@@ -4711,12 +4771,18 @@ function rasporedModal(idx = null) {
       }
     } else if (btn.dataset.act === 'save') {
       const project = m.root.querySelector('#r-name').value.trim();
-      const start = m.root.querySelector('#r-start').value;
-      const end = m.root.querySelector('#r-end').value;
       if (!project) { toast('Unesi naziv projekta', 'error'); return; }
-      if (!start) { toast('Odaberi datum početka', 'error'); m.root.querySelector('#r-start').classList.add('invalid'); m.root.querySelector('#r-start').focus(); return; }
-      if (!end) { toast('Odaberi datum kraja', 'error'); m.root.querySelector('#r-end').classList.add('invalid'); m.root.querySelector('#r-end').focus(); return; }
-      if (start > end) { toast('Početak mora biti prije kraja', 'error'); return; }
+      let start = '', end = '';
+      if (mode === 'dated') {
+        const startEl = m.root.querySelector('#r-start');
+        const endEl = m.root.querySelector('#r-end');
+        start = euToISO(startEl.value.trim());
+        end = euToISO(endEl.value.trim());
+        if (!start) { toast('Unesi datum početka (DD/MM/YYYY)', 'error'); startEl.classList.add('invalid'); startEl.focus(); return; }
+        if (!end) { toast('Unesi datum kraja (DD/MM/YYYY)', 'error'); endEl.classList.add('invalid'); endEl.focus(); return; }
+        if (start > end) { toast('Početak mora biti prije kraja', 'error'); return; }
+      }
+      const wasQueued = idx !== null && !it.start && !it.end;
       const newIt = {
         project,
         desc: m.root.querySelector('#r-desc').value.trim(),
@@ -4728,7 +4794,9 @@ function rasporedModal(idx = null) {
       if (await saveData()) {
         m.close();
         renderRaspored();
-        toast(idx !== null ? 'Projekt ažuriran' : 'Projekt dodan', 'success');
+        if (idx === null && mode === 'queued') toast('Projekt dodan na listu „Za ubaciti"', 'success');
+        else if (wasQueued && mode === 'dated') toast('Projekt uvršten u raspored', 'success');
+        else toast(idx !== null ? 'Projekt ažuriran' : 'Projekt dodan', 'success');
       }
     }
   });
