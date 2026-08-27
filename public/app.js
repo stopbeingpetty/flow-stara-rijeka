@@ -271,6 +271,44 @@ function injectExtraCss() {
       .modal.modal-wide { max-width: 100%; }
       tr[data-items-for] table { font-size: 12px; }
     }
+    /* STO stanje (vrh STO taba) */
+    .sto-stanje { margin: 0 0 40px; }
+    .sto-stanje > .eyebrow { margin-bottom: 14px; }
+    .sto-stanje .flourish-stat { margin-bottom: 16px; }
+    .sto-formula { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; font-family: var(--font-mono); font-size: 12px; color: var(--muted); position: relative; }
+    .sto-formula .seg { display: inline-flex; gap: 8px; align-items: baseline; white-space: nowrap; }
+    .sto-formula .seg .val { color: var(--ink); font-weight: 500; font-variant-numeric: tabular-nums; }
+    .sto-formula .op { color: var(--muted-2); margin-right: 2px; }
+    .sto-formula .sto-ios-link { margin-left: auto; }
+    .sto-formula .link { font: inherit; color: var(--ink); text-decoration: underline; text-decoration-color: #e8c200; text-decoration-thickness: 2px; text-underline-offset: 3px; cursor: pointer; padding: 0; }
+    .sto-uplate { margin-top: 26px; padding-top: 18px; border-top: 1px solid var(--line); position: relative; }
+    .sto-uplate-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 4px; }
+    .sto-uplate-head .eyebrow { margin: 0; white-space: nowrap; }
+    .sto-uplate-head .sum { font-family: var(--font-mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
+    .sto-uplate-empty { font-size: 13px; color: var(--muted); padding: 8px 0 2px; }
+    .sto-uplate-more { font-family: var(--font-mono); font-size: 11px; color: var(--muted-2); padding: 10px 0 0; }
+    .sto-ledger-row { display: grid; grid-template-columns: 104px 120px 1fr auto; grid-template-areas: "d a n act"; gap: 18px; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+    .sto-ledger-row:last-child { border-bottom: none; padding-bottom: 2px; }
+    .sto-ledger-row .d { grid-area: d; font-family: var(--font-mono); font-size: 13px; color: var(--muted); }
+    .sto-ledger-row .a { grid-area: a; font-family: var(--font-mono); font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .sto-ledger-row .n { grid-area: n; color: var(--ink-2); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sto-ledger-row .n .none { color: var(--muted-2); }
+    .sto-ledger-row .n .pill { margin-right: 8px; vertical-align: middle; }
+    .sto-ledger-row .act { grid-area: act; display: flex; gap: 2px; justify-self: end; }
+    .sto-ledger-row.before-ios .d, .sto-ledger-row.before-ios .a { color: var(--muted-2); font-weight: 500; }
+    .sto-section-head { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin: 0 0 24px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+    .sto-section-head .eyebrow { margin-bottom: 8px; }
+    .sto-section-head .section-title { font-family: var(--font-display); font-weight: 500; font-size: 24px; letter-spacing: -0.02em; line-height: 1.1; }
+    .sto-section-head .section-title em { font-style: italic; font-weight: 400; color: var(--muted); }
+    .sto-ios-drop { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; border: 2px dashed var(--line); border-radius: 12px; padding: 28px 16px; cursor: pointer; text-align: center; color: var(--muted); transition: border-color .15s; }
+    @media (max-width: 760px) {
+      .sto-stanje { margin-bottom: 32px; }
+      .sto-formula { flex-direction: column; align-items: flex-start; gap: 4px; }
+      .sto-formula .sto-ios-link { margin-left: 0; margin-top: 6px; }
+      .sto-uplate-head .sum { display: none; }
+      .sto-ledger-row { grid-template-columns: auto 1fr auto; grid-template-areas: "d a act" "n n n"; gap: 6px 14px; }
+      .sto-ledger-row .n { font-size: 13px; white-space: normal; }
+    }
   `;
   document.head.appendChild(st);
 }
@@ -735,6 +773,7 @@ async function saveData() {
   try {
     if (!state.forecast) state.forecast = [];
     if (!state.raspored) state.raspored = [];
+    ensureStoStanje();
     pruneEmptyMonths();
     await API.save(state);
     toast('Spremljeno', 'success', 1500);
@@ -2083,10 +2122,12 @@ function renderSto() {
 
   const panel = document.getElementById('panel-sto');
   panel.innerHTML = `
-    <div class="page-head">
-      <div class="page-title-block">
-        <div class="page-eyebrow">STO Gmbh · ${monthLabel(activeMonth)}</div>
-        <h1 class="page-title"><strong>STO</strong> <em>materijal</em></h1>
+    ${buildStoStanjeHtml()}
+
+    <div class="sto-section-head">
+      <div>
+        <div class="eyebrow">Mjesečni pregled</div>
+        <div class="section-title">Materijal <em>· ${monthLabel(activeMonth)}</em></div>
       </div>
       <div class="page-actions">
         <div class="toggle">
@@ -2238,6 +2279,7 @@ function renderSto() {
 
   // Bind month picker
   bindMonthPicker(panel, activeMonth, (m) => { activeMonth = m; renderSto(); }, { allowAdd: true });
+  bindStoStanje(panel);
 
   // View toggle
   panel.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => {
@@ -2305,10 +2347,12 @@ function renderStoYear() {
 
   const panel = document.getElementById('panel-sto');
   panel.innerHTML = `
-    <div class="page-head">
-      <div class="page-title-block">
-        <div class="page-eyebrow">STO Gmbh · Godišnji pregled 2026</div>
-        <h1 class="page-title"><strong>STO</strong> <em>· godišnji</em></h1>
+    ${buildStoStanjeHtml()}
+
+    <div class="sto-section-head">
+      <div>
+        <div class="eyebrow">Godišnji pregled</div>
+        <div class="section-title">Materijal <em>· 2026</em></div>
       </div>
       <div class="page-actions">
         <div class="toggle">
@@ -2388,6 +2432,7 @@ function renderStoYear() {
     stoView = b.dataset.view;
     renderSto();
   }));
+  bindStoStanje(panel);
 
   // Donut by project YTD
   const ctx = document.getElementById('sto-y-chart');
@@ -3070,6 +3115,440 @@ function stoImportReview(parsed) {
       toast(`Projekt „${p}" postavljen na sve stavke`, 'success', 1800);
     } else if (btn.dataset.act === 'save') {
       doSave();
+    }
+  });
+}
+
+/* ============================================================
+   STO · STANJE (otvoreni dug prema STO Gmbh)
+   Stanje = početno stanje iz IOS-a (Izvod otvorenih stavki)
+            + STO računi s datumom nakon IOS-a (iz state.sto, s PDV-om;
+              odobrenja su negativni iznosi i sama umanjuju stanje)
+            − uplate STO-u s datumom nakon IOS-a (state.stoStanje.uplate)
+   Novi IOS se učita iz PDF-a: aplikacija ga usporedi sa svojim
+   stanjem na taj dan i tek na potvrdu ga preuzme; stari IOS ide u
+   iosHistory (ništa se ne briše). Ako state nema stoStanje (stari
+   podaci), seeda se IOS od 26.08.2026 i u Blob se sprema tek pri
+   prvoj admin izmjeni, kao i ostali seedovi.
+   ============================================================ */
+const DEFAULT_STO_IOS_SEED = {
+  datum: '2026-08-26',
+  iznos: 23161.40,
+  izvor: 'IOS STO Gmbh 26.08.2026',
+  stavke: [
+    { datum: '2026-06-17', broj: '7658-01-91', valuta: '2026-08-01', iznos: 5179.68, otvoreno: 3391.53 },
+    { datum: '2026-06-18', broj: '7722-01-91', valuta: '2026-08-02', iznos: 680.44, otvoreno: 680.44 },
+    { datum: '2026-06-19', broj: '7863-01-91', valuta: '2026-08-03', iznos: 95.00, otvoreno: 95.00 },
+    { datum: '2026-06-23', broj: '7899-01-91', valuta: '2026-08-07', iznos: 2123.10, otvoreno: 2123.10 },
+    { datum: '2026-06-26', broj: '8141-01-91', valuta: '2026-08-10', iznos: 475.00, otvoreno: 475.00 },
+    { datum: '2026-06-29', broj: '8216-01-91', valuta: '2026-08-13', iznos: 237.50, otvoreno: 237.50 },
+    { datum: '2026-06-30', broj: '8302-01-91', valuta: '2026-08-14', iznos: 190.00, otvoreno: 190.00 },
+    { datum: '2026-07-02', broj: '8494-01-91', valuta: '2026-08-16', iznos: 440.00, otvoreno: 440.00 },
+    { datum: '2026-07-02', broj: '8506-01-91', valuta: '2026-08-16', iznos: 2841.38, otvoreno: 2841.38 },
+    { datum: '2026-07-06', broj: '8615-01-91', valuta: '2026-08-20', iznos: 2032.75, otvoreno: 2032.75 },
+    { datum: '2026-07-08', broj: '8774-01-91', valuta: '2026-08-22', iznos: 67.93, otvoreno: 67.93 },
+    { datum: '2026-07-09', broj: '8924-01-91', valuta: '2026-08-23', iznos: 1790.63, otvoreno: 1790.63 },
+    { datum: '2026-07-09', broj: '8926-01-91', valuta: '2026-08-23', iznos: 1812.50, otvoreno: 1812.50 },
+    { datum: '2026-07-13', broj: '9054-01-91', valuta: '2026-08-23', iznos: 817.65, otvoreno: 817.65 },
+    { datum: '2026-07-13', broj: '9055-01-91', valuta: '2026-08-27', iznos: 257.94, otvoreno: 257.94 },
+    { datum: '2026-07-14', broj: '9094-01-91', valuta: '2026-08-28', iznos: 1359.03, otvoreno: 1359.03 },
+    { datum: '2026-07-17', broj: '9322-01-91', valuta: '2026-08-31', iznos: 657.88, otvoreno: 657.88 },
+    { datum: '2026-07-21', broj: '9509-01-91', valuta: '2026-09-04', iznos: 1214.38, otvoreno: 1214.38 },
+    { datum: '2026-07-22', broj: '9621-01-91', valuta: '2026-09-05', iznos: 237.50, otvoreno: 237.50 },
+    { datum: '2026-07-23', broj: '9640-01-91', valuta: '2026-09-05', iznos: 235.88, otvoreno: 235.88 },
+    { datum: '2026-07-29', broj: '9944-01-91', valuta: '2026-09-11', iznos: 140.88, otvoreno: 140.88 },
+    { datum: '2026-08-14', broj: '10532-01-91', valuta: '2026-09-28', iznos: 2016.25, otvoreno: 2016.25 },
+    { datum: '2026-08-24', broj: '10833-01-91', valuta: '2026-10-08', iznos: 46.25, otvoreno: 46.25 },
+  ],
+};
+
+const STO_INV_NO_RE = /Račun\s+(\d{1,6}-\d{2}-\d{2})/;
+const todayISO = () => new Date().toISOString().slice(0, 10);
+const nowISO = () => new Date().toISOString();   // created / ucitano: puni timestamp, da se uplata unesena prije učitavanja IOS-a razlikuje od one nakon
+
+function ensureStoStanje() {
+  if (!state) return;
+  if (!state.stoStanje || typeof state.stoStanje !== 'object') state.stoStanje = {};
+  const s = state.stoStanje;
+  if (!s.ios || typeof s.ios !== 'object' || !s.ios.datum) {
+    s.ios = JSON.parse(JSON.stringify(DEFAULT_STO_IOS_SEED));
+    s.ios.ucitano = nowISO();
+  }
+  if (!Array.isArray(s.iosHistory)) s.iosHistory = [];
+  if (!Array.isArray(s.uplate)) s.uplate = [];
+}
+
+/* Stanje prema STO-u. untilISO = izračun na određeni dan (za usklađenje s novim IOS-om). */
+function computeStoStanje(untilISO = null) {
+  ensureStoStanje();
+  const ios = state.stoStanje.ios;
+  const od = ios.datum;
+  const inRange = (d) => !!d && d > od && (!untilISO || d <= untilISO);
+  let racuni = 0;
+  const invoiceKeys = new Set();
+  for (const k of allMonths()) {
+    const list = (state.sto || {})[k] || [];
+    list.forEach((t, i) => {
+      if (!inRange(t.date)) return;
+      racuni += Number(t.amount) || 0;
+      const m = String(t.note || '').match(STO_INV_NO_RE);
+      invoiceKeys.add(m ? 'inv:' + m[1] : `rec:${k}:${i}`);
+    });
+  }
+  let uplate = 0, uplateN = 0;
+  for (const u of state.stoStanje.uplate) {
+    if (!inRange(u.date)) continue;
+    uplate += Number(u.amount) || 0;
+    uplateN++;
+  }
+  racuni = round2(racuni);
+  uplate = round2(uplate);
+  const pocetno = round2(Number(ios.iznos) || 0);
+  return { ios, pocetno, racuni, racuniN: invoiceKeys.size, uplate, uplateN, stanje: round2(pocetno + racuni - uplate) };
+}
+
+function stoStanjeBigHtml(n) {
+  const neg = n < 0;
+  const cents = Math.round(Math.abs(n) * 100);
+  const int = Math.floor(cents / 100), dec = String(cents % 100).padStart(2, '0');
+  return `<span class="currency">${neg ? '−€' : '€'}</span>${FMT_INT.format(int)}<em>,${dec}</em>`;
+}
+
+const STO_EDIT_ICON = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+const STO_DEL_ICON = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/></svg>';
+
+/* HTML bloka na vrhu STO taba (mjesečni i godišnji prikaz). */
+function buildStoStanjeHtml() {
+  const c = computeStoStanje();
+  const ios = c.ios;
+  const ucitano = ios.ucitano || '';
+  const all = state.stoStanje.uplate.map((u, i) => ({ ...u, _idx: i }));
+  // Prikazuju se uplate nakon IOS-a + one s datumom prije IOS-a unesene nakon što je ovaj IOS učitan
+  // (vjerojatno krivi datum, pa se vide s oznakom). Starije, već obuhvaćene IOS-om, ostaju u podacima.
+  const visible = all
+    .filter(u => u.date > ios.datum || (u.created || '') >= ucitano)
+    .sort((a, b) => (b.date || '').localeCompare(a.date || '') || b._idx - a._idx);
+  const hiddenN = all.length - visible.length;
+  const nakon = visible.filter(u => u.date > ios.datum);
+  const nakonSum = round2(nakon.reduce((a, u) => a + (Number(u.amount) || 0), 0));
+  const plural = (n) => n === 1 ? 'uplata' : (n >= 2 && n <= 4) ? 'uplate' : 'uplata';
+  return `
+    <div class="page-head">
+      <div class="page-title-block">
+        <div class="page-eyebrow">STO Gmbh</div>
+        <h1 class="page-title"><strong>STO</strong> <em>stanje</em></h1>
+      </div>
+      <div class="page-actions">
+        <button class="btn btn-primary admin-only" id="sto-uplata-add">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Nova uplata
+        </button>
+      </div>
+    </div>
+
+    <div class="flourish sto-stanje">
+      <div class="eyebrow">Otvoreni dug prema STO-u${c.stanje < 0 ? ' · pretplata' : ''}</div>
+      <div class="flourish-stat${c.stanje < 0 ? ' positive' : ''}" id="sto-stanje-big">${stoStanjeBigHtml(c.stanje)}</div>
+      <div class="sto-formula">
+        <span class="seg"><span>IOS ${isoToEU(ios.datum)}</span><span class="val">${FMT.format(c.pocetno)}</span></span>
+        <span class="seg"><span class="op">+</span><span>računi nakon IOS-a · ${c.racuniN}</span><span class="val">${FMT.format(c.racuni)}</span></span>
+        <span class="seg"><span class="op">−</span><span>uplate nakon IOS-a · ${c.uplateN}</span><span class="val">${FMT.format(c.uplate)}</span></span>
+        <span class="seg sto-ios-link admin-only"><button type="button" class="link" id="sto-ios-load">Učitaj novi IOS</button></span>
+      </div>
+      <div class="sto-uplate">
+        <div class="sto-uplate-head">
+          <div class="eyebrow">Uplate nakon IOS-a</div>
+          ${nakon.length ? `<div class="sum">${nakon.length} ${plural(nakon.length)} · ${eur(nakonSum, 2)}</div>` : ''}
+        </div>
+        ${visible.length === 0 ? `<div class="sto-uplate-empty">Nema uplata nakon ${isoToEU(ios.datum)}.</div>` : visible.map(u => {
+          const nakonIosa = u.date > ios.datum;
+          return `
+          <div class="sto-ledger-row${nakonIosa ? '' : ' before-ios'}">
+            <span class="d">${isoToEU(u.date)}</span>
+            <span class="a">${eur(u.amount, 2)}</span>
+            <span class="n">${nakonIosa ? '' : '<span class="pill gray">prije IOS-a · ne ulazi u stanje</span>'}${u.note ? escapeHtml(u.note) : '<span class="none">bez napomene</span>'}</span>
+            <span class="act">${isAdmin ? `
+              <button class="btn btn-ghost btn-sm" data-act="edit-uplata" data-i="${u._idx}" title="Uredi">${STO_EDIT_ICON}</button>
+              <button class="btn btn-ghost btn-sm btn-danger" data-act="del-uplata" data-i="${u._idx}" title="Obriši">${STO_DEL_ICON}</button>` : ''}</span>
+          </div>`;
+        }).join('')}
+        ${hiddenN ? `<div class="sto-uplate-more">Još ${hiddenN} ${plural(hiddenN)} prije IOS-a · ${hiddenN === 1 ? 'obuhvaćena' : 'obuhvaćene'} početnim stanjem</div>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function bindStoStanje(panel) {
+  if (!isAdmin) return;
+  panel.querySelector('#sto-uplata-add')?.addEventListener('click', () => stoUplataModal());
+  panel.querySelector('#sto-ios-load')?.addEventListener('click', () => stoIosModal());
+  panel.querySelectorAll('[data-act="edit-uplata"]').forEach(b => b.addEventListener('click', () => stoUplataModal(parseInt(b.dataset.i))));
+  panel.querySelectorAll('[data-act="del-uplata"]').forEach(b => b.addEventListener('click', async () => {
+    if (!confirm('Obrisati ovu uplatu?')) return;
+    const snapshot = JSON.stringify(state.stoStanje.uplate);
+    state.stoStanje.uplate.splice(parseInt(b.dataset.i), 1);
+    if (await saveData()) renderSto();
+    else state.stoStanje.uplate = JSON.parse(snapshot);
+  }));
+}
+
+/* Nova / uredi uplata STO-u */
+function stoUplataModal(idx = null) {
+  ensureStoStanje();
+  const list = state.stoStanje.uplate;
+  const u = idx !== null ? list[idx] : { date: todayISO(), amount: 0, note: '' };
+  if (!u) return;
+  const c = computeStoStanje();
+  const html = `
+    <div class="modal-title">${idx !== null ? 'Uredi uplatu' : 'Nova uplata STO-u'}</div>
+    <div class="modal-sub">Iznos koji je otišao s računa prema STO Gmbh. Umanjuje stanje.</div>
+    <div class="grid grid-2" style="gap: 14px;">
+      <div class="field"><label class="field-label">Datum</label><input class="input" id="su-date" type="text" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" value="${isoToEU(u.date)}"></div>
+      <div class="field"><label class="field-label">Iznos (€)</label><input class="input num" id="su-amount" type="text" inputmode="decimal" placeholder="0,00" value="${u.amount ? formatEUAmount(u.amount) : ''}"></div>
+      <div class="field" style="grid-column: 1 / -1;"><label class="field-label">Napomena (opcionalno)</label><input class="input" id="su-note" value="${escapeHtml(u.note || '')}" placeholder="Npr. Izvod 210"></div>
+    </div>
+    <div class="field-hint" id="su-hint" style="margin-top: 12px; min-height: 16px;"></div>
+    <div class="modal-actions">
+      <button class="btn" data-act="cancel">Odustani</button>
+      ${idx !== null ? '<button class="btn btn-danger" data-act="del">Obriši</button>' : ''}
+      <button class="btn btn-primary" data-act="save">${idx !== null ? 'Spremi' : 'Dodaj'}</button>
+    </div>
+  `;
+  const m = modal(html);
+  const dateInp = m.root.querySelector('#su-date');
+  const amountInp = m.root.querySelector('#su-amount');
+  attachEUDateMask(dateInp);
+  attachEUAmountMask(amountInp);
+
+  const hint = () => {
+    const el = m.root.querySelector('#su-hint');
+    const a = parseEUAmount(amountInp.value);
+    const d = euToISO(dateInp.value.trim());
+    if (!(a > 0)) { el.innerHTML = ''; return; }
+    if (d && d <= c.ios.datum) {
+      el.innerHTML = `Datum je prije IOS-a (${isoToEU(c.ios.datum)}): uplata je već u početnom stanju i ne mijenja iznos.`;
+      return;
+    }
+    // Kod uređivanja se stari iznos vrati pa se oduzme novi
+    const base = round2(c.stanje + ((idx !== null && u.date > c.ios.datum) ? (Number(u.amount) || 0) : 0));
+    el.innerHTML = `Nakon spremanja: stanje ${FMT.format(base)} → <strong>${eur(round2(base - a), 2)}</strong>`;
+  };
+  amountInp.addEventListener('input', hint);
+  dateInp.addEventListener('input', hint);
+  hint();
+  if (idx === null) setTimeout(() => amountInp.focus(), 50);
+
+  m.root.addEventListener('click', async e => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    if (btn.dataset.act === 'cancel') { m.close(); return; }
+    if (btn.dataset.act === 'del') {
+      if (!confirm('Obrisati ovu uplatu?')) return;
+      const snapshot = JSON.stringify(list);
+      list.splice(idx, 1);
+      if (await saveData()) { m.close(); renderSto(); }
+      else state.stoStanje.uplate = JSON.parse(snapshot);
+      return;
+    }
+    if (btn.dataset.act === 'save') {
+      const date = euToISO(dateInp.value.trim());
+      if (!date) {
+        toast('Datum mora biti u formatu DD/MM/YYYY', 'error');
+        dateInp.classList.add('invalid');
+        dateInp.focus();
+        return;
+      }
+      const amount = round2(parseEUAmount(amountInp.value));
+      if (!(amount > 0)) { toast('Unesi iznos uplate', 'error'); amountInp.focus(); return; }
+      const newU = { ...u, date, amount, note: m.root.querySelector('#su-note').value.trim() };
+      if (!newU.created) newU.created = nowISO();
+      const snapshot = JSON.stringify(list);
+      if (idx !== null) list[idx] = newU; else list.push(newU);
+      if (await saveData()) { m.close(); renderSto(); }
+      else state.stoStanje.uplate = JSON.parse(snapshot);
+    }
+  });
+}
+
+/* SR-IOS-PARSER-START */
+/* IOS (Izvod otvorenih stavki, STO Gmbh) · redak stavke:
+   "17.06.2026 7658-01-91 512172 IFAN Izl.rn. 7658-01-91 01.08.2026 5.179,68 3.391,53 3.391,53"
+   Datum · Vezni dok. · Lok.dok. · Kl.dok. · Opis · Valuta · Iznos · Otvoreno · Saldo */
+const IOS_MONEY_SRC = '(-?\\d{1,3}(?:\\.\\d{3})*,\\d{2})';
+const IOS_ROW_RE = new RegExp('^(\\d{2}\\.\\d{2}\\.\\d{4})\\s+(\\S+)\\s+\\S+\\s+\\S+\\s+Izl\\.rn\\.\\s+\\S+\\s+(\\d{2}\\.\\d{2}\\.\\d{4})\\s+' + IOS_MONEY_SRC + '\\s+' + IOS_MONEY_SRC + '\\s+' + IOS_MONEY_SRC + '$');
+const IOS_TOTAL_RE = new RegExp('^' + IOS_MONEY_SRC + '\\s+' + IOS_MONEY_SRC + '\\s+' + IOS_MONEY_SRC + '$');
+const IOS_HEAD_RE = /Izvod otvorenih stavki.*?na dan\s+(\d{2}\.\d{2}\.\d{4})/i;
+function iosDateToISO(s) {
+  const m = String(s || '').match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : '';
+}
+function parseStoIosRows(rows) {
+  const out = { datum: '', stavke: [], total: null, sumOtvoreno: 0 };
+  for (const raw of rows) {
+    const line = String(raw || '').replace(/\s+/g, ' ').trim();
+    if (!line) continue;
+    if (!out.datum) {
+      const h = line.match(IOS_HEAD_RE);
+      if (h) out.datum = iosDateToISO(h[1]);
+    }
+    let m = line.match(IOS_ROW_RE);
+    if (m) {
+      out.stavke.push({ datum: iosDateToISO(m[1]), broj: m[2], valuta: iosDateToISO(m[3]), iznos: parseEUAmount(m[4]), otvoreno: parseEUAmount(m[5]) });
+      continue;
+    }
+    m = line.match(IOS_TOTAL_RE);
+    if (m && out.stavke.length && out.total === null) out.total = { iznos: parseEUAmount(m[1]), otvoreno: parseEUAmount(m[2]) };
+  }
+  out.sumOtvoreno = round2(out.stavke.reduce((a, s) => a + (Number(s.otvoreno) || 0), 0));
+  return out;
+}
+/* SR-IOS-PARSER-END */
+
+/* Korak 1: PDF IOS-a (ili ručni unos datuma i iznosa) */
+function stoIosModal() {
+  ensureStoStanje();
+  const cur = state.stoStanje.ios;
+  const html = `
+    <div class="modal-title">Novi IOS</div>
+    <div class="modal-sub">Ubaci PDF „Izvod otvorenih stavki" koji pošalje STO. Aplikacija ga pročita, usporedi sa svojim stanjem na taj dan i tek na tvoju potvrdu preuzme kao novo početno stanje. Trenutni IOS (${isoToEU(cur.datum)} · ${eur(cur.iznos, 2)}) ostaje arhiviran.</div>
+    <label id="ios-drop" class="sto-ios-drop">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 12 15 15"/></svg>
+      <span><strong style="color: var(--ink);">Odaberi PDF IOS-a</strong> ili ga dovuci ovdje</span>
+      <span style="font-size: 12px;">Tekstualni PDF kakav šalje STO, ne skenirana slika</span>
+      <input type="file" id="ios-file" accept="application/pdf,.pdf" style="display: none;">
+    </label>
+    <div id="ios-status" class="field-hint" style="min-height: 16px; margin-top: 10px;"></div>
+    <div class="field" style="margin-top: 10px;">
+      <label class="field-label">…ili upiši ručno</label>
+      <div class="grid grid-2" style="gap: 10px;">
+        <input class="input" id="ios-date" type="text" inputmode="numeric" placeholder="Datum IOS-a · DD/MM/YYYY" maxlength="10">
+        <input class="input num" id="ios-amount" type="text" inputmode="decimal" placeholder="Otvoreno · 0,00">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-act="cancel">Odustani</button>
+      <button class="btn btn-primary" data-act="manual">Dalje</button>
+    </div>
+  `;
+  const m = modal(html, { wide: true });
+  attachEUDateMask(m.root.querySelector('#ios-date'));
+  attachEUAmountMask(m.root.querySelector('#ios-amount'));
+  const status = (msg) => { const el = m.root.querySelector('#ios-status'); if (el) el.textContent = msg; };
+
+  const handleFile = async (file) => {
+    if (!file) return;
+    if (!/pdf$/i.test(file.type || '') && !/\.pdf$/i.test(file.name || '')) {
+      toast('Odaberi PDF datoteku', 'error');
+      return;
+    }
+    try {
+      status('Učitavam PDF modul…');
+      await loadPdfJs();
+      status(`Čitam ${file.name}…`);
+      const rows = await extractPdfRows(file);
+      const parsed = parseStoIosRows(rows);
+      if (!parsed.datum || (!parsed.total && !parsed.stavke.length)) {
+        status('');
+        toast('Ovo ne izgleda kao STO IOS (nema datuma ili stavki). Provjeri PDF ili upiši ručno.', 'error', 4200);
+        return;
+      }
+      m.close();
+      setTimeout(() => stoIosReview(parsed), 30);
+    } catch (err) {
+      console.error('IOS import:', err);
+      status('');
+      toast('Greška pri čitanju PDF-a: ' + (err.message || err), 'error', 4000);
+    }
+  };
+
+  const drop = m.root.querySelector('#ios-drop');
+  const fileInp = m.root.querySelector('#ios-file');
+  fileInp.addEventListener('change', () => handleFile(fileInp.files && fileInp.files[0]));
+  drop.addEventListener('dragover', e => { e.preventDefault(); drop.style.borderColor = 'var(--acc)'; });
+  drop.addEventListener('dragleave', () => { drop.style.borderColor = 'var(--line)'; });
+  drop.addEventListener('drop', e => {
+    e.preventDefault();
+    drop.style.borderColor = 'var(--line)';
+    handleFile(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]);
+  });
+
+  m.root.addEventListener('click', e => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    if (btn.dataset.act === 'cancel') { m.close(); return; }
+    if (btn.dataset.act === 'manual') {
+      const dateInp = m.root.querySelector('#ios-date');
+      const datum = euToISO(dateInp.value.trim());
+      const iznos = round2(parseEUAmount(m.root.querySelector('#ios-amount').value));
+      if (!datum) { toast('Upiši datum IOS-a (DD/MM/YYYY) ili odaberi PDF', 'error'); dateInp.classList.add('invalid'); dateInp.focus(); return; }
+      if (!(Math.abs(iznos) > 0)) { toast('Upiši otvoreni iznos iz IOS-a', 'error'); m.root.querySelector('#ios-amount').focus(); return; }
+      m.close();
+      setTimeout(() => stoIosReview({ datum, stavke: [], total: { iznos: iznos, otvoreno: iznos }, sumOtvoreno: iznos, manual: true }), 30);
+    }
+  });
+}
+
+/* Korak 2: usklađenje (STO vs aplikacija na taj dan) i preuzimanje kao početno stanje */
+function stoIosReview(parsed) {
+  ensureStoStanje();
+  const cur = state.stoStanje.ios;
+  const datum = parsed.datum;
+  const stoIznos = round2(parsed.total ? (Number(parsed.total.otvoreno) || 0) : parsed.sumOtvoreno);
+  const stavkeMismatch = !!(parsed.total && parsed.stavke.length && Math.abs(round2(parsed.total.otvoreno) - parsed.sumOtvoreno) >= 0.005);
+  const stariji = datum < cur.datum;
+  const c = computeStoStanje(datum);
+  const appIznos = stariji ? null : c.stanje;
+  const razlika = appIznos === null ? null : round2(stoIznos - appIznos);
+  const ok = razlika !== null && Math.abs(razlika) < 0.005;
+  const isti = datum === cur.datum && Math.abs(stoIznos - (Number(cur.iznos) || 0)) < 0.005;
+
+  let hint;
+  if (stariji) hint = `Ovaj IOS (${isoToEU(datum)}) je stariji od trenutnog početnog stanja (${isoToEU(cur.datum)}), pa ga ne mogu usporediti s aplikacijom. Preuzmi ga samo ako si siguran.`;
+  else if (ok) hint = 'Aplikacija i STO se slažu na cent. Preuzimanjem ovaj IOS postaje novo početno stanje, a računi i uplate do tog datuma više ne ulaze u izračun (već su u njemu).';
+  else hint = `Razlika ${eur(razlika, 2)}: ${razlika > 0 ? 'STO ima više otvorenog nego aplikacija, pa u aplikaciji vjerojatno fali račun ili je viška uplata.' : 'Aplikacija ima više otvorenog nego STO, pa vjerojatno fali odobrenje ili uplata, ili je račun unesen dvaput.'} Provjeri prije preuzimanja; možeš i svejedno preuzeti IOS, STO-ov iznos tada postaje početno stanje.`;
+
+  const html = `
+    <div class="modal-title">Novi IOS · usklađenje</div>
+    <div class="modal-sub">${parsed.manual ? 'Ručni unos.' : `Pročitano iz PDF-a: ${parsed.stavke.length} ${parsed.stavke.length === 1 ? 'stavka' : (parsed.stavke.length >= 2 && parsed.stavke.length <= 4) ? 'stavke' : 'stavki'}.`} Usporedba stanja STO-a i aplikacije na dan ${isoToEU(datum)}.</div>
+    <div class="kpi-row" style="margin-bottom: 16px; grid-template-columns: 1fr 1fr;">
+      <div class="kpi-cell"><div class="stat-label">IOS na dan</div><div class="stat-value" style="font-size: 22px;">${isoToEU(datum)}</div><div class="stat-sub">${parsed.manual ? 'ručni unos' : 'pročitano iz PDF-a'}</div></div>
+      <div class="kpi-cell"><div class="stat-label">STO kaže otvoreno</div><div class="stat-value" style="font-size: 22px;">${eur(stoIznos, 2)}</div>${stavkeMismatch ? `<div class="stat-sub" style="color: var(--negative);">zbroj stavki ${eur(parsed.sumOtvoreno, 2)} ≠ ukupno</div>` : ''}</div>
+      <div class="kpi-cell"><div class="stat-label">Aplikacija na taj dan</div><div class="stat-value" style="font-size: 22px;">${appIznos === null ? '—' : eur(appIznos, 2)}</div>${appIznos === null ? '' : `<div class="stat-sub">IOS ${isoToEU(cur.datum)} + računi − uplate do ${isoToEU(datum)}</div>`}</div>
+      <div class="kpi-cell"><div class="stat-label">Razlika</div><div class="stat-value ${razlika === null ? 'muted' : ok ? 'positive' : 'negative'}" style="font-size: 22px;">${razlika === null ? '—' : eur(razlika, 2)}</div>${ok ? '<div class="stat-sub" style="color: var(--positive);">✓ usklađeno</div>' : ''}</div>
+    </div>
+    <div class="field-hint" style="font-style: normal; font-size: 12px; line-height: 1.6;">${hint}</div>
+    <div class="modal-actions">
+      <button class="btn" data-act="back">Natrag</button>
+      <button class="btn btn-primary" data-act="confirm">${isti ? 'Osvježi početno stanje' : 'Preuzmi kao početno stanje'}</button>
+    </div>
+  `;
+  const m = modal(html, { wide: true });
+  m.root.addEventListener('click', async e => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    if (btn.dataset.act === 'back') {
+      m.close();
+      setTimeout(() => stoIosModal(), 30);
+      return;
+    }
+    if (btn.dataset.act === 'confirm') {
+      if (!ok && !confirm(`Stanje nije usklađeno (razlika ${razlika === null ? 'nepoznata' : eur(razlika, 2)}). Svejedno preuzeti IOS ${isoToEU(datum)} kao početno stanje?`)) return;
+      const snapshot = JSON.stringify(state.stoStanje);
+      state.stoStanje.iosHistory.push({ ...cur, zamijenjeno: todayISO(), appNaDan: appIznos, razlika });
+      state.stoStanje.ios = {
+        datum,
+        iznos: stoIznos,
+        izvor: parsed.manual ? 'ručni unos' : 'IOS PDF',
+        stavke: parsed.stavke.map(s => ({ ...s })),
+        ucitano: nowISO(),
+      };
+      if (await saveData()) {
+        m.close();
+        toast(`Početno stanje: IOS ${isoToEU(datum)} · ${eur(stoIznos, 2)}`, 'success', 3200);
+        renderSto();
+      } else {
+        state.stoStanje = JSON.parse(snapshot);
+      }
     }
   });
 }
@@ -5305,6 +5784,9 @@ async function boot() {
 
   // Registar (godišnji odmori + rokovi i podsjetnici)
   ensureRegistar();
+
+  // STO stanje (IOS + uplate); seed iz IOS-a 26.08.2026 ako još ne postoji
+  ensureStoStanje();
 
   // Defaultiraj na trenutni kalendarski mjesec (a ne na zadnji mjesec u podacima),
   // tako da ako je netko slučajno otvorio buduće mjesece, navigacija počinje "danas"
