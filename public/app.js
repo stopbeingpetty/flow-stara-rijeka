@@ -27,6 +27,7 @@ let activeTab = 'cashflow';
 let activeMonth = '2026-04';   // current default
 let stoView = 'month';   // 'month' | 'year'
 let activeProject = null;       // null = pregled svih, string = detalj projekta
+let projectsGroup = null;       // null = odabir grupe, 'tekuci' | 'zavrseni' = lista projekata grupe
 let projectsFilter = 'aktivni'; // 'aktivni' | 'svi'
 let trxView = 'month';   // 'month' | 'year'
 const charts = {};       // Chart.js instances (so we can destroy)
@@ -3683,8 +3684,10 @@ function computeProjectsData() {
     p.ponuda = (ob && Number(ob.ponuda) > 0) ? round2(Number(ob.ponuda)) : null;
     p.ponudaStavke = (ob && Array.isArray(ob.ponudaStavke)) ? ob.ponudaStavke : [];
     p.zakljucen = !!(ob && ob.zakljucen);
+    p.troskoviRucni = (ob && Array.isArray(ob.troskovi)) ? ob.troskovi : [];
+    p.trosakRucni = round2(p.troskoviRucni.reduce((a, t) => a + (Number(t.amount) || 0), 0));
     p.materijalBezPdv = round2(p.materijal / 1.25);
-    p.trosak = round2(p.materijalBezPdv + p.rad);
+    p.trosak = round2(p.materijalBezPdv + p.rad + p.trosakRucni);
     p.zarada = p.naplaceno > 0 ? round2(p.naplaceno - p.trosak) : null;
     p.marza = p.naplaceno > 0 ? (p.zarada / p.naplaceno) * 100 : null;
   }
@@ -3711,15 +3714,46 @@ function renderProjects() {
   const tekuci = real.filter(p => !p.zakljucen).sort(byActivity);
   const zavrseni = real.filter(p => p.zakljucen).sort(byActivity);
 
-  const pickRow = (p) => `
-    <div class="pick-row${p.zakljucen ? ' done' : ''}" data-proj="${escapeHtml(p.name)}">
-      <span class="nm">${escapeHtml(p.name)}</span>
-      <span class="side">
-        ${p.zakljucen ? '<span class="pill gray">✓ završen</span>' : (p.isActive ? '<span class="pill brown">aktivan</span>' : '')}
-        <span class="chev">›</span>
-      </span>
-    </div>`;
+  /* ---- Razina 2: lista projekata odabrane grupe ---- */
+  if (projectsGroup === 'tekuci' || projectsGroup === 'zavrseni') {
+    const isTek = projectsGroup === 'tekuci';
+    const group = isTek ? tekuci : zavrseni;
+    const pickRow = (p) => `
+      <div class="pick-row${p.zakljucen ? ' done' : ''}" data-proj="${escapeHtml(p.name)}">
+        <span class="nm">${escapeHtml(p.name)}</span>
+        <span class="side">
+          ${!p.zakljucen && p.isActive ? '<span class="pill brown">aktivan</span>' : ''}
+          <span class="chev">›</span>
+        </span>
+      </div>`;
 
+    panel.innerHTML = `
+      <div class="page-head">
+        <div class="page-title-block">
+          <button class="proj-back" id="grp-back">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            Projekti
+          </button>
+          <h1 class="page-title">${isTek ? 'Tekući' : 'Završeni'} <em>· ${group.length} ${hrPlural(group.length, 'projekt', 'projekta', 'projekata')}</em></h1>
+        </div>
+      </div>
+      ${group.length
+        ? `<div class="pick-list">${group.map(pickRow).join('')}</div>`
+        : `<div class="empty" style="padding: 20px; text-align: left;">${isTek ? 'Nema tekućih projekata.' : 'Još nijedan projekt nije zaključen.'}</div>`}
+    `;
+
+    panel.querySelector('#grp-back').addEventListener('click', () => {
+      projectsGroup = null;
+      renderProjects();
+    });
+    panel.querySelectorAll('.pick-row[data-proj]').forEach(row => row.addEventListener('click', () => {
+      activeProject = row.dataset.proj;
+      renderProjects();
+    }));
+    return;
+  }
+
+  /* ---- Razina 1: odabir grupe ---- */
   panel.innerHTML = `
     <div class="page-head">
       <div class="page-title-block">
@@ -3727,14 +3761,18 @@ function renderProjects() {
         <h1 class="page-title">Projekti</h1>
       </div>
     </div>
-    <div style="font-size: 13.5px; color: var(--muted); margin: -12px 0 2px;">Odaberi projekt za obračun i sve detalje</div>
+    <div style="font-size: 13.5px; color: var(--muted); margin: -12px 0 14px;">Odaberi grupu, zatim projekt</div>
 
-    <div class="pick-h">Tekući · ${tekuci.length}</div>
-    ${tekuci.length ? `<div class="pick-list">${tekuci.map(pickRow).join('')}</div>` : `<div class="empty" style="padding: 16px; text-align: left;">Nema tekućih projekata.</div>`}
-
-    ${zavrseni.length ? `
-    <div class="pick-h">Završeni · ${zavrseni.length}</div>
-    <div class="pick-list">${zavrseni.map(pickRow).join('')}</div>` : ''}
+    <div class="pick-list">
+      <div class="pick-row" data-group="tekuci">
+        <span class="nm">Tekući</span>
+        <span class="side"><span class="pill brown">${tekuci.length}</span><span class="chev">›</span></span>
+      </div>
+      <div class="pick-row" data-group="zavrseni">
+        <span class="nm">Završeni</span>
+        <span class="side"><span class="pill gray">${zavrseni.length}</span><span class="chev">›</span></span>
+      </div>
+    </div>
 
     ${none ? `
     <div class="pick-h">Neraspoređeno</div>
@@ -3769,6 +3807,10 @@ function renderProjects() {
     ` : ''}
   `;
 
+  panel.querySelectorAll('.pick-row[data-group]').forEach(row => row.addEventListener('click', () => {
+    projectsGroup = row.dataset.group;
+    renderProjects();
+  }));
   panel.querySelectorAll('.pick-row[data-proj]').forEach(row => row.addEventListener('click', () => {
     activeProject = row.dataset.proj;
     renderProjects();
@@ -3845,6 +3887,7 @@ function ensureObracunRec(name) {
   const rec = state.obracun[name];
   if (!Array.isArray(rec.uplate)) rec.uplate = [];
   if (!Array.isArray(rec.ponudaStavke)) rec.ponudaStavke = [];
+  if (!Array.isArray(rec.troskovi)) rec.troskovi = [];
   return rec;
 }
 
@@ -3940,6 +3983,65 @@ function obUplataModal(projName, idx = null) {
       if (idx !== null) list[idx] = newU; else list.push(newU);
       if (await saveData()) { m.close(); renderProjects(); }
       else rec.uplate = JSON.parse(snapshot);
+    }
+  });
+}
+
+/* Novi / uredi ručni trošak projekta (podizvođači, najam, kontejner…) */
+function obTrosakModal(projName, idx = null) {
+  const rec = ensureObracunRec(projName);
+  const list = rec.troskovi;
+  const t = idx !== null ? list[idx] : { date: todayISO(), amount: 0, note: '' };
+  if (!t) return;
+  const html = `
+    <div class="modal-title">${idx !== null ? 'Uredi trošak' : 'Novi trošak'} · ${escapeHtml(projName)}</div>
+    <div class="modal-sub">Trošak koji nije pokriven STO materijalom ni satima — podizvođač, najam, kontejner, gorivo… Ulazi u „Trošak ukupno" i smanjuje zaradu.</div>
+    <div class="grid grid-2" style="gap: 14px;">
+      <div class="field"><label class="field-label">Datum</label><input class="input" id="ot-date" type="text" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" value="${isoToEU(t.date)}"></div>
+      <div class="field"><label class="field-label">Iznos (€ bez PDV)</label><input class="input num" id="ot-amount" type="text" inputmode="decimal" placeholder="0,00" value="${t.amount ? formatEUAmount(t.amount) : ''}"></div>
+      <div class="field" style="grid-column: 1 / -1;"><label class="field-label">Opis</label><input class="input" id="ot-note" value="${escapeHtml(t.note || '')}" placeholder="Npr. Podizvođač — knauf stropovi, najam skele, kontejner"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-act="cancel">Odustani</button>
+      ${idx !== null ? '<button class="btn btn-danger" data-act="del">Obriši</button>' : ''}
+      <button class="btn btn-primary" data-act="save">${idx !== null ? 'Spremi' : 'Dodaj'}</button>
+    </div>
+  `;
+  const m = modal(html);
+  const dateInp = m.root.querySelector('#ot-date');
+  const amountInp = m.root.querySelector('#ot-amount');
+  attachEUDateMask(dateInp);
+  attachEUAmountMask(amountInp);
+  if (idx === null) setTimeout(() => amountInp.focus(), 50);
+
+  m.root.addEventListener('click', async e => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    if (btn.dataset.act === 'cancel') { m.close(); return; }
+    if (btn.dataset.act === 'del') {
+      if (!confirm('Obrisati ovaj trošak?')) return;
+      const snapshot = JSON.stringify(list);
+      list.splice(idx, 1);
+      if (await saveData()) { m.close(); renderProjects(); }
+      else rec.troskovi = JSON.parse(snapshot);
+      return;
+    }
+    if (btn.dataset.act === 'save') {
+      const date = euToISO(dateInp.value.trim());
+      if (!date) {
+        toast('Datum mora biti u formatu DD/MM/YYYY', 'error');
+        dateInp.classList.add('invalid');
+        dateInp.focus();
+        return;
+      }
+      const amount = round2(parseEUAmount(amountInp.value));
+      if (!(amount > 0)) { toast('Unesi iznos troška', 'error'); amountInp.focus(); return; }
+      const newT = { ...t, date, amount, note: m.root.querySelector('#ot-note').value.trim() };
+      if (!newT.created) newT.created = nowISO();
+      const snapshot = JSON.stringify(list);
+      if (idx !== null) list[idx] = newT; else list.push(newT);
+      if (await saveData()) { m.close(); renderProjects(); }
+      else rec.troskovi = JSON.parse(snapshot);
     }
   });
 }
@@ -4192,6 +4294,17 @@ function bindObracunDetail(panel, p) {
     if (await saveData()) renderProjects();
     else rec.uplate = JSON.parse(snapshot);
   }));
+  panel.querySelector('#ob-trosak-add')?.addEventListener('click', () => obTrosakModal(p.name));
+  panel.querySelectorAll('[data-ob-tr-edit]').forEach(el => el.addEventListener('click', () => obTrosakModal(p.name, parseInt(el.dataset.obTrEdit))));
+  panel.querySelectorAll('[data-ob-tr-del]').forEach(el => el.addEventListener('click', async e => {
+    e.stopPropagation();
+    if (!confirm('Obrisati ovaj trošak?')) return;
+    const rec = ensureObracunRec(p.name);
+    const snapshot = JSON.stringify(rec.troskovi);
+    rec.troskovi.splice(parseInt(el.dataset.obTrDel), 1);
+    if (await saveData()) renderProjects();
+    else rec.troskovi = JSON.parse(snapshot);
+  }));
   panel.querySelector('#ob-ponuda-edit')?.addEventListener('click', () => obPonudaModal(p.name));
   panel.querySelector('#ob-ponuda-manual')?.addEventListener('click', () => obPonudaModal(p.name));
   const drop = panel.querySelector('#ob-ponuda-drop');
@@ -4247,7 +4360,9 @@ function renderProjectDetail(p) {
   const nonItemized = Math.max(0, round2(p.materijal - itemizedTotal));
 
   /* ---- Obračun (mockup v3): izračuni za KPI, raspodjelu, ponudu i uplate ---- */
+  projectsGroup = isNone ? null : (p.zakljucen ? 'zavrseni' : 'tekuci');
   const uplateSorted = (p.uplate || []).map((u, i) => ({ ...u, __i: i })).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  const troskoviSorted = (p.troskoviRucni || []).map((t, i) => ({ ...t, __i: i })).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
   const hasNapl = p.naplaceno > 0;
   const hasPonuda = p.ponuda !== null && p.ponuda !== undefined;
   const razlika = (hasPonuda && hasNapl) ? round2(p.naplaceno - p.ponuda) : null;
@@ -4276,7 +4391,7 @@ function renderProjectDetail(p) {
       <div class="kpi-cell">
         <div class="stat-label">Trošak ukupno</div>
         <div class="stat-value">${eur(p.trosak, 0)}</div>
-        <div class="stat-sub">materijal bez PDV + rad</div>
+        <div class="stat-sub">${p.trosakRucni > 0 ? 'materijal + rad + ostalo' : 'materijal bez PDV + rad'}</div>
       </div>
       ${hasNapl ? `
       <div class="kpi-cell" style="background: var(${gubitak ? '--negative-soft' : '--positive-soft'});">
@@ -4309,10 +4424,18 @@ function renderProjectDetail(p) {
   let raspodjelaHtml = '';
   if (!isNone && hasNapl) {
     const segLbl = (w) => w >= 9 ? pct1(w) : '';
+    const ostaloLegend = (base) => p.trosakRucni > 0 ? `
+      <div class="ob-legend-row">
+        <span class="sw" style="background: var(--muted);"></span>
+        <span>Ostali troškovi <span style="color: var(--muted); font-size: 12.5px;">(ručni unos)</span></span>
+        <span class="amt">${eur(p.trosakRucni, 0)}</span>
+        <span class="pct">${pct1((p.trosakRucni / base) * 100)}</span>
+      </div>` : '';
     if (!gubitak) {
       const wMat = (p.materijalBezPdv / p.naplaceno) * 100;
       const wRad = (p.rad / p.naplaceno) * 100;
-      const wZar = Math.max(0, 100 - wMat - wRad);
+      const wOst = (p.trosakRucni / p.naplaceno) * 100;
+      const wZar = Math.max(0, 100 - wMat - wRad - wOst);
       raspodjelaHtml = `
     <div class="card" style="margin-bottom: 24px;">
       <div class="card-head">
@@ -4324,6 +4447,7 @@ function renderProjectDetail(p) {
       <div class="ob-bar">
         ${wMat > 0.05 ? `<span style="width: ${wMat.toFixed(2)}%; background: var(--acc-projects);" title="Materijal ${pct1(wMat)}">${segLbl(wMat)}</span>` : ''}
         ${wRad > 0.05 ? `<span style="width: ${wRad.toFixed(2)}%; background: var(--acc-cashflow);" title="Rad ${pct1(wRad)}">${segLbl(wRad)}</span>` : ''}
+        ${wOst > 0.05 ? `<span style="width: ${wOst.toFixed(2)}%; background: var(--muted);" title="Ostali troškovi ${pct1(wOst)}">${segLbl(wOst)}</span>` : ''}
         ${wZar > 0.05 ? `<span style="width: ${wZar.toFixed(2)}%; background: var(--positive);" title="Zarada ${pct1(wZar)}">${segLbl(wZar)}</span>` : ''}
       </div>
       <div class="ob-legend-row">
@@ -4338,6 +4462,7 @@ function renderProjectDetail(p) {
         <span class="amt">${eur(p.rad, 0)}</span>
         <span class="pct">${pct1(wRad)}</span>
       </div>
+      ${ostaloLegend(p.naplaceno)}
       <div class="ob-legend-row">
         <span class="sw" style="background: var(--positive);"></span>
         <span><strong>Zarada</strong></span>
@@ -4348,7 +4473,8 @@ function renderProjectDetail(p) {
     } else {
       const base = p.trosak > 0 ? p.trosak : 1;
       const wMat = (p.materijalBezPdv / base) * 100;
-      const wRad = Math.max(0, 100 - wMat);
+      const wRad = (p.rad / base) * 100;
+      const wOst = Math.max(0, 100 - wMat - wRad);
       raspodjelaHtml = `
     <div class="card" style="margin-bottom: 24px;">
       <div class="card-head">
@@ -4360,6 +4486,7 @@ function renderProjectDetail(p) {
       <div class="ob-bar">
         ${wMat > 0.05 ? `<span style="width: ${wMat.toFixed(2)}%; background: var(--acc-projects);" title="Materijal ${pct1(wMat)}">${segLbl(wMat)}</span>` : ''}
         ${wRad > 0.05 ? `<span style="width: ${wRad.toFixed(2)}%; background: var(--acc-cashflow);" title="Rad ${pct1(wRad)}">${segLbl(wRad)}</span>` : ''}
+        ${p.trosakRucni > 0 && wOst > 0.05 ? `<span style="width: ${wOst.toFixed(2)}%; background: var(--muted);" title="Ostali troškovi ${pct1(wOst)}">${segLbl(wOst)}</span>` : ''}
       </div>
       <div class="ob-legend-row">
         <span class="sw" style="background: var(--acc-projects);"></span>
@@ -4373,6 +4500,7 @@ function renderProjectDetail(p) {
         <span class="amt">${eur(p.rad, 0)}</span>
         <span class="pct">${pct1(wRad)}</span>
       </div>
+      ${ostaloLegend(base)}
       <div class="ob-legend-row">
         <span class="sw" style="background: var(--negative);"></span>
         <span><strong>Gubitak</strong> <span style="color: var(--muted); font-size: 12.5px;">(naplaćeno − trošak)</span></span>
@@ -4470,9 +4598,10 @@ function renderProjectDetail(p) {
     <div class="card" style="margin-bottom: 24px;">
       <div class="card-head">
         <div>
-          <div class="card-title">Trošak — automatski</div>
-          <div class="card-sub">Iz STO taba i Evidencije sati — ništa se ne upisuje dvaput</div>
+          <div class="card-title">Trošak</div>
+          <div class="card-sub">Materijal i rad automatski iz STO taba i Evidencije sati · ostale troškove dodaješ sam</div>
         </div>
+        ${isAdmin && !isNone ? '<button class="btn btn-sm" id="ob-trosak-add">+ Dodaj trošak</button>' : ''}
       </div>
       <table class="table">
         <tbody>
@@ -4482,6 +4611,14 @@ function renderProjectDetail(p) {
           <tr><td>Sati ukupno</td><td class="num text-right">${FMT_INT.format(p.sati)} h</td></tr>
           <tr><td>Radni dani</td><td class="num text-right">${p.dani}</td></tr>
           ${p.dani > 0 ? `<tr><td>Prosjek troška po danu</td><td class="num text-right">${eur(p.trosak / p.dani, 2)}</td></tr>` : ''}
+          ${troskoviSorted.length ? `
+          <tr><td colspan="2" style="padding-top: 16px; border-bottom: none;"><span class="stat-label">Ostali troškovi · ručni unos</span></td></tr>
+          ${troskoviSorted.map(t => `
+          <tr${isAdmin ? ` data-ob-tr-edit="${t.__i}" style="cursor: pointer;" title="Klik za uređivanje"` : ''}>
+            <td>${escapeHtml(t.note || 'Trošak')} <span style="color: var(--muted-2); font-size: 12px; white-space: nowrap;">${isoToEU(t.date)}</span></td>
+            <td class="num text-right" style="white-space: nowrap;"><strong>${eur(Number(t.amount) || 0, 2)}</strong>${isAdmin ? ` <span data-ob-tr-del="${t.__i}" title="Obriši trošak" style="color: var(--muted-2); cursor: pointer; padding: 0 2px 0 8px; font-size: 15px;">×</span>` : ''}</td>
+          </tr>`).join('')}
+          <tr><td style="color: var(--muted);">Σ ostali troškovi</td><td class="num text-right" style="color: var(--muted);">${eur(p.trosakRucni, 2)}</td></tr>` : ''}
         </tbody>
         <tfoot>
           <tr><td>TROŠAK UKUPNO</td><td class="num text-right">${eur(p.trosak, 2)}</td></tr>
