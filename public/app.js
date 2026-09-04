@@ -312,6 +312,62 @@ function injectExtraCss() {
   `;
   document.head.appendChild(st);
 }
+
+/* CSS za obračun projekata (lista-odabir + detalj) — iz app.js da deploy ostane jedan file */
+function injectObracunCss() {
+  if (document.getElementById('sr-obracun-css')) return;
+  const st = document.createElement('style');
+  st.id = 'sr-obracun-css';
+  st.textContent = `
+    .pick-h { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); margin: 26px 0 8px; }
+    .pick-list { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-md); overflow: hidden; box-shadow: var(--shadow-sm); }
+    .pick-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 17px 20px; border-bottom: 1px solid var(--line); cursor: pointer; transition: background .15s var(--ease-snap); }
+    .pick-row:last-child { border-bottom: none; }
+    .pick-row:hover { background: var(--surface-2); }
+    .pick-row .nm { font-family: var(--font-display); font-size: 18px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pick-row .side { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+    .pick-row .chev { color: var(--muted-2); font-size: 18px; }
+    .pick-row.done .nm { color: var(--muted); font-weight: 500; }
+    .pill.brown { background: var(--acc-projects-soft); color: var(--acc-projects); }
+    .ob-bar { display: flex; height: 34px; border-radius: 10px; overflow: hidden; margin-bottom: 16px; background: var(--surface-2); }
+    .ob-bar span { display: flex; align-items: center; justify-content: center; color: #fff; font-family: var(--font-mono); font-size: 11.5px; font-weight: 600; min-width: 0; white-space: nowrap; overflow: hidden; }
+    .ob-legend-row { display: grid; grid-template-columns: 14px 1fr auto 62px; gap: 12px; align-items: center; padding: 11px 2px; border-bottom: 1px solid var(--line); font-size: 14px; }
+    .ob-legend-row:last-child { border-bottom: none; }
+    .ob-legend-row .sw { width: 12px; height: 12px; border-radius: 4px; }
+    .ob-legend-row .amt { font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+    .ob-legend-row .pct { font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); text-align: right; }
+    .ob-cmp-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: baseline; padding: 11px 2px; border-bottom: 1px solid var(--line); font-size: 14px; }
+    .ob-cmp-row:last-child { border-bottom: none; }
+    .ob-cmp-row .v { font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+    .delta-chip { display: inline-block; padding: 2px 8px; border-radius: 5px; font-family: var(--font-mono); font-size: 11.5px; font-weight: 600; }
+    .delta-chip.up { background: var(--positive-soft); color: var(--positive); }
+    .delta-chip.down { background: var(--negative-soft); color: var(--negative); }
+    .up-row { display: grid; grid-template-columns: 100px 120px 1fr auto; gap: 16px; align-items: center; padding: 11px 2px; border-bottom: 1px solid var(--line); font-size: 14px; }
+    .up-row[data-ob-up-edit] { cursor: pointer; }
+    .up-row[data-ob-up-edit]:hover { background: var(--surface-2); }
+    .up-row .d { font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); }
+    .up-row .a { font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+    .up-row .n { color: var(--ink-2); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .up-row .x { color: var(--muted-2); font-size: 16px; cursor: pointer; padding: 0 4px; }
+    .up-row .x:hover { color: var(--negative); }
+    .up-total { display: flex; justify-content: space-between; padding: 13px 2px 2px; font-weight: 650; border-top: 1px solid var(--line-strong); margin-top: 2px; font-variant-numeric: tabular-nums; }
+    .ob-drop { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; border: 2px dashed var(--line-strong); border-radius: 12px; padding: 22px 16px; text-align: center; color: var(--muted); font-size: 13px; cursor: pointer; transition: border-color .15s; }
+    .ob-drop:hover { border-color: var(--acc-projects); }
+    .ob-drop strong { color: var(--ink); font-size: 14px; }
+    @media (max-width: 719px) {
+      .pick-row { padding: 15px 16px; }
+      .pick-row .nm { font-size: 16.5px; }
+      .up-row { grid-template-columns: 1fr auto auto; grid-template-areas: "n a x" "d a x"; row-gap: 2px; gap: 6px 14px; }
+      .up-row .d { grid-area: d; }
+      .up-row .a { grid-area: a; }
+      .up-row .x { grid-area: x; }
+      .up-row .n { grid-area: n; white-space: normal; }
+      .ob-bar span { font-size: 10px; }
+      .ob-legend-row { grid-template-columns: 14px 1fr auto 52px; gap: 8px; }
+    }
+  `;
+  document.head.appendChild(st);
+}
 const monthLabel = (key) => {
   const [y, m] = key.split('-');
   return `${MONTH_NAMES_HR[parseInt(m, 10) - 1]} ${y}`;
@@ -773,6 +829,7 @@ async function saveData() {
   try {
     if (!state.forecast) state.forecast = [];
     if (!state.raspored) state.raspored = [];
+    if (!state.obracun || typeof state.obracun !== 'object' || Array.isArray(state.obracun)) state.obracun = {};
     ensureStoStanje();
     pruneEmptyMonths();
     await API.save(state);
@@ -3565,7 +3622,7 @@ const PROJ_NONE = '__bez_projekta__';
 function computeProjectsData() {
   const map = {};
   const ensure = (name) => {
-    if (!map[name]) map[name] = { name, materijal: 0, rad: 0, sati: 0, months: {}, workers: {}, stoCount: 0, lastActivity: '' };
+    if (!map[name]) map[name] = { name, materijal: 0, rad: 0, sati: 0, months: {}, workers: {}, stoCount: 0, lastActivity: '', daysSet: new Set() };
     return map[name];
   };
   const mEnsure = (p, k) => {
@@ -3588,9 +3645,12 @@ function computeProjectsData() {
         for (const wName of Object.keys(d.workers || {})) {
           const wd = d.workers[wName];
           if (!wd || !(wd.hours > 0)) continue;
+          const name = (wd.project || '').trim() || PROJ_NONE;
+          const pd = ensure(name);
+          if (d.date) pd.daysSet.add(d.date);
+          if (k > pd.lastActivity) pd.lastActivity = k;
           const w = state.settings.workers.find(x => x.name === wName);
           if (!w || !(w.satnica > 0)) continue;
-          const name = (wd.project || '').trim() || PROJ_NONE;
           const cost = wd.hours * w.satnica + (wd.marenda || 0);
           const p = ensure(name);
           p.rad += cost;
@@ -3614,6 +3674,19 @@ function computeProjectsData() {
     p.isActive = !!lastKey && (p.lastActivity === lastKey || p.lastActivity === prevKey);
     p.monthCount = Object.keys(p.months).length;
     p.workerCount = Object.keys(p.workers).length;
+    /* Obračun: radni dani + ručno uneseni podaci (uplate, ponuda, status) */
+    p.dani = p.daysSet ? p.daysSet.size : 0;
+    delete p.daysSet;
+    const ob = (state.obracun && typeof state.obracun === 'object') ? state.obracun[p.name] : null;
+    p.uplate = (ob && Array.isArray(ob.uplate)) ? ob.uplate : [];
+    p.naplaceno = round2(p.uplate.reduce((a, u) => a + (Number(u.amount) || 0), 0));
+    p.ponuda = (ob && Number(ob.ponuda) > 0) ? round2(Number(ob.ponuda)) : null;
+    p.ponudaStavke = (ob && Array.isArray(ob.ponudaStavke)) ? ob.ponudaStavke : [];
+    p.zakljucen = !!(ob && ob.zakljucen);
+    p.materijalBezPdv = round2(p.materijal / 1.25);
+    p.trosak = round2(p.materijalBezPdv + p.rad);
+    p.zarada = p.naplaceno > 0 ? round2(p.naplaceno - p.trosak) : null;
+    p.marza = p.naplaceno > 0 ? (p.zarada / p.naplaceno) * 100 : null;
   }
   return list;
 }
@@ -3628,93 +3701,49 @@ function renderProjects() {
 
   const panel = document.getElementById('panel-projects');
   const hiddenSet = new Set(state.hiddenProjects || []);
-  const realAll = all.filter(p => p.name !== PROJ_NONE).sort((a, b) => b.ukupno - a.ukupno);
+  const realAll = all.filter(p => p.name !== PROJ_NONE);
   const real = realAll.filter(p => !hiddenSet.has(p.name));
-  const removed = realAll.filter(p => hiddenSet.has(p.name));
+  const removed = realAll.filter(p => hiddenSet.has(p.name)).sort((a, b) => b.ukupno - a.ukupno);
   const removedTotal = removed.reduce((a, p) => a + p.ukupno, 0);
   const none = all.find(p => p.name === PROJ_NONE);
 
-  const visible = none ? [...real, none] : real;
-  const totMat = visible.reduce((a, p) => a + p.materijal, 0);
-  const totRad = visible.reduce((a, p) => a + p.rad, 0);
-  const activeCount = real.filter(p => p.isActive).length;
+  const byActivity = (a, b) => (b.lastActivity || '').localeCompare(a.lastActivity || '') || a.name.localeCompare(b.name, 'hr');
+  const tekuci = real.filter(p => !p.zakljucen).sort(byActivity);
+  const zavrseni = real.filter(p => p.zakljucen).sort(byActivity);
 
-  // Filter: ako nema aktivnih, prikaži sve bez obzira na toggle
-  const effFilter = (projectsFilter === 'aktivni' && activeCount > 0) ? 'aktivni' : 'svi';
-  const shown = effFilter === 'aktivni' ? real.filter(p => p.isActive) : real;
-  const hiddenCount = real.length - shown.length;
+  const pickRow = (p) => `
+    <div class="pick-row${p.zakljucen ? ' done' : ''}" data-proj="${escapeHtml(p.name)}">
+      <span class="nm">${escapeHtml(p.name)}</span>
+      <span class="side">
+        ${p.zakljucen ? '<span class="pill gray">✓ završen</span>' : (p.isActive ? '<span class="pill brown">aktivan</span>' : '')}
+        <span class="chev">›</span>
+      </span>
+    </div>`;
 
   panel.innerHTML = `
     <div class="page-head">
       <div class="page-title-block">
-        <div class="page-eyebrow">Materijal + rad · YTD 2026</div>
-        <h1 class="page-title">Projekti <em>· troškovi</em></h1>
-      </div>
-      <div class="page-actions">
-        <div class="toggle">
-          <button class="${effFilter === 'aktivni' ? 'active' : ''}" data-pfilter="aktivni">Aktivni</button>
-          <button class="${effFilter === 'svi' ? 'active' : ''}" data-pfilter="svi">Svi</button>
-        </div>
+        <div class="page-eyebrow">Obračun · troškovi · zarada</div>
+        <h1 class="page-title">Projekti</h1>
       </div>
     </div>
+    <div style="font-size: 13.5px; color: var(--muted); margin: -12px 0 2px;">Odaberi projekt za obračun i sve detalje</div>
 
-    <div class="kpi-row" style="margin-bottom: 24px;">
-      <div class="kpi-cell">
-        <div class="stat-label">Ukupno</div>
-        <div class="stat-value">${eur(totMat + totRad, 0)}</div>
-        <div class="stat-sub">materijal + rad${removed.length ? ` · bez ${removed.length} uklonjenih (${eur(removedTotal, 0)})` : ''}</div>
-      </div>
-      <div class="kpi-cell">
-        <div class="stat-label">Materijal (STO)</div>
-        <div class="stat-value">${eur(totMat, 0)}</div>
-      </div>
-      <div class="kpi-cell">
-        <div class="stat-label">Rad (sati)</div>
-        <div class="stat-value">${eur(totRad, 0)}</div>
-      </div>
-      <div class="kpi-cell">
-        <div class="stat-label">Aktivnih projekata</div>
-        <div class="stat-value">${activeCount}</div>
-        <div class="stat-sub">od ukupno ${real.length}</div>
-      </div>
-    </div>
+    <div class="pick-h">Tekući · ${tekuci.length}</div>
+    ${tekuci.length ? `<div class="pick-list">${tekuci.map(pickRow).join('')}</div>` : `<div class="empty" style="padding: 16px; text-align: left;">Nema tekućih projekata.</div>`}
 
-    <div class="proj-grid">
-      ${shown.length === 0 ? `<div class="empty">Nema projekata za prikaz.</div>` : shown.map(p => {
-        const pctMat = p.ukupno > 0 ? (p.materijal / p.ukupno) * 100 : 0;
-        return `
-        <div class="proj-card" data-proj="${escapeHtml(p.name)}">
-          <div class="proj-card-head">
-            <div class="proj-card-name">
-              ${escapeHtml(p.name)}
-              ${p.isActive ? '<span class="pill green">aktivan</span>' : ''}
-            </div>
-            <div class="proj-card-total">${eur(p.ukupno, 0)}</div>
-          </div>
-          <div class="proj-split-bar">
-            <div class="proj-split-mat" style="width: ${pctMat.toFixed(1)}%;"></div>
-            <div class="proj-split-rad" style="width: ${(100 - pctMat).toFixed(1)}%;"></div>
-          </div>
-          <div class="proj-card-meta">
-            <span><span class="proj-legend-dot proj-split-mat"></span>Materijal ${eur(p.materijal, 0)} · <span class="proj-legend-dot proj-split-rad"></span>Rad ${eur(p.rad, 0)}</span>
-            <span>${p.sati > 0 ? FMT_INT.format(p.sati) + ' h · ' : ''}${p.monthCount} mj.${p.workerCount > 0 ? ' · ' + p.workerCount + ' radnika' : ''}</span>
-          </div>
-        </div>`;
-      }).join('')}
+    ${zavrseni.length ? `
+    <div class="pick-h">Završeni · ${zavrseni.length}</div>
+    <div class="pick-list">${zavrseni.map(pickRow).join('')}</div>` : ''}
 
-      ${effFilter === 'aktivni' && hiddenCount > 0 ? `
-        <button class="btn" data-pfilter="svi" style="align-self: center;">Prikaži sve projekte (još ${hiddenCount})</button>
-      ` : ''}
-
-      ${none ? `
-        <div class="proj-card proj-none-card" data-proj="${PROJ_NONE}">
-          <div class="proj-card-head" style="margin-bottom: 0;">
-            <div class="proj-card-name">Bez projekta — stavke i sati bez upisanog naziva</div>
-            <div class="proj-card-total">${eur(none.ukupno, 0)}</div>
-          </div>
-        </div>
-      ` : ''}
-    </div>
+    ${none ? `
+    <div class="pick-h">Neraspoređeno</div>
+    <div class="pick-list">
+      <div class="pick-row done" data-proj="${PROJ_NONE}">
+        <span class="nm" style="font-size: 16px;">Bez projekta</span>
+        <span class="side"><span class="pill gray">stavke i sati bez naziva</span><span class="chev">›</span></span>
+      </div>
+    </div>` : ''}
 
     ${removed.length ? `
     <div class="card" style="margin-top: 24px;">
@@ -3740,12 +3769,8 @@ function renderProjects() {
     ` : ''}
   `;
 
-  panel.querySelectorAll('[data-pfilter]').forEach(b => b.addEventListener('click', () => {
-    projectsFilter = b.dataset.pfilter;
-    renderProjects();
-  }));
-  panel.querySelectorAll('.proj-card[data-proj]').forEach(card => card.addEventListener('click', () => {
-    activeProject = card.dataset.proj;
+  panel.querySelectorAll('.pick-row[data-proj]').forEach(row => row.addEventListener('click', () => {
+    activeProject = row.dataset.proj;
     renderProjects();
   }));
   panel.querySelectorAll('[data-restore-proj]').forEach(b => b.addEventListener('click', async () => {
@@ -3796,6 +3821,401 @@ function removeProjectModal(name) {
   });
 }
 
+
+/* ============================================================
+   OBRAČUN PROJEKTA
+   Ručno uneseni podaci po projektu: ponuda (bez PDV, sa
+   stavkama), uplate investitora i status zaključen/tekući.
+   Sve se sprema u state.obracun[imeProjekta] — postojeći
+   podaci (STO, sati) se nikad ne diraju.
+   ============================================================ */
+const hrPlural = (n, one, few, many) => {
+  const m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+  return many;
+};
+const pct1 = (x) => (Math.round((Number(x) || 0) * 10) / 10).toFixed(1).replace('.', ',') + ' %';
+
+function ensureObracunRec(name) {
+  if (!state.obracun || typeof state.obracun !== 'object' || Array.isArray(state.obracun)) state.obracun = {};
+  if (!state.obracun[name] || typeof state.obracun[name] !== 'object') {
+    state.obracun[name] = { ponuda: null, ponudaStavke: [], uplate: [], zakljucen: false };
+  }
+  const rec = state.obracun[name];
+  if (!Array.isArray(rec.uplate)) rec.uplate = [];
+  if (!Array.isArray(rec.ponudaStavke)) rec.ponudaStavke = [];
+  return rec;
+}
+
+/* Zaključi / ponovno otvori projekt (soft status, ništa se ne briše) */
+function toggleProjZakljucen(projName, isZakljucen) {
+  const rec = ensureObracunRec(projName);
+  const html = isZakljucen ? `
+    <div class="modal-title">Ponovno otvoriti projekt?</div>
+    <div class="modal-sub">Projekt <strong>„${escapeHtml(projName)}"</strong> se vraća među tekuće projekte. Svi podaci ostaju kakvi jesu.</div>
+    <div class="modal-actions">
+      <button class="btn" data-act="cancel">Odustani</button>
+      <button class="btn btn-primary" data-act="confirm">↺ Ponovno otvori</button>
+    </div>` : `
+    <div class="modal-title">Zaključiti projekt?</div>
+    <div class="modal-sub">Projekt <strong>„${escapeHtml(projName)}"</strong> prelazi među završene projekte na listi. Ništa se ne briše — možeš ga bilo kad ponovno otvoriti.</div>
+    <div class="modal-actions">
+      <button class="btn" data-act="cancel">Odustani</button>
+      <button class="btn btn-primary" data-act="confirm">✓ Zaključi projekt</button>
+    </div>`;
+  const m = modal(html);
+  m.root.addEventListener('click', async e => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    if (btn.dataset.act === 'cancel') { m.close(); return; }
+    if (btn.dataset.act === 'confirm') {
+      const prev = { zakljucen: rec.zakljucen, zakljucenAt: rec.zakljucenAt };
+      rec.zakljucen = !isZakljucen;
+      if (rec.zakljucen) rec.zakljucenAt = todayISO(); else delete rec.zakljucenAt;
+      if (await saveData()) {
+        m.close();
+        toast(rec.zakljucen ? `Projekt „${projName}" zaključen` : `Projekt „${projName}" ponovno otvoren`, 'success');
+        renderProjects();
+      } else {
+        rec.zakljucen = prev.zakljucen;
+        if (prev.zakljucenAt) rec.zakljucenAt = prev.zakljucenAt; else delete rec.zakljucenAt;
+      }
+    }
+  });
+}
+
+/* Nova / uredi uplata za projekt */
+function obUplataModal(projName, idx = null) {
+  const rec = ensureObracunRec(projName);
+  const list = rec.uplate;
+  const u = idx !== null ? list[idx] : { date: todayISO(), amount: 0, note: '' };
+  if (!u) return;
+  const html = `
+    <div class="modal-title">${idx !== null ? 'Uredi uplatu' : 'Nova uplata'} · ${escapeHtml(projName)}</div>
+    <div class="modal-sub">Iznos koji je investitor platio za ovaj projekt. Zbroj svih uplata je „Naplaćeno" u obračunu.</div>
+    <div class="grid grid-2" style="gap: 14px;">
+      <div class="field"><label class="field-label">Datum</label><input class="input" id="ou-date" type="text" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" value="${isoToEU(u.date)}"></div>
+      <div class="field"><label class="field-label">Iznos (€)</label><input class="input num" id="ou-amount" type="text" inputmode="decimal" placeholder="0,00" value="${u.amount ? formatEUAmount(u.amount) : ''}"></div>
+      <div class="field" style="grid-column: 1 / -1;"><label class="field-label">Opis (opcionalno)</label><input class="input" id="ou-note" value="${escapeHtml(u.note || '')}" placeholder="Npr. Avans, 1. situacija, dodatni radovi"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-act="cancel">Odustani</button>
+      ${idx !== null ? '<button class="btn btn-danger" data-act="del">Obriši</button>' : ''}
+      <button class="btn btn-primary" data-act="save">${idx !== null ? 'Spremi' : 'Dodaj'}</button>
+    </div>
+  `;
+  const m = modal(html);
+  const dateInp = m.root.querySelector('#ou-date');
+  const amountInp = m.root.querySelector('#ou-amount');
+  attachEUDateMask(dateInp);
+  attachEUAmountMask(amountInp);
+  if (idx === null) setTimeout(() => amountInp.focus(), 50);
+
+  m.root.addEventListener('click', async e => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    if (btn.dataset.act === 'cancel') { m.close(); return; }
+    if (btn.dataset.act === 'del') {
+      if (!confirm('Obrisati ovu uplatu?')) return;
+      const snapshot = JSON.stringify(list);
+      list.splice(idx, 1);
+      if (await saveData()) { m.close(); renderProjects(); }
+      else rec.uplate = JSON.parse(snapshot);
+      return;
+    }
+    if (btn.dataset.act === 'save') {
+      const date = euToISO(dateInp.value.trim());
+      if (!date) {
+        toast('Datum mora biti u formatu DD/MM/YYYY', 'error');
+        dateInp.classList.add('invalid');
+        dateInp.focus();
+        return;
+      }
+      const amount = round2(parseEUAmount(amountInp.value));
+      if (!(amount > 0)) { toast('Unesi iznos uplate', 'error'); amountInp.focus(); return; }
+      const newU = { ...u, date, amount, note: m.root.querySelector('#ou-note').value.trim() };
+      if (!newU.created) newU.created = nowISO();
+      const snapshot = JSON.stringify(list);
+      if (idx !== null) list[idx] = newU; else list.push(newU);
+      if (await saveData()) { m.close(); renderProjects(); }
+      else rec.uplate = JSON.parse(snapshot);
+    }
+  });
+}
+
+/* Ponuda: ručni unos iznosa + opcionalne stavke (isti editor kao STO stavke) */
+function obPonudaModal(projName, prefill = null) {
+  const rec = ensureObracunRec(projName);
+  const workStavke = (prefill ? (prefill.stavke || []) : rec.ponudaStavke)
+    .map(it => ({ name: it.name || '', qty: (Number(it.qty) > 0 ? Number(it.qty) : null), unit: it.unit || '', amount: Number(it.amount) || 0 }));
+  const initAmount = prefill ? (Number(prefill.amount) || 0) : (Number(rec.ponuda) || 0);
+
+  const html = `
+    <div class="modal-title">${rec.ponuda && !prefill ? 'Uredi ponudu' : 'Ponuda'} · ${escapeHtml(projName)}</div>
+    <div class="modal-sub">Iznos ponude bez PDV-a. Stavke su opcionalne — služe da se zna što je ponudom obuhvaćeno.</div>
+    <div class="field" style="max-width: 240px;">
+      <label class="field-label">Iznos ponude (€ bez PDV)</label>
+      <input class="input num" id="op-amount" type="text" inputmode="decimal" placeholder="0,00" value="${initAmount ? formatEUAmount(initAmount) : ''}">
+    </div>
+    <div class="field" style="margin-top: 14px;">
+      <label class="field-label">Stavke ponude (opcionalno)</label>
+      <div id="op-items" style="overflow-x: auto;"></div>
+      <div style="display: flex; gap: 10px; align-items: center; margin-top: 8px; flex-wrap: wrap;">
+        <button type="button" class="btn btn-sm" data-act="add-item">+ Dodaj stavku</button>
+        <span id="op-items-sum" class="field-hint" style="margin-top: 0;"></span>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-act="cancel">Odustani</button>
+      ${(!prefill && rec.ponuda) ? '<button class="btn btn-danger" data-act="del">Obriši ponudu</button>' : ''}
+      <button class="btn btn-primary" data-act="save">Spremi</button>
+    </div>
+  `;
+  const m = modal(html, { wide: true });
+  const amountInp = m.root.querySelector('#op-amount');
+  attachEUAmountMask(amountInp);
+  const itemsBox = m.root.querySelector('#op-items');
+  const sumEl = m.root.querySelector('#op-items-sum');
+  const itemsSum = () => round2(workStavke.reduce((a, it) => a + (Number(it.amount) || 0), 0));
+  const updateItemsSum = () => {
+    if (!workStavke.length) { sumEl.innerHTML = ''; return; }
+    const sum = itemsSum();
+    const cur = parseEUAmount(amountInp.value);
+    sumEl.innerHTML = `Zbroj stavki: <strong>${eur(sum, 2)}</strong>` +
+      (Math.abs(sum - cur) > 0.005
+        ? ` · <a href="#" data-act="use-sum" style="color: var(--acc);">postavi kao iznos ponude</a>`
+        : ' · odgovara iznosu ✓');
+  };
+  const renderItems = () => {
+    if (!workStavke.length) {
+      itemsBox.innerHTML = `<div class="field-hint" style="margin-top: 0;">Nema stavki. Možeš ih dodati ručno ili ubaciti datoteku ponude kroz karticu „Ponuda".</div>`;
+      updateItemsSum();
+      return;
+    }
+    if (isMobileView()) {
+      itemsBox.innerHTML = workStavke.map((it, i) => `
+      <div class="ir-card" style="padding: 10px;">
+        <div class="ir-head-row">
+          <input class="input" data-it="${i}" data-f="name" value="${escapeHtml(it.name || '')}" placeholder="Opis stavke" style="flex: 1;">
+          <button type="button" class="btn btn-ghost btn-sm btn-danger" data-del-item="${i}" title="Ukloni stavku">×</button>
+        </div>
+        <div class="ir-grid-3">
+          <div><div class="ir-mini-label">Količina</div><input class="input num" data-it="${i}" data-f="qty" type="text" inputmode="decimal" value="${it.qty ? String(it.qty).replace('.', ',') : ''}" style="width: 100%; text-align: right;"></div>
+          <div><div class="ir-mini-label">Jed.</div><input class="input" data-it="${i}" data-f="unit" value="${escapeHtml(it.unit || '')}" style="width: 100%;"></div>
+          <div><div class="ir-mini-label">€ bez PDV</div><input class="input num" data-it="${i}" data-f="amount" type="text" inputmode="decimal" value="${formatEUAmount(it.amount)}" style="width: 100%; text-align: right; font-weight: 600;"></div>
+        </div>
+      </div>`).join('');
+    } else {
+      itemsBox.innerHTML = workStavke.map((it, i) => `
+      <div style="display: grid; grid-template-columns: minmax(150px, 1fr) 58px 46px 100px 28px; gap: 6px; margin-bottom: 6px; align-items: center; min-width: 400px;">
+        <input class="input" data-it="${i}" data-f="name" value="${escapeHtml(it.name || '')}" placeholder="Opis stavke">
+        <input class="input num" data-it="${i}" data-f="qty" type="text" inputmode="decimal" value="${it.qty ? String(it.qty).replace('.', ',') : ''}" placeholder="Kol." style="text-align: right; padding: 10px 8px;">
+        <input class="input" data-it="${i}" data-f="unit" value="${escapeHtml(it.unit || '')}" placeholder="Jed." style="padding: 10px 8px;">
+        <input class="input num" data-it="${i}" data-f="amount" type="text" inputmode="decimal" value="${formatEUAmount(it.amount)}" placeholder="€ bez PDV" style="text-align: right; padding: 10px 8px;">
+        <button type="button" class="btn btn-ghost btn-sm btn-danger" data-del-item="${i}" title="Ukloni stavku" style="padding: 6px 4px;">×</button>
+      </div>`).join('');
+    }
+    updateItemsSum();
+  };
+  renderItems();
+
+  itemsBox.addEventListener('input', e => {
+    const inp = e.target.closest('input[data-it]');
+    if (!inp) return;
+    const it = workStavke[+inp.dataset.it];
+    if (!it) return;
+    const f = inp.dataset.f;
+    if (f === 'qty' || f === 'amount') it[f] = parseEUAmount(inp.value);
+    else it[f] = inp.value;
+    updateItemsSum();
+  });
+  itemsBox.addEventListener('focusout', e => {
+    const inp = e.target.closest('input[data-it]');
+    if (!inp) return;
+    const it = workStavke[+inp.dataset.it];
+    if (!it) return;
+    if (inp.dataset.f === 'amount') inp.value = formatEUAmount(it.amount);
+    if (inp.dataset.f === 'qty') inp.value = it.qty ? String(it.qty).replace('.', ',') : '';
+  });
+  amountInp.addEventListener('input', updateItemsSum);
+
+  m.root.addEventListener('click', async e => {
+    const useSum = e.target.closest('[data-act="use-sum"]');
+    if (useSum) {
+      e.preventDefault();
+      amountInp.value = formatEUAmount(itemsSum());
+      updateItemsSum();
+      return;
+    }
+    const delItem = e.target.closest('button[data-del-item]');
+    if (delItem) {
+      workStavke.splice(+delItem.dataset.delItem, 1);
+      renderItems();
+      return;
+    }
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    if (btn.dataset.act === 'add-item') {
+      workStavke.push({ name: '', qty: null, unit: '', amount: 0 });
+      renderItems();
+    } else if (btn.dataset.act === 'cancel') {
+      m.close();
+    } else if (btn.dataset.act === 'del') {
+      if (!confirm('Obrisati ponudu za ovaj projekt? Uplate i svi ostali podaci ostaju.')) return;
+      const snapshot = JSON.stringify({ ponuda: rec.ponuda, ponudaStavke: rec.ponudaStavke });
+      rec.ponuda = null;
+      rec.ponudaStavke = [];
+      if (await saveData()) { m.close(); toast('Ponuda obrisana', 'success'); renderProjects(); }
+      else { const prev = JSON.parse(snapshot); rec.ponuda = prev.ponuda; rec.ponudaStavke = prev.ponudaStavke; }
+    } else if (btn.dataset.act === 'save') {
+      const amount = round2(parseEUAmount(amountInp.value));
+      if (!(amount > 0)) { toast('Unesi iznos ponude', 'error'); amountInp.focus(); return; }
+      const clean = workStavke
+        .map(it => ({ name: (it.name || '').trim(), qty: Number(it.qty) > 0 ? Number(it.qty) : null, unit: (it.unit || '').trim(), amount: round2(Number(it.amount) || 0) }))
+        .filter(it => it.name || it.amount > 0);
+      const snapshot = JSON.stringify({ ponuda: rec.ponuda, ponudaStavke: rec.ponudaStavke });
+      rec.ponuda = amount;
+      rec.ponudaStavke = clean;
+      if (await saveData()) { m.close(); toast('Ponuda spremljena', 'success'); renderProjects(); }
+      else { const prev = JSON.parse(snapshot); rec.ponuda = prev.ponuda; rec.ponudaStavke = prev.ponudaStavke; }
+    }
+  });
+}
+
+/* Lazy-load SheetJS (za čitanje XLSX/CSV ponuda) */
+let sheetJsPromise = null;
+function loadSheetJs() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  if (sheetJsPromise) return sheetJsPromise;
+  sheetJsPromise = new Promise((resolve, reject) => {
+    const sc = document.createElement('script');
+    sc.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+    sc.onload = () => resolve(window.XLSX);
+    sc.onerror = () => { sheetJsPromise = null; reject(new Error('Ne mogu učitati Excel modul — provjeri internetsku vezu')); };
+    document.head.appendChild(sc);
+  });
+  return sheetJsPromise;
+}
+
+/* Čitanje ponude iz PDF / XLSX / CSV — heuristika: redak s opisom i iznosom.
+   Redovi „UKUPNO / TOTAL" postaju prijedlog iznosa ponude, PDV/rabat redovi se preskaču.
+   Sve prolazi kroz pregled u obPonudaModal — ništa se ne sprema automatski. */
+async function parsePonudaFile(file) {
+  const fname = (file.name || '').toLowerCase();
+  const TOTAL_RE = /\b(ukupno|sveukupno|total)\b/i;
+  const SKIP_RE = /\b(pdv|porez|rabat|popust|iban|oib)\b/i;
+  const MONEY_STR_RE = /^-?\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?$/;
+  const stavke = [];
+  let total = null;
+
+  if (fname.endsWith('.pdf')) {
+    const rows = await extractPdfRows(file);
+    const LINE_RE = /^(.*?)[\s·:]+(-?\d{1,3}(?:\.\d{3})*(?:,\d{2}))(?:\s*(?:€|eur))?\s*$/i;
+    for (const raw of rows) {
+      const line = String(raw || '').trim();
+      const mm = line.match(LINE_RE);
+      if (!mm) continue;
+      const label = mm[1].trim().replace(/[.·\s]+$/, '');
+      const amount = parseEUAmount(mm[2]);
+      if (!(amount > 0)) continue;
+      if (TOTAL_RE.test(label)) { if (!SKIP_RE.test(label)) total = round2(amount); continue; }
+      if (SKIP_RE.test(label) || label.length < 2) continue;
+      stavke.push({ name: label, qty: null, unit: '', amount: round2(amount) });
+      if (stavke.length >= 200) break;
+    }
+  } else {
+    const XLSXlib = await loadSheetJs();
+    const buf = await file.arrayBuffer();
+    const wb = XLSXlib.read(buf, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    if (!ws) throw new Error('Datoteka nema čitljivih listova');
+    const rows = XLSXlib.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
+    for (const r of rows) {
+      if (!Array.isArray(r)) continue;
+      const nums = [];
+      const texts = [];
+      for (const c of r) {
+        if (typeof c === 'number' && isFinite(c)) { if (c !== 0) nums.push(round2(c)); continue; }
+        if (typeof c === 'string') {
+          const t = c.trim();
+          if (!t) continue;
+          if (MONEY_STR_RE.test(t)) {
+            const v = parseEUAmount(t);
+            if (v) nums.push(round2(v));
+          } else texts.push(t);
+        }
+      }
+      if (!texts.length || !nums.length) continue;
+      const label = texts.join(' ').replace(/\s+/g, ' ').trim();
+      const amount = nums[nums.length - 1];
+      if (!(amount > 0)) continue;
+      if (TOTAL_RE.test(label)) { if (!SKIP_RE.test(label)) total = amount; continue; }
+      if (SKIP_RE.test(label) || label.length < 2) continue;
+      stavke.push({ name: label, qty: null, unit: '', amount });
+      if (stavke.length >= 200) break;
+    }
+  }
+  if (total === null && stavke.length) total = round2(stavke.reduce((a, it) => a + (Number(it.amount) || 0), 0));
+  return { stavke, total };
+}
+
+async function obPonudaUploadFlow(projName, file) {
+  try {
+    toast('Čitam ponudu…', '', 2000);
+    const res = await parsePonudaFile(file);
+    if (!res.stavke.length && !(res.total > 0)) {
+      toast('Iz datoteke nisam uspio iščitati stavke — unesi ponudu ručno', 'error', 3200);
+      obPonudaModal(projName);
+      return;
+    }
+    toast(`Iščitano: ${res.stavke.length} ${hrPlural(res.stavke.length, 'stavka', 'stavke', 'stavki')} — pregledaj i potvrdi`, 'success', 3000);
+    obPonudaModal(projName, { amount: res.total, stavke: res.stavke });
+  } catch (err) {
+    console.error('Ponuda parse failed:', err);
+    toast('Ne mogu pročitati datoteku: ' + (err && err.message ? err.message : err), 'error', 3500);
+    obPonudaModal(projName);
+  }
+}
+
+/* Event bindings za obračun blokove u detalju projekta */
+function bindObracunDetail(panel, p) {
+  panel.querySelector('#ob-status')?.addEventListener('click', () => toggleProjZakljucen(p.name, p.zakljucen));
+  panel.querySelector('#ob-uplata-add')?.addEventListener('click', () => obUplataModal(p.name));
+  panel.querySelectorAll('[data-ob-up-edit]').forEach(el => el.addEventListener('click', () => obUplataModal(p.name, parseInt(el.dataset.obUpEdit))));
+  panel.querySelectorAll('[data-ob-up-del]').forEach(el => el.addEventListener('click', async e => {
+    e.stopPropagation();
+    if (!confirm('Obrisati ovu uplatu?')) return;
+    const rec = ensureObracunRec(p.name);
+    const snapshot = JSON.stringify(rec.uplate);
+    rec.uplate.splice(parseInt(el.dataset.obUpDel), 1);
+    if (await saveData()) renderProjects();
+    else rec.uplate = JSON.parse(snapshot);
+  }));
+  panel.querySelector('#ob-ponuda-edit')?.addEventListener('click', () => obPonudaModal(p.name));
+  panel.querySelector('#ob-ponuda-manual')?.addEventListener('click', () => obPonudaModal(p.name));
+  const drop = panel.querySelector('#ob-ponuda-drop');
+  const fileInp = panel.querySelector('#ob-ponuda-file');
+  if (drop && fileInp) {
+    drop.addEventListener('click', () => fileInp.click());
+    fileInp.addEventListener('change', () => {
+      const f = fileInp.files && fileInp.files[0];
+      if (f) obPonudaUploadFlow(p.name, f);
+      fileInp.value = '';
+    });
+    drop.addEventListener('dragover', e => e.preventDefault());
+    drop.addEventListener('drop', e => {
+      e.preventDefault();
+      const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (f) obPonudaUploadFlow(p.name, f);
+    });
+  }
+  panel.querySelector('#ob-stavke-toggle')?.addEventListener('click', () => {
+    const box = panel.querySelector('#ob-stavke-box');
+    if (box) box.style.display = box.style.display === 'none' ? '' : 'none';
+  });
+}
+
 function renderProjectDetail(p) {
   const panel = document.getElementById('panel-projects');
   const isNone = p.name === PROJ_NONE;
@@ -3826,6 +4246,249 @@ function renderProjectDetail(p) {
   const matTotal = round2(matRows.reduce((a, r) => a + r.amount, 0));
   const nonItemized = Math.max(0, round2(p.materijal - itemizedTotal));
 
+  /* ---- Obračun (mockup v3): izračuni za KPI, raspodjelu, ponudu i uplate ---- */
+  const uplateSorted = (p.uplate || []).map((u, i) => ({ ...u, __i: i })).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  const hasNapl = p.naplaceno > 0;
+  const hasPonuda = p.ponuda !== null && p.ponuda !== undefined;
+  const razlika = (hasPonuda && hasNapl) ? round2(p.naplaceno - p.ponuda) : null;
+  const razlikaPct = (razlika !== null && p.ponuda > 0) ? (razlika / p.ponuda) * 100 : null;
+  const planMarza = hasPonuda ? round2(p.ponuda - p.trosak) : null;
+  const planMarzaPct = (planMarza !== null && p.ponuda > 0) ? (planMarza / p.ponuda) * 100 : null;
+  const gubitak = hasNapl && p.zarada < 0;
+  const signEur = (n, dec = 2) => (n >= 0 ? '+' : '−') + eur(Math.abs(n), dec);
+  const signPct = (x) => (x >= 0 ? '+' : '−') + pct1(Math.abs(x));
+
+  const periodStr = mKeys.length === 0 ? '—' : (mKeys.length === 1 ? monthLabel(mKeys[0]) : monthLabelShort(mKeys[0]) + ' – ' + monthLabel(mKeys[mKeys.length - 1]));
+  const statusPill = isNone ? '' : (p.zakljucen
+    ? '<span class="pill gray" style="vertical-align: middle;">✓ završen</span>'
+    : '<span class="pill brown" style="vertical-align: middle;">tekući</span>');
+  const subline = isNone
+    ? 'STO stavke bez naziva projekta i radni sati bez upisanog projekta'
+    : `${periodStr} · ${p.dani} ${hrPlural(p.dani, 'radni dan', 'radna dana', 'radnih dana')} · ${FMT_INT.format(p.sati)} h`;
+
+  const obKpiHtml = isNone ? '' : `
+    <div class="kpi-row" style="margin-bottom: 24px;">
+      <div class="kpi-cell">
+        <div class="stat-label">Naplaćeno</div>
+        <div class="stat-value"${hasNapl ? '' : ' style="color: var(--muted-2);"'}>${hasNapl ? eur(p.naplaceno, 0) : '—'}</div>
+        <div class="stat-sub">${uplateSorted.length ? `${uplateSorted.length} ${hrPlural(uplateSorted.length, 'uplata', 'uplate', 'uplata')}` : 'još nema uplata'}</div>
+      </div>
+      <div class="kpi-cell">
+        <div class="stat-label">Trošak ukupno</div>
+        <div class="stat-value">${eur(p.trosak, 0)}</div>
+        <div class="stat-sub">materijal bez PDV + rad</div>
+      </div>
+      ${hasNapl ? `
+      <div class="kpi-cell" style="background: var(${gubitak ? '--negative-soft' : '--positive-soft'});">
+        <div class="stat-label" style="color: var(${gubitak ? '--negative' : '--positive'});">Zarada</div>
+        <div class="stat-value" style="color: var(${gubitak ? '--negative' : '--positive'});">${signEur(p.zarada, 0)}</div>
+        <div class="stat-sub" style="color: var(${gubitak ? '--negative' : '--positive'});">marža ${signPct(p.marza)}</div>
+      </div>` : `
+      <div class="kpi-cell">
+        <div class="stat-label">Zarada</div>
+        <div class="stat-value" style="color: var(--muted-2);">—</div>
+        <div class="stat-sub">čeka prvu uplatu</div>
+      </div>`}
+      ${hasPonuda ? `
+      <div class="kpi-cell">
+        <div class="stat-label">Ponuda → naplaćeno</div>
+        <div class="stat-value" style="font-size: 21px;">${FMT_INT.format(Math.round(p.ponuda))} → ${hasNapl ? FMT_INT.format(Math.round(p.naplaceno)) : '—'}</div>
+        <div class="stat-sub">${razlika !== null
+          ? (Math.abs(razlika) < 0.005
+            ? 'naplaćeno točno po ponudi'
+            : `<span class="delta-chip ${razlika >= 0 ? 'up' : 'down'}">${signEur(razlika, 0)} · ${signPct(razlikaPct)}</span>`)
+          : 'još nema uplata'}</div>
+      </div>` : `
+      <div class="kpi-cell">
+        <div class="stat-label">Ponuda</div>
+        <div class="stat-value" style="color: var(--muted-2);">—</div>
+        <div class="stat-sub">nije unesena</div>
+      </div>`}
+    </div>`;
+
+  let raspodjelaHtml = '';
+  if (!isNone && hasNapl) {
+    const segLbl = (w) => w >= 9 ? pct1(w) : '';
+    if (!gubitak) {
+      const wMat = (p.materijalBezPdv / p.naplaceno) * 100;
+      const wRad = (p.rad / p.naplaceno) * 100;
+      const wZar = Math.max(0, 100 - wMat - wRad);
+      raspodjelaHtml = `
+    <div class="card" style="margin-bottom: 24px;">
+      <div class="card-head">
+        <div>
+          <div class="card-title">Raspodjela naplaćenog</div>
+          <div class="card-sub">Na što je otišao svaki euro</div>
+        </div>
+      </div>
+      <div class="ob-bar">
+        ${wMat > 0.05 ? `<span style="width: ${wMat.toFixed(2)}%; background: var(--acc-projects);" title="Materijal ${pct1(wMat)}">${segLbl(wMat)}</span>` : ''}
+        ${wRad > 0.05 ? `<span style="width: ${wRad.toFixed(2)}%; background: var(--acc-cashflow);" title="Rad ${pct1(wRad)}">${segLbl(wRad)}</span>` : ''}
+        ${wZar > 0.05 ? `<span style="width: ${wZar.toFixed(2)}%; background: var(--positive);" title="Zarada ${pct1(wZar)}">${segLbl(wZar)}</span>` : ''}
+      </div>
+      <div class="ob-legend-row">
+        <span class="sw" style="background: var(--acc-projects);"></span>
+        <span>Materijal <span style="color: var(--muted); font-size: 12.5px;">(bez PDV)</span></span>
+        <span class="amt">${eur(p.materijalBezPdv, 0)}</span>
+        <span class="pct">${pct1(wMat)}</span>
+      </div>
+      <div class="ob-legend-row">
+        <span class="sw" style="background: var(--acc-cashflow);"></span>
+        <span>Rad <span style="color: var(--muted); font-size: 12.5px;">(${FMT_INT.format(p.sati)} h · ${p.dani} ${hrPlural(p.dani, 'dan', 'dana', 'dana')})</span></span>
+        <span class="amt">${eur(p.rad, 0)}</span>
+        <span class="pct">${pct1(wRad)}</span>
+      </div>
+      <div class="ob-legend-row">
+        <span class="sw" style="background: var(--positive);"></span>
+        <span><strong>Zarada</strong></span>
+        <span class="amt" style="color: var(--positive);">${eur(p.zarada, 0)}</span>
+        <span class="pct">${pct1(wZar)}</span>
+      </div>
+    </div>`;
+    } else {
+      const base = p.trosak > 0 ? p.trosak : 1;
+      const wMat = (p.materijalBezPdv / base) * 100;
+      const wRad = Math.max(0, 100 - wMat);
+      raspodjelaHtml = `
+    <div class="card" style="margin-bottom: 24px;">
+      <div class="card-head">
+        <div>
+          <div class="card-title">Raspodjela troška</div>
+          <div class="card-sub" style="color: var(--negative);">Trošak premašuje naplaćeno — projekt je trenutno u minusu ${eur(Math.abs(p.zarada), 0)}</div>
+        </div>
+      </div>
+      <div class="ob-bar">
+        ${wMat > 0.05 ? `<span style="width: ${wMat.toFixed(2)}%; background: var(--acc-projects);" title="Materijal ${pct1(wMat)}">${segLbl(wMat)}</span>` : ''}
+        ${wRad > 0.05 ? `<span style="width: ${wRad.toFixed(2)}%; background: var(--acc-cashflow);" title="Rad ${pct1(wRad)}">${segLbl(wRad)}</span>` : ''}
+      </div>
+      <div class="ob-legend-row">
+        <span class="sw" style="background: var(--acc-projects);"></span>
+        <span>Materijal <span style="color: var(--muted); font-size: 12.5px;">(bez PDV · udio u trošku)</span></span>
+        <span class="amt">${eur(p.materijalBezPdv, 0)}</span>
+        <span class="pct">${pct1(wMat)}</span>
+      </div>
+      <div class="ob-legend-row">
+        <span class="sw" style="background: var(--acc-cashflow);"></span>
+        <span>Rad <span style="color: var(--muted); font-size: 12.5px;">(${FMT_INT.format(p.sati)} h · ${p.dani} ${hrPlural(p.dani, 'dan', 'dana', 'dana')})</span></span>
+        <span class="amt">${eur(p.rad, 0)}</span>
+        <span class="pct">${pct1(wRad)}</span>
+      </div>
+      <div class="ob-legend-row">
+        <span class="sw" style="background: var(--negative);"></span>
+        <span><strong>Gubitak</strong> <span style="color: var(--muted); font-size: 12.5px;">(naplaćeno − trošak)</span></span>
+        <span class="amt" style="color: var(--negative);">−${eur(Math.abs(p.zarada), 0)}</span>
+        <span class="pct">—</span>
+      </div>
+    </div>`;
+    }
+  }
+
+  let ponudaUplateHtml = '';
+  if (!isNone) {
+    const ponudaInner = hasPonuda ? `
+        <div class="ob-cmp-row"><span>Ponuda (bez PDV)</span><span class="v">${eur(p.ponuda, 2)}</span></div>
+        <div class="ob-cmp-row"><span>Naplaćeno</span><span class="v">${hasNapl ? eur(p.naplaceno, 2) : '<span style="color: var(--muted-2);">—</span>'}</span></div>
+        ${razlika !== null ? `
+        <div class="ob-cmp-row">
+          <span><strong>Razlika</strong> <span style="color: var(--muted); font-size: 12.5px;">(dodatni radovi / gratis)</span></span>
+          <span class="v" style="color: var(${razlika >= 0 ? '--positive' : '--negative'});">${signEur(razlika, 2)}${Math.abs(razlika) >= 0.005 && razlikaPct !== null ? ` <span class="delta-chip ${razlika >= 0 ? 'up' : 'down'}">${signPct(razlikaPct)}</span>` : ''}</span>
+        </div>` : ''}
+        ${planMarza !== null ? `
+        <div class="ob-cmp-row">
+          <span>Planirana marža po ponudi <span style="color: var(--muted); font-size: 12.5px;">(ponuda − trošak)</span></span>
+          <span class="v">${signEur(planMarza, 2)}${planMarzaPct !== null ? ' · ' + signPct(planMarzaPct) : ''}</span>
+        </div>` : ''}
+        ${p.ponudaStavke.length ? `
+        <div style="margin-top: 12px;">
+          <button class="pill blue" type="button" id="ob-stavke-toggle" style="border: none; cursor: pointer; font-family: inherit;">${p.ponudaStavke.length} ${hrPlural(p.ponudaStavke.length, 'stavka', 'stavke', 'stavki')} ponude ▾</button>
+          <div id="ob-stavke-box" style="display: none; margin-top: 10px;">
+            <div class="table-scroll">
+              <table class="table" style="font-size: 13px;">
+                <tbody>
+                  ${p.ponudaStavke.map(it => `
+                  <tr>
+                    <td>${escapeHtml(it.name || 'Stavka')}</td>
+                    <td class="num text-right" style="color: var(--muted); white-space: nowrap;">${it.qty ? fmtQty(it.qty) + (it.unit ? ' ' + escapeHtml(it.unit) : '') : ''}</td>
+                    <td class="num text-right" style="font-weight: 600;">${eur(Number(it.amount) || 0, 2)}</td>
+                  </tr>`).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>` : ''}`
+      : (isAdmin ? `
+        <div class="ob-drop" id="ob-ponuda-drop">
+          <strong>Ubaci ponudu — PDF · XLSX · CSV</strong>
+          <span>Stavke se iščitaju, pregledaš i potvrdiš ukupni iznos.<br>Sprema se iznos + stavke, ne datoteka.</span>
+        </div>
+        <input type="file" id="ob-ponuda-file" accept=".pdf,.xlsx,.xls,.csv" style="display: none;">
+        <div style="text-align: center; margin-top: 10px;"><button class="btn btn-sm" id="ob-ponuda-manual">ili unesi iznos ručno</button></div>`
+      : '<div class="empty">Ponuda još nije unesena.</div>');
+
+    const upRow = (u) => isAdmin ? `
+        <div class="up-row" data-ob-up-edit="${u.__i}" title="Klik za uređivanje">
+          <span class="d">${isoToEU(u.date)}</span>
+          <span class="a">${eur(Number(u.amount) || 0, 2)}</span>
+          <span class="n">${u.note ? escapeHtml(u.note) : '<span style="color: var(--muted-2);">bez opisa</span>'}</span>
+          <span class="x" data-ob-up-del="${u.__i}" title="Obriši uplatu">×</span>
+        </div>` : `
+        <div class="up-row">
+          <span class="d">${isoToEU(u.date)}</span>
+          <span class="a">${eur(Number(u.amount) || 0, 2)}</span>
+          <span class="n">${u.note ? escapeHtml(u.note) : '<span style="color: var(--muted-2);">bez opisa</span>'}</span>
+          <span></span>
+        </div>`;
+
+    ponudaUplateHtml = `
+    <div class="grid grid-cf" style="margin-bottom: 24px;">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Ponuda</div>
+            <div class="card-sub">${hasPonuda ? 'Usporedba s naplaćenim i troškom' : 'Ručni unos ili upload — PDF, Excel ili CSV'}</div>
+          </div>
+          ${hasPonuda && isAdmin ? '<button class="btn btn-sm" id="ob-ponuda-edit">Uredi</button>' : ''}
+        </div>
+        ${ponudaInner}
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Uplate</div>
+            <div class="card-sub">Zbroj = „Naplaćeno" u cijelom obračunu</div>
+          </div>
+          ${isAdmin ? '<button class="btn btn-primary btn-sm" id="ob-uplata-add">+ Dodaj uplatu</button>' : ''}
+        </div>
+        ${uplateSorted.length === 0 ? '<div class="empty">Još nema evidentiranih uplata za ovaj projekt.</div>' : `
+        ${uplateSorted.map(upRow).join('')}
+        <div class="up-total"><span>NAPLAĆENO UKUPNO</span><span class="num">${eur(p.naplaceno, 2)}</span></div>`}
+      </div>
+    </div>`;
+  }
+
+  const trosakAutoHtml = `
+    <div class="card" style="margin-bottom: 24px;">
+      <div class="card-head">
+        <div>
+          <div class="card-title">Trošak — automatski</div>
+          <div class="card-sub">Iz STO taba i Evidencije sati — ništa se ne upisuje dvaput</div>
+        </div>
+      </div>
+      <table class="table">
+        <tbody>
+          <tr><td>Materijal s PDV <span style="color: var(--muted-2); font-size: 12px;">(STO · ${p.stoCount} ${hrPlural(p.stoCount, 'stavka', 'stavke', 'stavki')})</span></td><td class="num text-right">${eur(p.materijal, 2)}</td></tr>
+          <tr><td><strong>Materijal bez PDV</strong> <span style="color: var(--muted-2); font-size: 12px;">(÷ 1,25)</span></td><td class="num text-right"><strong>${eur(p.materijalBezPdv, 2)}</strong></td></tr>
+          <tr><td><strong>Rad</strong> <span style="color: var(--muted-2); font-size: 12px;">(sati × satnica + marenda)</span></td><td class="num text-right"><strong>${eur(p.rad, 2)}</strong></td></tr>
+          <tr><td>Sati ukupno</td><td class="num text-right">${FMT_INT.format(p.sati)} h</td></tr>
+          <tr><td>Radni dani</td><td class="num text-right">${p.dani}</td></tr>
+          ${p.dani > 0 ? `<tr><td>Prosjek troška po danu</td><td class="num text-right">${eur(p.trosak / p.dani, 2)}</td></tr>` : ''}
+        </tbody>
+        <tfoot>
+          <tr><td>TROŠAK UKUPNO</td><td class="num text-right">${eur(p.trosak, 2)}</td></tr>
+        </tfoot>
+      </table>
+    </div>`;
+
   panel.innerHTML = `
     <div class="page-head">
       <div class="page-title-block">
@@ -3833,11 +4496,12 @@ function renderProjectDetail(p) {
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
           Svi projekti
         </button>
-        <h1 class="page-title">${escapeHtml(displayName)} ${p.isActive && !isNone ? '<span class="pill green" style="vertical-align: middle;">aktivan</span>' : ''}</h1>
-        ${isNone ? '<div class="card-sub" style="margin-top: 4px;">STO stavke bez naziva projekta i radni sati bez upisanog projekta</div>' : ''}
+        <h1 class="page-title">${escapeHtml(displayName)} ${statusPill}</h1>
+        <div class="card-sub" style="margin-top: 4px;">${subline}</div>
       </div>
       ${isAdmin && !isNone ? `
       <div class="page-actions">
+        <button class="btn" id="ob-status">${p.zakljucen ? '↺ Ponovno otvori' : '✓ Zaključi projekt'}</button>
         <button class="btn btn-danger" id="proj-remove">
           <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;"><path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
           Ukloni s pregleda
@@ -3845,27 +4509,10 @@ function renderProjectDetail(p) {
       </div>` : ''}
     </div>
 
-    <div class="kpi-row" style="margin-bottom: 24px;">
-      <div class="kpi-cell">
-        <div class="stat-label">Materijal (STO)</div>
-        <div class="stat-value">${eur(p.materijal, 0)}</div>
-        <div class="stat-sub">${p.stoCount} stavki</div>
-      </div>
-      <div class="kpi-cell">
-        <div class="stat-label">Rad</div>
-        <div class="stat-value">${eur(p.rad, 0)}</div>
-        <div class="stat-sub">${FMT_INT.format(p.sati)} h ukupno</div>
-      </div>
-      <div class="kpi-cell" style="background: var(--acc-projects-soft);">
-        <div class="stat-label" style="color: var(--acc-projects);">Ukupno</div>
-        <div class="stat-value" style="color: var(--acc-projects);">${eur(p.ukupno, 0)}</div>
-      </div>
-      <div class="kpi-cell">
-        <div class="stat-label">Razdoblje</div>
-        <div class="stat-value" style="font-size: 18px;">${mKeys.length ? monthLabelShort(mKeys[0]) + ' – ' + monthLabelShort(mKeys[mKeys.length - 1]) : '—'}</div>
-        <div class="stat-sub">${p.monthCount} mj. aktivnosti</div>
-      </div>
-    </div>
+    ${obKpiHtml}
+    ${raspodjelaHtml}
+    ${ponudaUplateHtml}
+    ${trosakAutoHtml}
 
     <div class="card" style="margin-bottom: 24px;">
       <div class="card-head">
@@ -4015,6 +4662,7 @@ function renderProjectDetail(p) {
     renderProjects();
   });
   panel.querySelector('#proj-remove')?.addEventListener('click', () => removeProjectModal(p.name));
+  bindObracunDetail(panel, p);
 
   // CHART: stacked bar po mjesecima
   charts.projMonths?.destroy?.();
@@ -5720,6 +6368,7 @@ function godisnjiModal(workerName) {
 
 async function boot() {
   injectExtraCss();
+  injectObracunCss();
   // Restore admin from localStorage if exists
   if (API.pin) {
     try {
@@ -5756,6 +6405,7 @@ async function boot() {
   // Osiguraj forecast field u stateu + napuni default ako prazan
   if (!state.raspored || !Array.isArray(state.raspored)) state.raspored = [];
   if (!state.forecast || !Array.isArray(state.forecast)) state.forecast = [];
+  if (!state.obracun || typeof state.obracun !== 'object' || Array.isArray(state.obracun)) state.obracun = {};
   if (state.forecast.length === 0) {
     state.forecast = DEFAULT_FORECAST_SEED.map(x => ({ ...x }));
     // NAPOMENA: nije pozvan saveData() — popunjavanje se sprema tek nakon prve admin izmjene
