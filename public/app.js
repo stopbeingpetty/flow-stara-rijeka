@@ -355,6 +355,14 @@ function injectObracunCss() {
     .ob-drop { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; border: 2px dashed var(--line-strong); border-radius: 12px; padding: 22px 16px; text-align: center; color: var(--muted); font-size: 13px; cursor: pointer; transition: border-color .15s; }
     .ob-drop:hover { border-color: var(--acc-projects); }
     .ob-drop strong { color: var(--ink); font-size: 14px; }
+    .proj-removed-row { margin-top: 24px; width: 100%; display: flex; align-items: center; gap: 10px; padding: 13px 16px; border: 1px dashed var(--line-strong); border-radius: var(--radius-md); background: none; color: var(--muted); font-size: 13.5px; font-family: inherit; cursor: pointer; text-align: left; }
+    .proj-removed-row:hover { background: var(--surface); }
+    .proj-removed-row .chev2 { display: inline-flex; transition: transform .2s var(--ease-snap); font-size: 15px; color: var(--muted-2); }
+    .proj-removed-row.open .chev2 { transform: rotate(90deg); }
+    .proj-removed-row .sp { flex: 1; }
+    .proj-removed-list { display: none; }
+    .proj-removed-list.open { display: block; }
+    #panel-projects.swiping { transition: none !important; }
     @media (max-width: 719px) {
       .pick-row { padding: 15px 16px; }
       .pick-row .nm { font-size: 16.5px; }
@@ -3619,18 +3627,101 @@ function stoIosReview(parsed) {
    postojećih podataka — ništa se ne sprema.
    ============================================================ */
 const PROJ_NONE = '__bez_projekta__';
+const PROJ_GODISNJI = '__godisnji__';
+
+/* Radni dani (pon-pet) u mjesecu; opcionalno samo do zadanog ISO datuma (ukljucivo) */
+function workdaysInMonth(key, upToISO) {
+  const [y, m] = key.split('-').map(Number);
+  if (!y || !m) return 0;
+  const last = new Date(y, m, 0).getDate();
+  let n = 0;
+  for (let d = 1; d <= last; d++) {
+    const iso = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    if (upToISO && iso > upToISO) break;
+    const dow = new Date(y, m - 1, d).getDay();
+    if (dow >= 1 && dow <= 5) n++;
+  }
+  return n;
+}
+
+/* Sati godisnjeg u mjesecu (radni dani pon-pet x 8 h), iz Registra, samo radnici sa satnicom.
+   Broje se iskljucivo periodi s upisanim datumima od-do. */
+function godisnjiHoursInMonth(key, upToISO) {
+  const god = state.registar && state.registar.godisnji;
+  if (!god) return 0;
+  const [y, m] = key.split('-').map(Number);
+  if (!y || !m) return 0;
+  const mStart = `${key}-01`;
+  const mEnd = `${key}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`;
+  let hours = 0;
+  for (const w of state.settings.workers) {
+    if (!(w.satnica > 0)) continue;
+    const g = god[w.name];
+    if (!g || !Array.isArray(g.periodi)) continue;
+    for (const p of g.periodi) {
+      if (!p.od || !p.do) continue;
+      let a = p.od > mStart ? p.od : mStart;
+      let b = p.do < mEnd ? p.do : mEnd;
+      if (upToISO && b > upToISO) b = upToISO;
+      if (a > b) continue;
+      const cur = new Date(a + 'T12:00:00');
+      const end = new Date(b + 'T12:00:00');
+      while (cur <= end) {
+        const dow = cur.getDay();
+        if (dow >= 1 && dow <= 5) hours += 8;
+        cur.setDate(cur.getDate() + 1);
+      }
+    }
+  }
+  return hours;
+}
+
+/* Stvarni trosak mjeseca, podijeljen na dva dijela:
+   - radnici: ukupni mjesecni trosak firme za radnike sa satnicom (fiksno + isplata + prijevoz + stan)
+   - rezija:  fiksne osobe (bez duplikata s radnicima) + radnici bez satnice + tekuci troskovi bez placa
+   Za tekuci kalendarski mjesec fiksni dio se razmjerno smanjuje na protekle radne dane. */
+function computeMonthCosts(key) {
+  const stats = computeWorkerStats(key) || [];
+  const satnicaOf = {};
+  for (const w of state.settings.workers) satnicaOf[w.name] = Number(w.satnica) || 0;
+  let radnici = 0, rezOsobe = 0;
+  for (const st of stats) {
+    if ((satnicaOf[st.name] || 0) > 0) radnici += st.mjesecniTrosak;
+    else rezOsobe += st.mjesecniTrosak;
+  }
+  const wNames = new Set(state.settings.workers.map(w => (w.name || '').trim().toLowerCase()));
+  for (const f of getFixedLabor()) {
+    if (!wNames.has((f.name || '').trim().toLowerCase())) rezOsobe += Number(f.amount) || 0;
+  }
+  let tekuci = 0;
+  for (const t of (state.trx[key] || [])) {
+    if (t.type === 'Trošak' && t.group === 'Tekući' && t.category !== 'Plaće') tekuci += t.amount;
+  }
+  const today = todayISO();
+  const inProgress = key === today.slice(0, 7);
+  let frac = 1;
+  if (inProgress) {
+    const total = workdaysInMonth(key);
+    const done = workdaysInMonth(key, today);
+    frac = total > 0 ? Math.max(done, 1) / total : 1;
+  }
+  return { radnici: radnici * frac, rezija: rezOsobe * frac + tekuci, frac, inProgress };
+}
 
 function computeProjectsData() {
   const map = {};
   const ensure = (name) => {
-    if (!map[name]) map[name] = { name, materijal: 0, rad: 0, sati: 0, months: {}, workers: {}, stoCount: 0, lastActivity: '', daysSet: new Set() };
+    if (!map[name]) map[name] = { name, materijal: 0, rad: 0, rez: 0, radIsplata: 0, sati: 0, months: {}, workers: {}, stoCount: 0, lastActivity: '', daysSet: new Set(), nepotpunSet: new Set(), inProgressSet: new Set() };
     return map[name];
   };
   const mEnsure = (p, k) => {
-    if (!p.months[k]) p.months[k] = { materijal: 0, rad: 0, sati: 0 };
+    if (!p.months[k]) p.months[k] = { materijal: 0, rad: 0, rez: 0, sati: 0, udio: 0 };
     return p.months[k];
   };
   const months = allMonths();
+  const nSatnica = state.settings.workers.filter(w => Number(w.satnica) > 0).length;
+  const today = todayISO();
+
   for (const k of months) {
     for (const t of (state.sto[k] || [])) {
       const name = (t.project || '').trim() || PROJ_NONE;
@@ -3640,6 +3731,11 @@ function computeProjectsData() {
       mEnsure(p, k).materijal += t.amount;
       if (k > p.lastActivity) p.lastActivity = k;
     }
+
+    /* Sati po projektu i radniku u ovom mjesecu (samo radnici sa satnicom) */
+    const projH = {};   // ime -> sati
+    const projW = {};   // ime -> { radnik -> { sati, dani:Set } }
+    let satiOdradeni = 0;
     const h = state.hours[k];
     if (h && h.days) {
       for (const d of h.days) {
@@ -3652,32 +3748,90 @@ function computeProjectsData() {
           if (k > pd.lastActivity) pd.lastActivity = k;
           const w = state.settings.workers.find(x => x.name === wName);
           if (!w || !(w.satnica > 0)) continue;
-          const cost = wd.hours * w.satnica + (wd.marenda || 0);
-          const p = ensure(name);
-          p.rad += cost;
-          p.sati += wd.hours;
-          const mm = mEnsure(p, k);
-          mm.rad += cost;
-          mm.sati += wd.hours;
-          if (!p.workers[wName]) p.workers[wName] = { sati: 0, trosak: 0, satnica: w.satnica };
-          p.workers[wName].sati += wd.hours;
-          p.workers[wName].trosak += cost;
-          if (k > p.lastActivity) p.lastActivity = k;
+          satiOdradeni += wd.hours;
+          projH[name] = (projH[name] || 0) + wd.hours;
+          if (!projW[name]) projW[name] = {};
+          if (!projW[name][wName]) projW[name][wName] = { sati: 0, dani: new Set() };
+          projW[name][wName].sati += wd.hours;
+          if (d.date) projW[name][wName].dani.add(d.date);
+          pd.radIsplata += wd.hours * w.satnica + (wd.marenda || 0);
         }
       }
     }
+
+    /* Stvarni trosak mjeseca i njegova raspodjela po udjelu sati */
+    const c = computeMonthCosts(k);
+    const godH = godisnjiHoursInMonth(k, c.inProgress ? today : null);
+    const satiUk = satiOdradeni + godH;
+    const rRad = satiUk > 0 ? c.radnici / satiUk : 0;
+    const rRez = satiUk > 0 ? c.rezija / satiUk : 0;
+    const kapacitet = nSatnica * workdaysInMonth(k, c.inProgress ? today : null) * 8;
+    const nepotpun = !c.inProgress && kapacitet > 0 && satiUk < 0.5 * kapacitet && (c.radnici + c.rezija) > 0.005;
+
+    for (const name of Object.keys(projH)) {
+      const hh = projH[name];
+      const p = ensure(name);
+      const rad = hh * rRad, rz = hh * rRez;
+      p.rad += rad; p.rez += rz; p.sati += hh;
+      const mm = mEnsure(p, k);
+      mm.rad += rad; mm.rez += rz; mm.sati += hh;
+      mm.udio = satiUk > 0 ? (hh / satiUk) * 100 : 0;
+      if (nepotpun) p.nepotpunSet.add(k);
+      if (c.inProgress) p.inProgressSet.add(k);
+      for (const wName of Object.keys(projW[name] || {})) {
+        const src = projW[name][wName];
+        if (!p.workers[wName]) p.workers[wName] = { sati: 0, rad: 0, rez: 0, dani: 0 };
+        p.workers[wName].sati += src.sati;
+        p.workers[wName].rad += src.sati * rRad;
+        p.workers[wName].rez += src.sati * rRez;
+        p.workers[wName].dani += src.dani.size;
+      }
+    }
+
+    /* Godisnji odmor kao vlastita kosara — preuzima svoj udio troska mjeseca */
+    if (godH > 0.005) {
+      const g = ensure(PROJ_GODISNJI);
+      g.sati += godH;
+      g.rad += godH * rRad;
+      g.rez += godH * rRez;
+      const gm = mEnsure(g, k);
+      gm.sati += godH; gm.rad += godH * rRad; gm.rez += godH * rRez;
+      gm.udio = satiUk > 0 ? (godH / satiUk) * 100 : 0;
+      if (k > g.lastActivity) g.lastActivity = k;
+    }
+
+    /* Mjesec bez ijednog evidentiranog sata: cijeli trosak ide u "Bez projekta" */
+    if (satiUk <= 0 && (c.radnici + c.rezija) > 0.005) {
+      const n = ensure(PROJ_NONE);
+      n.rad += c.radnici; n.rez += c.rezija;
+      const nm = mEnsure(n, k);
+      nm.rad += c.radnici; nm.rez += c.rezija; nm.udio = 100;
+      n.nepotpunSet.add(k);
+      if (k > n.lastActivity) n.lastActivity = k;
+    }
   }
+
   const list = Object.values(map);
   const lastKey = months.length ? months[months.length - 1] : null;
   const prevKey = lastKey ? addCalendarMonths(lastKey, -1) : null;
   for (const p of list) {
-    p.ukupno = p.materijal + p.rad;
+    p.ukupno = p.materijal + p.rad + p.rez;
     p.isActive = !!lastKey && (p.lastActivity === lastKey || p.lastActivity === prevKey);
     p.monthCount = Object.keys(p.months).length;
     p.workerCount = Object.keys(p.workers).length;
-    /* Obračun: radni dani + ručno uneseni podaci (uplate, ponuda, status) */
+    /* Obracun: kalendarski raspon + dani s evidencijom + rucno uneseni podaci */
     p.dani = p.daysSet ? p.daysSet.size : 0;
+    const dates = p.daysSet ? Array.from(p.daysSet).sort() : [];
+    p.prviDan = dates.length ? dates[0] : null;
+    p.zadnjiDan = dates.length ? dates[dates.length - 1] : null;
+    p.kalDana = (p.prviDan && p.zadnjiDan)
+      ? Math.round((new Date(p.zadnjiDan) - new Date(p.prviDan)) / 86400000) + 1
+      : 0;
     delete p.daysSet;
+    p.nepotpunMonths = Array.from(p.nepotpunSet).sort();
+    delete p.nepotpunSet;
+    p.inProgressMonths = Array.from(p.inProgressSet).sort();
+    delete p.inProgressSet;
     const ob = (state.obracun && typeof state.obracun === 'object') ? state.obracun[p.name] : null;
     p.uplate = (ob && Array.isArray(ob.uplate)) ? ob.uplate : [];
     p.naplaceno = round2(p.uplate.reduce((a, u) => a + (Number(u.amount) || 0), 0));
@@ -3687,14 +3841,61 @@ function computeProjectsData() {
     p.troskoviRucni = (ob && Array.isArray(ob.troskovi)) ? ob.troskovi : [];
     p.trosakRucni = round2(p.troskoviRucni.reduce((a, t) => a + (Number(t.amount) || 0), 0));
     p.materijalBezPdv = round2(p.materijal / 1.25);
-    p.trosak = round2(p.materijalBezPdv + p.rad + p.trosakRucni);
-    p.zarada = p.naplaceno > 0 ? round2(p.naplaceno - p.trosak) : null;
-    p.marza = p.naplaceno > 0 ? (p.zarada / p.naplaceno) * 100 : null;
+    p.trosak = round2(p.materijalBezPdv + p.rad + p.rez + p.trosakRucni);
+    /* Zarada se ne prikazuje dok projekt dodiruje mjesec s nepotpunom evidencijom */
+    p.zaradaBlocked = p.nepotpunMonths.length > 0 && p.name !== PROJ_NONE;
+    p.zarada = (p.naplaceno > 0 && !p.zaradaBlocked) ? round2(p.naplaceno - p.trosak) : null;
+    p.marza = (p.zarada !== null && p.naplaceno > 0) ? (p.zarada / p.naplaceno) * 100 : null;
+    /* Naplaceno veliko, a rad + rezija zanemarivi: sati ocito nisu upisani */
+    p.warnEvidencija = p.naplaceno > 0 && !p.zaradaBlocked && (p.rad + p.rez) < 0.10 * p.naplaceno;
   }
   return list;
 }
 
+/* Povratak povlacenjem s lijevog ruba (detalj -> lista -> grupe), samo touch */
+let __projSwipeInit = false;
+function initProjectsSwipe() {
+  if (__projSwipeInit) return;
+  const panel = document.getElementById('panel-projects');
+  if (!panel) return;
+  __projSwipeInit = true;
+  let sx = 0, sy = 0, dx = 0, on = false, w = 0, t0 = 0;
+  panel.addEventListener('touchstart', (e) => {
+    if (activeTab !== 'projects') return;
+    if (activeProject === null && projectsGroup === null) return;
+    const t = e.touches[0];
+    if (t.clientX - panel.getBoundingClientRect().left > 30) return;
+    sx = t.clientX; sy = t.clientY; dx = 0; on = true; t0 = Date.now();
+    w = panel.getBoundingClientRect().width;
+    panel.classList.add('swiping');
+  }, { passive: true });
+  panel.addEventListener('touchmove', (e) => {
+    if (!on) return;
+    const t = e.touches[0];
+    const dy = Math.abs(t.clientY - sy);
+    dx = Math.max(0, t.clientX - sx);
+    if (dy > 30 && dx < dy) { on = false; panel.classList.remove('swiping'); panel.style.transform = ''; return; }
+    panel.style.transform = 'translateX(' + dx + 'px)';
+  }, { passive: true });
+  const fin = () => {
+    if (!on) return;
+    on = false;
+    panel.classList.remove('swiping');
+    panel.style.transform = '';
+    const brzo = dx / Math.max(1, Date.now() - t0) > 0.5;
+    if (dx > w * 0.28 || (brzo && dx > 40)) {
+      if (activeProject !== null) activeProject = null;
+      else projectsGroup = null;
+      renderProjects();
+      window.scrollTo(0, 0);
+    }
+  };
+  panel.addEventListener('touchend', fin);
+  panel.addEventListener('touchcancel', fin);
+}
+
 function renderProjects() {
+  initProjectsSwipe();
   const all = computeProjectsData();
   if (activeProject !== null) {
     const p = all.find(x => x.name === activeProject);
@@ -3704,7 +3905,8 @@ function renderProjects() {
 
   const panel = document.getElementById('panel-projects');
   const hiddenSet = new Set(state.hiddenProjects || []);
-  const realAll = all.filter(p => p.name !== PROJ_NONE);
+  const realAll = all.filter(p => p.name !== PROJ_NONE && p.name !== PROJ_GODISNJI);
+  const god = all.find(p => p.name === PROJ_GODISNJI);
   const real = realAll.filter(p => !hiddenSet.has(p.name));
   const removed = realAll.filter(p => hiddenSet.has(p.name)).sort((a, b) => b.ukupno - a.ukupno);
   const removedTotal = removed.reduce((a, p) => a + p.ukupno, 0);
@@ -3774,34 +3976,38 @@ function renderProjects() {
       </div>
     </div>
 
-    ${none ? `
+    ${(none || god) ? `
     <div class="pick-h">Neraspoređeno</div>
     <div class="pick-list">
+      ${none ? `
       <div class="pick-row done" data-proj="${PROJ_NONE}">
         <span class="nm" style="font-size: 16px;">Bez projekta</span>
-        <span class="side"><span class="pill gray">stavke i sati bez naziva</span><span class="chev">›</span></span>
-      </div>
+        <span class="side"><span class="pill gray">${eur(none.materijalBezPdv + none.rad + none.rez, 0)}</span><span class="chev">›</span></span>
+      </div>` : ''}
+      ${god ? `
+      <div class="pick-row done" style="cursor: default;">
+        <span class="nm" style="font-size: 16px;">Godišnji odmor</span>
+        <span class="side"><span class="pill gray">${FMT_INT.format(god.sati)} h · ${eur(god.rad + god.rez, 0)}</span></span>
+      </div>` : ''}
     </div>` : ''}
 
     ${removed.length ? `
-    <div class="card" style="margin-top: 24px;">
-      <div class="card-head">
-        <div>
-          <div class="card-title">Uklonjeni projekti (${removed.length})</div>
-          <div class="card-sub">Skriveni s pregleda · podaci (STO stavke i sati) ostaju netaknuti · ukupno ${eur(removedTotal, 0)}</div>
-        </div>
-      </div>
-      <div class="table-scroll">
-        <table class="table">
-          <tbody>
-            ${removed.map(p => `
-              <tr>
-                <td><strong>${escapeHtml(p.name)}</strong></td>
-                <td class="num text-right" style="color: var(--muted);">${eur(p.ukupno, 0)}</td>
-                ${isAdmin ? `<td class="text-right" style="width: 90px;"><button class="btn btn-sm" data-restore-proj="${escapeHtml(p.name)}">Vrati</button></td>` : ''}
-              </tr>`).join('')}
-          </tbody>
-        </table>
+    <button class="proj-removed-row" id="proj-removed-toggle" type="button">
+      <span class="chev2">›</span>
+      Uklonjeni projekti (${removed.length})
+      <span class="sp"></span>
+      <span style="font-family: var(--font-mono); font-size: 12.5px;">${eur(removedTotal, 0)}</span>
+    </button>
+    <div class="proj-removed-list" id="proj-removed-list">
+      <div class="pick-list" style="margin-top: 8px;">
+        ${removed.map(p => `
+        <div class="pick-row done" style="cursor: default;">
+          <span class="nm" style="font-size: 15px;">${escapeHtml(p.name)}</span>
+          <span class="side">
+            <span style="font-family: var(--font-mono); font-size: 12.5px; color: var(--muted);">${eur(p.ukupno, 0)}</span>
+            ${isAdmin ? `<button class="btn btn-sm" data-restore-proj="${escapeHtml(p.name)}">Vrati</button>` : ''}
+          </span>
+        </div>`).join('')}
       </div>
     </div>
     ` : ''}
@@ -3815,6 +4021,11 @@ function renderProjects() {
     activeProject = row.dataset.proj;
     renderProjects();
   }));
+  const remTgl = panel.querySelector('#proj-removed-toggle');
+  remTgl?.addEventListener('click', () => {
+    remTgl.classList.toggle('open');
+    panel.querySelector('#proj-removed-list')?.classList.toggle('open');
+  });
   panel.querySelectorAll('[data-restore-proj]').forEach(b => b.addEventListener('click', async () => {
     const name = b.dataset.restoreProj;
     state.hiddenProjects = (state.hiddenProjects || []).filter(n => n !== name);
@@ -4336,7 +4547,7 @@ function renderProjectDetail(p) {
   const mKeys = Object.keys(p.months).sort();
   const workers = Object.entries(p.workers)
     .map(([name, w]) => ({ name, ...w }))
-    .sort((a, b) => b.trosak - a.trosak);
+    .sort((a, b) => (b.rad + b.rez) - (a.rad + a.rez));
 
   // Razrada materijala po stavkama (iz uvezenih STO računa)
   const matMap = {};
@@ -4369,7 +4580,7 @@ function renderProjectDetail(p) {
   const razlikaPct = (razlika !== null && p.ponuda > 0) ? (razlika / p.ponuda) * 100 : null;
   const planMarza = hasPonuda ? round2(p.ponuda - p.trosak) : null;
   const planMarzaPct = (planMarza !== null && p.ponuda > 0) ? (planMarza / p.ponuda) * 100 : null;
-  const gubitak = hasNapl && p.zarada < 0;
+  const gubitak = hasNapl && p.zarada !== null && p.zarada < 0;
   const signEur = (n, dec = 2) => (n >= 0 ? '+' : '−') + eur(Math.abs(n), dec);
   const signPct = (x) => (x >= 0 ? '+' : '−') + pct1(Math.abs(x));
 
@@ -4378,8 +4589,13 @@ function renderProjectDetail(p) {
     ? '<span class="pill gray" style="vertical-align: middle;">✓ završen</span>'
     : '<span class="pill brown" style="vertical-align: middle;">tekući</span>');
   const subline = isNone
-    ? 'STO stavke bez naziva projekta i radni sati bez upisanog projekta'
-    : `${periodStr} · ${p.dani} ${hrPlural(p.dani, 'radni dan', 'radna dana', 'radnih dana')} · ${FMT_INT.format(p.sati)} h`;
+    ? 'STO stavke bez naziva projekta, sati bez upisanog projekta i mjeseci bez evidencije'
+    : (p.prviDan && p.zadnjiDan
+      ? `${isoToEU(p.prviDan)} – ${isoToEU(p.zadnjiDan)} · ${p.kalDana} ${hrPlural(p.kalDana, 'kalendarski dan', 'kalendarska dana', 'kalendarskih dana')} · ${p.dani} ${hrPlural(p.dani, 'dan s evidencijom', 'dana s evidencijom', 'dana s evidencijom')} · ${FMT_INT.format(p.sati)} h`
+      : `${periodStr} · ${FMT_INT.format(p.sati)} h`);
+  const nepotpunLbl = p.nepotpunMonths && p.nepotpunMonths.length
+    ? p.nepotpunMonths.map(monthLabelShort).join(', ')
+    : '';
 
   const obKpiHtml = isNone ? '' : `
     <div class="kpi-row" style="margin-bottom: 24px;">
@@ -4391,38 +4607,34 @@ function renderProjectDetail(p) {
       <div class="kpi-cell">
         <div class="stat-label">Trošak ukupno</div>
         <div class="stat-value">${eur(p.trosak, 0)}</div>
-        <div class="stat-sub">${p.trosakRucni > 0 ? 'materijal + rad + ostalo' : 'materijal bez PDV + rad'}</div>
+        <div class="stat-sub">materijal neto + rad + režija${p.trosakRucni > 0 ? ' + ostalo' : ''}</div>
       </div>
-      ${hasNapl ? `
+      ${p.zaradaBlocked ? `
+      <div class="kpi-cell" style="background: var(--warning-soft, #f6eeda);">
+        <div class="stat-label">Zarada</div>
+        <div class="stat-value" style="color: var(--muted);">—</div>
+        <div class="stat-sub">čeka evidenciju: ${nepotpunLbl}</div>
+      </div>` : hasNapl ? `
       <div class="kpi-cell" style="background: var(${gubitak ? '--negative-soft' : '--positive-soft'});">
         <div class="stat-label" style="color: var(${gubitak ? '--negative' : '--positive'});">Zarada</div>
         <div class="stat-value" style="color: var(${gubitak ? '--negative' : '--positive'});">${signEur(p.zarada, 0)}</div>
-        <div class="stat-sub" style="color: var(${gubitak ? '--negative' : '--positive'});">marža ${signPct(p.marza)}</div>
+        <div class="stat-sub" style="color: var(${gubitak ? '--negative' : '--positive'});">marža ${signPct(p.marza)}${p.warnEvidencija ? ' · <span class="pill amber">evidencija sati nepotpuna</span>' : ''}</div>
       </div>` : `
       <div class="kpi-cell">
         <div class="stat-label">Zarada</div>
         <div class="stat-value" style="color: var(--muted-2);">—</div>
         <div class="stat-sub">čeka prvu uplatu</div>
       </div>`}
-      ${hasPonuda ? `
       <div class="kpi-cell">
-        <div class="stat-label">Ponuda → naplaćeno</div>
-        <div class="stat-value" style="font-size: 21px;">${FMT_INT.format(Math.round(p.ponuda))} → ${hasNapl ? FMT_INT.format(Math.round(p.naplaceno)) : '—'}</div>
-        <div class="stat-sub">${razlika !== null
-          ? (Math.abs(razlika) < 0.005
-            ? 'naplaćeno točno po ponudi'
-            : `<span class="delta-chip ${razlika >= 0 ? 'up' : 'down'}">${signEur(razlika, 0)} · ${signPct(razlikaPct)}</span>`)
-          : 'još nema uplata'}</div>
-      </div>` : `
-      <div class="kpi-cell">
-        <div class="stat-label">Ponuda</div>
-        <div class="stat-value" style="color: var(--muted-2);">—</div>
-        <div class="stat-sub">nije unesena</div>
-      </div>`}
+        <div class="stat-label">Rad i režija</div>
+        <div class="stat-value">${eur(p.rad + p.rez, 0)}</div>
+        <div class="stat-sub">rad ${eur(p.rad, 0)} + režija ${eur(p.rez, 0)}</div>
+      </div>
     </div>`;
 
   let raspodjelaHtml = '';
-  if (!isNone && hasNapl) {
+  const REZ_COLOR = '#6f8196';
+  if (!isNone && hasNapl && !p.zaradaBlocked) {
     const segLbl = (w) => w >= 9 ? pct1(w) : '';
     const ostaloLegend = (base) => p.trosakRucni > 0 ? `
       <div class="ob-legend-row">
@@ -4434,8 +4646,9 @@ function renderProjectDetail(p) {
     if (!gubitak) {
       const wMat = (p.materijalBezPdv / p.naplaceno) * 100;
       const wRad = (p.rad / p.naplaceno) * 100;
+      const wRez = (p.rez / p.naplaceno) * 100;
       const wOst = (p.trosakRucni / p.naplaceno) * 100;
-      const wZar = Math.max(0, 100 - wMat - wRad - wOst);
+      const wZar = Math.max(0, 100 - wMat - wRad - wRez - wOst);
       raspodjelaHtml = `
     <div class="card" style="margin-bottom: 24px;">
       <div class="card-head">
@@ -4447,6 +4660,7 @@ function renderProjectDetail(p) {
       <div class="ob-bar">
         ${wMat > 0.05 ? `<span style="width: ${wMat.toFixed(2)}%; background: var(--acc-projects);" title="Materijal ${pct1(wMat)}">${segLbl(wMat)}</span>` : ''}
         ${wRad > 0.05 ? `<span style="width: ${wRad.toFixed(2)}%; background: var(--acc-cashflow);" title="Rad ${pct1(wRad)}">${segLbl(wRad)}</span>` : ''}
+        ${wRez > 0.05 ? `<span style="width: ${wRez.toFixed(2)}%; background: ${REZ_COLOR};" title="Režija ${pct1(wRez)}">${segLbl(wRez)}</span>` : ''}
         ${wOst > 0.05 ? `<span style="width: ${wOst.toFixed(2)}%; background: var(--muted);" title="Ostali troškovi ${pct1(wOst)}">${segLbl(wOst)}</span>` : ''}
         ${wZar > 0.05 ? `<span style="width: ${wZar.toFixed(2)}%; background: var(--positive);" title="Zarada ${pct1(wZar)}">${segLbl(wZar)}</span>` : ''}
       </div>
@@ -4458,9 +4672,15 @@ function renderProjectDetail(p) {
       </div>
       <div class="ob-legend-row">
         <span class="sw" style="background: var(--acc-cashflow);"></span>
-        <span>Rad <span style="color: var(--muted); font-size: 12.5px;">(${FMT_INT.format(p.sati)} h · ${p.dani} ${hrPlural(p.dani, 'dan', 'dana', 'dana')})</span></span>
+        <span>Rad <span style="color: var(--muted); font-size: 12.5px;">(udio u stvarnom trošku radnika po mjesecu · ${FMT_INT.format(p.sati)} h)</span></span>
         <span class="amt">${eur(p.rad, 0)}</span>
         <span class="pct">${pct1(wRad)}</span>
+      </div>
+      <div class="ob-legend-row">
+        <span class="sw" style="background: ${REZ_COLOR};"></span>
+        <span>Režija <span style="color: var(--muted); font-size: 12.5px;">(isti udio u stvarnoj režiji po mjesecu)</span></span>
+        <span class="amt">${eur(p.rez, 0)}</span>
+        <span class="pct">${pct1(wRez)}</span>
       </div>
       ${ostaloLegend(p.naplaceno)}
       <div class="ob-legend-row">
@@ -4474,7 +4694,8 @@ function renderProjectDetail(p) {
       const base = p.trosak > 0 ? p.trosak : 1;
       const wMat = (p.materijalBezPdv / base) * 100;
       const wRad = (p.rad / base) * 100;
-      const wOst = Math.max(0, 100 - wMat - wRad);
+      const wRez = (p.rez / base) * 100;
+      const wOst = Math.max(0, 100 - wMat - wRad - wRez);
       raspodjelaHtml = `
     <div class="card" style="margin-bottom: 24px;">
       <div class="card-head">
@@ -4486,6 +4707,7 @@ function renderProjectDetail(p) {
       <div class="ob-bar">
         ${wMat > 0.05 ? `<span style="width: ${wMat.toFixed(2)}%; background: var(--acc-projects);" title="Materijal ${pct1(wMat)}">${segLbl(wMat)}</span>` : ''}
         ${wRad > 0.05 ? `<span style="width: ${wRad.toFixed(2)}%; background: var(--acc-cashflow);" title="Rad ${pct1(wRad)}">${segLbl(wRad)}</span>` : ''}
+        ${wRez > 0.05 ? `<span style="width: ${wRez.toFixed(2)}%; background: ${REZ_COLOR};" title="Režija ${pct1(wRez)}">${segLbl(wRez)}</span>` : ''}
         ${p.trosakRucni > 0 && wOst > 0.05 ? `<span style="width: ${wOst.toFixed(2)}%; background: var(--muted);" title="Ostali troškovi ${pct1(wOst)}">${segLbl(wOst)}</span>` : ''}
       </div>
       <div class="ob-legend-row">
@@ -4496,9 +4718,15 @@ function renderProjectDetail(p) {
       </div>
       <div class="ob-legend-row">
         <span class="sw" style="background: var(--acc-cashflow);"></span>
-        <span>Rad <span style="color: var(--muted); font-size: 12.5px;">(${FMT_INT.format(p.sati)} h · ${p.dani} ${hrPlural(p.dani, 'dan', 'dana', 'dana')})</span></span>
+        <span>Rad <span style="color: var(--muted); font-size: 12.5px;">(udio u stvarnom trošku radnika po mjesecu · ${FMT_INT.format(p.sati)} h)</span></span>
         <span class="amt">${eur(p.rad, 0)}</span>
         <span class="pct">${pct1(wRad)}</span>
+      </div>
+      <div class="ob-legend-row">
+        <span class="sw" style="background: ${REZ_COLOR};"></span>
+        <span>Režija <span style="color: var(--muted); font-size: 12.5px;">(isti udio u stvarnoj režiji po mjesecu)</span></span>
+        <span class="amt">${eur(p.rez, 0)}</span>
+        <span class="pct">${pct1(wRez)}</span>
       </div>
       ${ostaloLegend(base)}
       <div class="ob-legend-row">
@@ -4512,6 +4740,7 @@ function renderProjectDetail(p) {
   }
 
   let ponudaUplateHtml = '';
+  let uplateCardHtml = '';
   if (!isNone) {
     const ponudaInner = hasPonuda ? `
         <div class="ob-cmp-row"><span>Ponuda (bez PDV)</span><span class="v">${eur(p.ponuda, 2)}</span></div>
@@ -4567,18 +4796,7 @@ function renderProjectDetail(p) {
           <span></span>
         </div>`;
 
-    ponudaUplateHtml = `
-    <div class="grid grid-cf" style="margin-bottom: 24px;">
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <div class="card-title">Ponuda</div>
-            <div class="card-sub">${hasPonuda ? 'Usporedba s naplaćenim i troškom' : 'Ručni unos ili upload — PDF, Excel ili CSV'}</div>
-          </div>
-          ${hasPonuda && isAdmin ? '<button class="btn btn-sm" id="ob-ponuda-edit">Uredi</button>' : ''}
-        </div>
-        ${ponudaInner}
-      </div>
+    uplateCardHtml = `
       <div class="card">
         <div class="card-head">
           <div>
@@ -4590,16 +4808,26 @@ function renderProjectDetail(p) {
         ${uplateSorted.length === 0 ? '<div class="empty">Još nema evidentiranih uplata za ovaj projekt.</div>' : `
         ${uplateSorted.map(upRow).join('')}
         <div class="up-total"><span>NAPLAĆENO UKUPNO</span><span class="num">${eur(p.naplaceno, 2)}</span></div>`}
+      </div>`;
+    ponudaUplateHtml = `
+    <div class="card" style="margin-top: 24px;">
+      <div class="card-head">
+        <div>
+          <div class="card-title" style="font-size: 17px; color: var(--muted);">Ponuda <span style="font-weight: 400;">· referenca</span></div>
+          <div class="card-sub">${hasPonuda ? 'Ne ulazi u obračun zarade — služi samo za usporedbu s naplaćenim' : 'Ručni unos ili upload — PDF, Excel ili CSV'}</div>
+        </div>
+        ${hasPonuda && isAdmin ? '<button class="btn btn-sm" id="ob-ponuda-edit">Uredi</button>' : ''}
       </div>
+      ${ponudaInner}
     </div>`;
   }
 
   const trosakAutoHtml = `
-    <div class="card" style="margin-bottom: 24px;">
+    <div class="card">
       <div class="card-head">
         <div>
           <div class="card-title">Trošak</div>
-          <div class="card-sub">Materijal i rad automatski iz STO taba i Evidencije sati · ostale troškove dodaješ sam</div>
+          <div class="card-sub">Materijal, rad i režija automatski iz STO taba, Evidencije sati i Troškova · ostalo dodaješ sam</div>
         </div>
         ${isAdmin && !isNone ? '<button class="btn btn-sm" id="ob-trosak-add">+ Dodaj trošak</button>' : ''}
       </div>
@@ -4607,9 +4835,10 @@ function renderProjectDetail(p) {
         <tbody>
           <tr><td>Materijal s PDV <span style="color: var(--muted-2); font-size: 12px;">(STO · ${p.stoCount} ${hrPlural(p.stoCount, 'stavka', 'stavke', 'stavki')})</span></td><td class="num text-right">${eur(p.materijal, 2)}</td></tr>
           <tr><td><strong>Materijal bez PDV</strong> <span style="color: var(--muted-2); font-size: 12px;">(÷ 1,25)</span></td><td class="num text-right"><strong>${eur(p.materijalBezPdv, 2)}</strong></td></tr>
-          <tr><td><strong>Rad</strong> <span style="color: var(--muted-2); font-size: 12px;">(sati × satnica + marenda)</span></td><td class="num text-right"><strong>${eur(p.rad, 2)}</strong></td></tr>
+          <tr><td><strong>Rad</strong> <span style="color: var(--muted-2); font-size: 12px;">(udio u trošku radnika po mjesecu)</span></td><td class="num text-right"><strong>${eur(p.rad, 2)}</strong></td></tr>
+          <tr><td><strong>Režija</strong> <span style="color: var(--muted-2); font-size: 12px;">(isti udio u režiji po mjesecu)</span></td><td class="num text-right"><strong>${eur(p.rez, 2)}</strong></td></tr>
           <tr><td>Sati ukupno</td><td class="num text-right">${FMT_INT.format(p.sati)} h</td></tr>
-          <tr><td>Radni dani</td><td class="num text-right">${p.dani}</td></tr>
+          <tr><td>Dani s evidencijom</td><td class="num text-right">${p.dani}</td></tr>
           ${p.dani > 0 ? `<tr><td>Prosjek troška po danu</td><td class="num text-right">${eur(p.trosak / p.dani, 2)}</td></tr>` : ''}
           ${troskoviSorted.length ? `
           <tr><td colspan="2" style="padding-top: 16px; border-bottom: none;"><span class="stat-label">Ostali troškovi · ručni unos</span></td></tr>
@@ -4648,8 +4877,11 @@ function renderProjectDetail(p) {
 
     ${obKpiHtml}
     ${raspodjelaHtml}
-    ${ponudaUplateHtml}
-    ${trosakAutoHtml}
+    ${isNone ? `<div style="margin-bottom: 24px;">${trosakAutoHtml}</div>` : `
+    <div class="grid grid-cf" style="margin-bottom: 24px;">
+      ${uplateCardHtml}
+      ${trosakAutoHtml}
+    </div>`}
 
     <div class="card" style="margin-bottom: 24px;">
       <div class="card-head">
@@ -4666,7 +4898,7 @@ function renderProjectDetail(p) {
         <div class="card-head">
           <div>
             <div class="card-title">Po mjesecima</div>
-            <div class="card-sub">Razrada po izvorima</div>
+            <div class="card-sub">Udio mjeseca = sati projekta ÷ svi sati firme u mjesecu (uklj. godišnji)</div>
           </div>
         </div>
         <div class="table-scroll">
@@ -4674,9 +4906,11 @@ function renderProjectDetail(p) {
             <thead>
               <tr>
                 <th>Mjesec</th>
+                <th class="text-right">Sati</th>
+                <th class="text-right">Udio mj.</th>
                 <th class="text-right">Materijal</th>
                 <th class="text-right">Rad</th>
-                <th class="text-right">Sati</th>
+                <th class="text-right">Režija</th>
                 <th class="text-right">Ukupno</th>
               </tr>
             </thead>
@@ -4686,19 +4920,23 @@ function renderProjectDetail(p) {
                 return `
                 <tr>
                   <td><strong>${monthLabel(k)}</strong></td>
+                  <td class="num text-right">${m.sati ? FMT_INT.format(m.sati) : '—'}</td>
+                  <td class="num text-right" style="color: var(--muted);">${m.udio ? pct1(m.udio) : '—'}</td>
                   <td class="num text-right">${m.materijal ? eur(m.materijal, 0) : '—'}</td>
                   <td class="num text-right">${m.rad ? eur(m.rad, 0) : '—'}</td>
-                  <td class="num text-right">${m.sati ? FMT_INT.format(m.sati) : '—'}</td>
-                  <td class="num text-right" style="font-weight: 600;">${eur(m.materijal + m.rad, 0)}</td>
+                  <td class="num text-right">${m.rez ? eur(m.rez, 0) : '—'}</td>
+                  <td class="num text-right" style="font-weight: 600;">${eur(m.materijal + m.rad + m.rez, 0)}</td>
                 </tr>`;
               }).join('')}
             </tbody>
             <tfoot>
               <tr>
                 <td>UKUPNO</td>
+                <td class="num text-right"><strong>${FMT_INT.format(p.sati)}</strong></td>
+                <td></td>
                 <td class="num text-right"><strong>${eur(p.materijal, 0)}</strong></td>
                 <td class="num text-right"><strong>${eur(p.rad, 0)}</strong></td>
-                <td class="num text-right"><strong>${FMT_INT.format(p.sati)}</strong></td>
+                <td class="num text-right"><strong>${eur(p.rez, 0)}</strong></td>
                 <td class="num text-right"><strong>${eur(p.ukupno, 0)}</strong></td>
               </tr>
             </tfoot>
@@ -4710,7 +4948,7 @@ function renderProjectDetail(p) {
         <div class="card-head">
           <div>
             <div class="card-title">Rad po radniku</div>
-            <div class="card-sub">Sati × satnica + marenda</div>
+            <div class="card-sub">Svaki sat nosi trošak mjeseca u kojem je odrađen</div>
           </div>
         </div>
         ${workers.length === 0 ? `<div class="empty">Nema evidentiranih sati za ovaj projekt.</div>` : `
@@ -4720,8 +4958,10 @@ function renderProjectDetail(p) {
               <tr>
                 <th>Radnik</th>
                 <th class="text-right">Sati</th>
-                <th class="text-right">Satnica</th>
-                <th class="text-right">Trošak</th>
+                <th class="text-right">Dana</th>
+                <th class="text-right">Rad</th>
+                <th class="text-right">Režija</th>
+                <th class="text-right">Ukupno</th>
               </tr>
             </thead>
             <tbody>
@@ -4729,8 +4969,10 @@ function renderProjectDetail(p) {
                 <tr>
                   <td><strong>${escapeHtml(w.name)}</strong></td>
                   <td class="num text-right">${FMT_INT.format(w.sati)}</td>
-                  <td class="num text-right">${eur(w.satnica, 2)}</td>
-                  <td class="num text-right" style="font-weight: 600;">${eur(w.trosak, 0)}</td>
+                  <td class="num text-right">${w.dani || '—'}</td>
+                  <td class="num text-right">${eur(w.rad, 0)}</td>
+                  <td class="num text-right">${eur(w.rez, 0)}</td>
+                  <td class="num text-right" style="font-weight: 600;">${eur(w.rad + w.rez, 0)}</td>
                 </tr>`).join('')}
             </tbody>
             <tfoot>
@@ -4739,11 +4981,13 @@ function renderProjectDetail(p) {
                 <td class="num text-right"><strong>${FMT_INT.format(p.sati)}</strong></td>
                 <td></td>
                 <td class="num text-right"><strong>${eur(p.rad, 0)}</strong></td>
+                <td class="num text-right"><strong>${eur(p.rez, 0)}</strong></td>
+                <td class="num text-right"><strong>${eur(p.rad + p.rez, 0)}</strong></td>
               </tr>
             </tfoot>
           </table>
         </div>`}
-        <div class="proj-formula">Rad = sati × satnica + marenda, pripisano po danu iz Evidencije sati. Radnici bez satnice nisu uključeni u obračun projekta.</div>
+        <div class="proj-formula">Udio mjeseca = sati projekta ÷ svi sati firme u mjesecu (uklj. godišnji). Rad = udio × stvarni trošak radnika tog mjeseca (fiksno + isplata + prijevoz + stan). Režija = udio × (fiksne osobe + radnici bez satnice + tekući troškovi bez plaća) tog mjeseca. Ništa nije prosjek — svaki mjesec nosi svoj stvarni trošak, pa kišni i prazni dani poskupljuju sat mjeseca u kojem su se dogodili. Isplaćeno radnicima po satnici za ove sate: ${eur(p.radIsplata, 0)}.</div>
       </div>
     </div>
 
@@ -4792,6 +5036,8 @@ function renderProjectDetail(p) {
         </table>
       </div>`}
     </div>
+
+    ${ponudaUplateHtml}
   `;
 
   panel.querySelector('#proj-back').addEventListener('click', () => {
@@ -4811,6 +5057,7 @@ function renderProjectDetail(p) {
       datasets: [
         { label: 'Materijal', data: mKeys.map(k => p.months[k].materijal), backgroundColor: cssVar('--acc-sto'), borderRadius: 6, stack: 's' },
         { label: 'Rad', data: mKeys.map(k => p.months[k].rad), backgroundColor: cssVar('--acc-hours'), borderRadius: 6, stack: 's' },
+        { label: 'Režija', data: mKeys.map(k => p.months[k].rez), backgroundColor: '#6f8196', borderRadius: 6, stack: 's' },
       ],
     },
     options: {
