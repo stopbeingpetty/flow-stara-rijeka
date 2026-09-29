@@ -667,14 +667,203 @@ function fiksnoForMonth(w, monthKey) {
   return matched ? val : base;
 }
 
+/* ============================================================
+   PERIOD RADA RADNIKA (Postavke › Radnici)
+   w.zaposlenje = [{ od: 'YYYY-MM-DD' | '', do: 'YYYY-MM-DD' | '', puniMjesecOd?: true, puniMjesecDo?: true }]
+   Bez polja = radnik je u timu od početka evidencije i dalje (stari podaci ostaju isti).
+   Prazan 'od' = od početka evidencije; prazan 'do' = i dalje radi.
+   Radnik se ne briše: izvan perioda rada ne ulazi u unos sati, isplatu, cashflow
+   ni obračun projekata, a sva povijest ostaje. U mjesecu dolaska ili odlaska
+   fiksno, prijevoz, stan i fiksna isplata idu razmjerno radnim danima (pon-pet)
+   u periodu rada, osim ako je za taj rub odabran puni mjesec.
+   ============================================================ */
+const MONTH_GEN_HR = ['siječnja', 'veljače', 'ožujka', 'travnja', 'svibnja', 'lipnja', 'srpnja', 'kolovoza', 'rujna', 'listopada', 'studenoga', 'prosinca'];
+const monthGenHr = (key) => MONTH_GEN_HR[parseInt(key.split('-')[1], 10) - 1];
+const monthAccHr = (key) => { const i = parseInt(key.split('-')[1], 10) - 1; return i === 1 ? 'veljaču' : MONTH_NAMES_HR[i].toLowerCase(); };
+const isoDateLocal = (dt) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+const localTodayISO = () => isoDateLocal(new Date());
+const addDaysISO = (iso, n) => { const [y, m, d] = iso.split('-').map(Number); return isoDateLocal(new Date(y, m - 1, d + n)); };
+const dmEU = (iso) => isoToEU(iso).slice(0, 5);
+const monthBounds = (key) => {
+  const [y, m] = key.split('-').map(Number);
+  return { start: `${key}-01`, end: `${key}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}` };
+};
+const hrRadnihDana = (n) => (n % 10 === 1 && n % 100 !== 11) ? 'radni dan' : ([2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100)) ? 'radna dana' : 'radnih dana';
+const WP_ICON_ODJAVA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>';
+const WP_ICON_VRATI = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>';
+const WP_ICON_INFO = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>';
+
+function workerPeriods(w) {
+  const list = (w && Array.isArray(w.zaposlenje)) ? w.zaposlenje.filter(p => p && typeof p === 'object') : [];
+  return list.length ? list : null;
+}
+/* Zadnji (tekući) period rada: onaj s najkasnijim početkom */
+function workerLastPeriod(w) {
+  const per = workerPeriods(w);
+  if (!per) return null;
+  return per.slice().sort((a, b) => (a.od || '').localeCompare(b.od || ''))[per.length - 1];
+}
+function workerActiveOn(w, iso) {
+  const per = workerPeriods(w);
+  if (!per) return true;
+  return per.some(p => (!p.od || p.od <= iso) && (!p.do || iso <= p.do));
+}
+function workerActiveInRange(w, a, b) {
+  const per = workerPeriods(w);
+  if (!per) return true;
+  return per.some(p => (!p.od || p.od <= b) && (!p.do || p.do >= a));
+}
+const workerActiveInMonth = (w, key) => { const { start, end } = monthBounds(key); return workerActiveInRange(w, start, end); };
+/* Radnici koji ulaze u isplatu i troškove mjeseca */
+const workersInMonth = (key) => (state.settings.workers || []).filter(w => workerActiveInMonth(w, key));
+/* Radnici u prikazu Evidencije: oni u periodu rada i oni koji u mjesecu imaju upisane sate (ništa upisano ne nestaje s ekrana) */
+function workersForMonthView(key) {
+  const h = state.hours[key];
+  const withData = new Set();
+  if (h && Array.isArray(h.days)) {
+    for (const d of h.days) {
+      for (const [n, e] of Object.entries(d.workers || {})) {
+        if (e && ((e.hours || 0) > 0 || (e.marenda || 0) > 0)) withData.add(n);
+      }
+    }
+  }
+  return (state.settings.workers || []).filter(w => workerActiveInMonth(w, key) || withData.has(w.name));
+}
+/* Udio mjeseca za fiksne iznose: radni dani u periodu rada ÷ radni dani mjeseca */
+function workerMonthShare(w, key) {
+  const ukupno = workdaysInMonth(key);
+  const per = workerPeriods(w);
+  if (!per || !ukupno) return { udio: 1, dana: ukupno, ukupno };
+  const { start, end } = monthBounds(key);
+  let dana = 0;
+  for (const p of per) {
+    let a = (p.od && p.od > start) ? p.od : start;
+    let b = (p.do && p.do < end) ? p.do : end;
+    if (p.puniMjesecOd && p.od && p.od > start && p.od <= end) a = start;
+    if (p.puniMjesecDo && p.do && p.do >= start && p.do < end) b = end;
+    if (a <= b) dana += radnihDana(a, b);
+  }
+  dana = Math.min(dana, ukupno);
+  return { udio: dana / ukupno, dana, ukupno };
+}
+/* Dolazak ili odlazak unutar mjeseca (oznake "od 15/10" i "do 20/09") */
+function workerMonthEdges(w, key) {
+  const out = { od: '', do: '' };
+  const per = workerPeriods(w);
+  if (!per) return out;
+  const { start, end } = monthBounds(key);
+  for (const p of per) {
+    if (p.od && p.od >= start && p.od <= end) out.od = p.od;
+    if (p.do && p.do >= start && p.do <= end) out.do = p.do;
+  }
+  return out;
+}
+function workerYearEdges(w, year) {
+  const out = { od: '', do: '' };
+  const per = workerPeriods(w);
+  if (!per) return out;
+  const y = String(year);
+  for (const p of per) {
+    if (p.od && p.od.slice(0, 4) === y) out.od = p.od;
+    if (p.do && p.do.slice(0, 4) === y) out.do = p.do;
+  }
+  return out;
+}
+const wpEdgeText = (e) => [e.od ? `od ${dmEU(e.od)}` : '', e.do ? `do ${dmEU(e.do)}` : ''].filter(Boolean).join(' ');
+/* Tekući mjesec: dio perioda rada u mjesecu koji je već prošao (raspodjela troška po projektima) */
+function workerElapsedShare(w, key, todayIso) {
+  const { start, end } = monthBounds(key);
+  let uMjesecu = 0, proslo = 0;
+  for (const p of (workerPeriods(w) || [{ od: '', do: '' }])) {
+    const a = (p.od && p.od > start) ? p.od : start;
+    const b = (p.do && p.do < end) ? p.do : end;
+    if (a > b) continue;
+    uMjesecu += radnihDana(a, b);
+    const b2 = b < todayIso ? b : todayIso;
+    if (a <= b2) proslo += radnihDana(a, b2);
+  }
+  if (!uMjesecu) return 1;
+  return Math.min(1, Math.max(proslo, 1) / uMjesecu);
+}
+/* Kapacitet sati mjeseca: radnici sa satnicom × radni dani u periodu rada × 8 h (do zadanog dana) */
+function capacityHoursInMonth(key, upToISO) {
+  const { start, end } = monthBounds(key);
+  const last = (upToISO && upToISO < end) ? upToISO : end;
+  let h = 0;
+  for (const w of (state.settings.workers || [])) {
+    if (!(Number(w.satnica) > 0)) continue;
+    for (const p of (workerPeriods(w) || [{ od: '', do: '' }])) {
+      const a = (p.od && p.od > start) ? p.od : start;
+      const b = (p.do && p.do < last) ? p.do : last;
+      if (a <= b) h += radnihDana(a, b) * 8;
+    }
+  }
+  return h;
+}
+function workerIsFormer(w, todayIso) {
+  const per = workerPeriods(w);
+  return !!per && per.every(p => p.do && p.do < todayIso);
+}
+/* Ima li radnik ikakav upis (sati, godišnji, dug): takav se ne briše, nego odjavljuje */
+function workerHasHistory(w) {
+  const name = w && w.name;
+  for (const k of Object.keys(state.hours || {})) {
+    for (const d of ((state.hours[k] || {}).days || [])) {
+      const e = (d.workers || {})[name];
+      if (e && ((e.hours || 0) > 0 || (e.marenda || 0) > 0)) return true;
+    }
+  }
+  const g = state.registar && state.registar.godisnji && state.registar.godisnji[name];
+  if (g && (((g.periodi || []).length) || Number(g.ukupno) > 0)) return true;
+  return (Number(w && w.dug) || 0) > 0;
+}
+function workerLastHoursDate(name) {
+  let last = '';
+  for (const k of Object.keys(state.hours || {})) {
+    for (const d of ((state.hours[k] || {}).days || [])) {
+      const e = (d.workers || {})[name];
+      if (e && (e.hours || 0) > 0 && d.date > last) last = d.date;
+    }
+  }
+  return last;
+}
+function workerHoursDaysAfter(name, iso) {
+  let n = 0;
+  for (const k of Object.keys(state.hours || {})) {
+    for (const d of ((state.hours[k] || {}).days || [])) {
+      const e = (d.workers || {})[name];
+      if (e && (e.hours || 0) > 0 && d.date > iso) n++;
+    }
+  }
+  return n;
+}
+function workerPeriodText(w) {
+  const lp = workerLastPeriod(w);
+  if (!lp) return 'od početka';
+  const parts = [lp.od ? `od ${isoToEU(lp.od)}` : 'od početka'];
+  if (lp.do) parts.push(`do ${isoToEU(lp.do)}`);
+  return parts.join(' · ');
+}
+/* Iznos u Sažetku isplate koji je razmjeran periodu rada: točkasto podcrtan, puni iznos u opisu */
+function wpProrata(txt, s, punoTxt) {
+  if (!s || !(s.udio < 1)) return txt;
+  return `<span class="wp-prorata" title="Razmjerno: ${s.radnihUPeriodu}/${s.radnihUMjesecu} radnih dana · puni iznos ${punoTxt}">${txt}</span>`;
+}
+function wpThSub(w, key) {
+  const t = wpEdgeText(workerMonthEdges(w, key));
+  if (t) return `<div class="wp-th-sub">${t}</div>`;
+  if (!workerActiveInMonth(w, key)) return '<div class="wp-th-sub">van perioda</div>';
+  return '';
+}
+
 function computeWorkerStats(monthKey) {
   const h = state.hours[monthKey];
   if (!h || !h.days) return [];
-  return state.settings.workers.map(w => {
+  return workersInMonth(monthKey).map(w => {
     let autoTotalHours = 0, totalMarenda = 0, daysWorked = 0;
     for (const d of h.days) {
       const wd = d.workers && d.workers[w.name];
-      if (wd && wd.hours > 0) {
+      if (wd && wd.hours > 0 && workerActiveOn(w, d.date)) {
         autoTotalHours += wd.hours;
         totalMarenda += wd.marenda || 0;
         daysWorked++;
@@ -690,7 +879,14 @@ function computeWorkerStats(monthKey) {
     }
 
     // Fiksno za OVAJ mjesec (uvažava povijest promjena)
-    const fiksno = fiksnoForMonth(w, monthKey);
+    const fiksnoPuno = fiksnoForMonth(w, monthKey);
+    // Period rada: u mjesecu dolaska ili odlaska fiksni iznosi idu razmjerno radnim danima u periodu
+    const share = workerMonthShare(w, monthKey);
+    const pr = (v) => share.udio < 1 ? round2((Number(v) || 0) * share.udio) : (Number(v) || 0);
+    const fiksno = pr(fiksnoPuno);
+    const prijevoz = pr(w.prijevoz);
+    const stan = pr(w.stan);
+    const edges = workerMonthEdges(w, monthKey);
 
     const zaradaSati = totalHours * w.satnica;
     // Auto-formula: ako radnik ima satnicu > 0 → Dodatno = Zarada + Marenda − Fiksno
@@ -709,14 +905,14 @@ function computeWorkerStats(monthKey) {
     // Fiksna isplata (npr. Dragan): ako je postavljena (> 0) u Postavke → Radnici,
     // radnik SVAKI mjesec ima točno taj iznos za isplatu. Sati, marenda i prijevoz
     // tada ne ulaze u obračun keš isplate (sve je uključeno u fiksni iznos).
-    const fiksnaIsplata = Number(w.fiksnaIsplata) || 0;
-    const isFixedPayout = fiksnaIsplata > 0;
+    const isFixedPayout = (Number(w.fiksnaIsplata) || 0) > 0;
+    const fiksnaIsplata = pr(w.fiksnaIsplata);
     // Za isplatu = Dodatno + Prijevoz (Marenda je već u Dodatno; Stan ide preko firme, NE ovdje).
     // Nikad ispod 0: radnik ne može biti dužan firmi kroz isplatu.
-    const zaIsplatuRaw = isFixedPayout ? fiksnaIsplata : (dodatno + w.prijevoz);
+    const zaIsplatuRaw = isFixedPayout ? fiksnaIsplata : (dodatno + prijevoz);
     const zaIsplatu = Math.max(0, zaIsplatuRaw);
     // Mjesečni trošak (ukupni izdatak firme) = Za isplatu + Fiksno + Stan
-    const mjesecniTrosak = zaIsplatu + fiksno + w.stan;
+    const mjesecniTrosak = zaIsplatu + fiksno + stan;
     // Dug radnika (ako postoji) — ne utječe na izračune, samo prikaz
     const dug = Number(w.dug) || 0;
     return {
@@ -728,8 +924,8 @@ function computeWorkerStats(monthKey) {
       totalMarenda,
       daysWorked,
       zaradaSati,
-      prijevoz: w.prijevoz,
-      stan: w.stan,
+      prijevoz,
+      stan,
       fiksno,
       dodatno,
       isAutoCalculated,
@@ -739,6 +935,15 @@ function computeWorkerStats(monthKey) {
       isFixedPayout,
       fiksnaIsplata,
       dug,
+      udio: share.udio,
+      radnihUPeriodu: share.dana,
+      radnihUMjesecu: share.ukupno,
+      fiksnoPuno,
+      prijevozPuno: Number(w.prijevoz) || 0,
+      stanPuno: Number(w.stan) || 0,
+      fiksnaIsplataPuno: Number(w.fiksnaIsplata) || 0,
+      radiOd: edges.od,
+      radiDo: edges.do,
     };
   });
 }
@@ -1079,7 +1284,7 @@ function renderHours() {
   const fixed = getFixedLabor();
   const fixedTotal = fixed.reduce((a, f) => a + (Number(f.amount) || 0), 0);
   const today = new Date().toISOString().slice(0, 10);
-  const workers = state.settings.workers;
+  const workers = workersForMonthView(activeMonth);
 
   const panel = document.getElementById('panel-hours');
   panel.innerHTML = `
@@ -1126,10 +1331,12 @@ function renderHours() {
               <tr>
                 <td>
                   <strong>${escapeHtml(s.name)}</strong>
-                  ${s.isFixedPayout ? `<span class="pill gray" style="margin-left: 6px;" title="Fiksna isplata: uvijek ${eur(s.fiksnaIsplata, 0)} svaki mjesec">fiksno</span>` : ''}
+                  ${(s.radiOd || s.radiDo) ? `<span class="pill amber" style="margin-left: 6px;" title="Period rada${s.radiOd ? ' · prvi radni dan ' + isoToEU(s.radiOd) : ''}${s.radiDo ? ' · zadnji radni dan ' + isoToEU(s.radiDo) : ''}">${wpEdgeText({ od: s.radiOd, do: s.radiDo })}</span>` : ''}
+                  ${s.isFixedPayout ? `<span class="pill gray" style="margin-left: 6px;" title="Fiksna isplata: uvijek ${eur(s.fiksnaIsplataPuno, 0)} svaki mjesec">fiksno</span>` : ''}
                   ${s.dug > 0
                     ? `<span class="dug-badge ${isAdmin ? 'editable' : ''}" data-dug-worker="${escapeHtml(s.name)}" title="${isAdmin ? 'Klikni za izmjenu duga' : 'Dug radnika'}">dug ${eur(s.dug, 0)}</span>`
                     : (isAdmin ? `<span class="dug-badge add editable" data-dug-worker="${escapeHtml(s.name)}" title="Dodaj dug">+ dug</span>` : '')}
+                  ${s.udio < 1 ? `<span class="wp-caption">${s.isFixedPayout ? 'fiksna isplata, ' : ''}fiksno, prijevoz i stan · ${s.radnihUPeriodu}/${s.radnihUMjesecu} radnih dana</span>` : ''}
                 </td>
                 <td class="num text-right">
                   ${(() => {
@@ -1149,16 +1356,16 @@ function renderHours() {
                 <td class="num text-right muted-cell">${s.isFixedPayout ? '—' : eur(s.satnica, 2)}</td>
                 <td class="num text-right${s.isFixedPayout ? ' muted-cell' : ''}">${s.isFixedPayout ? '—' : eur(s.zaradaSati, 2)}</td>
                 <td class="num text-right zone-kes zone-kes-first${s.isFixedPayout ? ' muted-cell' : ''}">${s.isFixedPayout ? '—' : eur(s.totalMarenda, 0)}</td>
-                <td class="num text-right zone-kes${s.isFixedPayout ? ' muted-cell' : ''}">${s.isFixedPayout ? '—' : eur(s.prijevoz, 0)}</td>
+                <td class="num text-right zone-kes${s.isFixedPayout ? ' muted-cell' : ''}">${s.isFixedPayout ? '—' : wpProrata(eur(s.prijevoz, 0), s, eur(s.prijevozPuno, 0))}</td>
                 <td class="num text-right zone-kes zone-kes-total">${
                   s.isFixedPayout
-                    ? `<span title="Fiksna isplata: uvijek isti iznos, svaki mjesec (Postavke → Radnici)">${eur(s.zaIsplatu, 2)}</span>`
+                    ? (s.udio < 1 ? wpProrata(eur(s.zaIsplatu, 2), s, eur(s.fiksnaIsplataPuno, 2)) : `<span title="Fiksna isplata: uvijek isti iznos, svaki mjesec (Postavke → Radnici)">${eur(s.zaIsplatu, 2)}</span>`)
                     : (s.zaIsplatuRaw < 0
                         ? `<span class="zero-clamp" title="Izračun bi bio ${eur(s.zaIsplatuRaw, 2)} · isplata ne može biti negativna, pa je 0. Razlika se ne prenosi.">${eur(0, 2)}</span>`
                         : eur(s.zaIsplatu, 2))
                 }</td>
-                <td class="num text-right zone-firma zone-firma-first">${eur(s.fiksno, 0)}</td>
-                <td class="num text-right zone-firma" style="${s.stan > 0 ? '' : 'color: var(--muted-2);'}">${eur(s.stan, 0)}</td>
+                <td class="num text-right zone-firma zone-firma-first">${wpProrata(eur(s.fiksno, 0), s, eur(s.fiksnoPuno, 0))}</td>
+                <td class="num text-right zone-firma" style="${s.stan > 0 ? '' : 'color: var(--muted-2);'}">${s.stan > 0 ? wpProrata(eur(s.stan, 0), s, eur(s.stanPuno, 0)) : eur(s.stan, 0)}</td>
                 <td class="num text-right" style="font-weight: 600;">${eur(s.mjesecniTrosak, 2)}</td>
               </tr>
             `;}).join('')}
@@ -1193,7 +1400,7 @@ function renderHours() {
         </table>
       </div>
       <div class="payroll-formula">
-        Zarada = Sati × Satnica&nbsp;&nbsp;·&nbsp;&nbsp;<span style="color: var(--positive);">Za isplatu = Zarada + Marenda + Prijevoz − Fiksno</span> (nikad ispod 0)&nbsp;&nbsp;·&nbsp;&nbsp;Mj. trošak = Za isplatu + Fiksno + Stan&nbsp;&nbsp;·&nbsp;&nbsp;Radnici s oznakom „fiksno": uvijek isti iznos za isplatu, svaki mjesec (Postavke → Radnici → Fiksna isplata)&nbsp;&nbsp;·&nbsp;&nbsp;Fiksne osobe: Mj. trošak = fiksni iznos (Postavke → Fiksni rad)
+        Zarada = Sati × Satnica&nbsp;&nbsp;·&nbsp;&nbsp;<span style="color: var(--positive);">Za isplatu = Zarada + Marenda + Prijevoz − Fiksno</span> (nikad ispod 0)&nbsp;&nbsp;·&nbsp;&nbsp;Mj. trošak = Za isplatu + Fiksno + Stan&nbsp;&nbsp;·&nbsp;&nbsp;Radnici s oznakom „fiksno": uvijek isti iznos za isplatu, svaki mjesec (Postavke → Radnici → Fiksna isplata)&nbsp;&nbsp;·&nbsp;&nbsp;Fiksne osobe: Mj. trošak = fiksni iznos (Postavke → Fiksni rad)&nbsp;&nbsp;·&nbsp;&nbsp;Mjesec dolaska ili odlaska: fiksno, prijevoz i stan razmjerno radnim danima u periodu rada (Postavke → Radnici → Period rada)
       </div>
     </div>
 
@@ -1213,6 +1420,7 @@ function renderHours() {
           const chips = workers.map(w => {
             const wd = (dayData?.workers || {})[w.name];
             if (!wd || !(wd.hours > 0)) return '';
+            if (!workerActiveOn(w, d.date)) return `<span class="hrs-chip wp-off" title="${escapeHtml(w.name)} tog dana nije u periodu rada · sati se ne računaju">${escapeHtml(w.name)} ${wd.hours}</span>`;
             sum += wd.hours;
             return `<span class="hrs-chip">${escapeHtml(w.name)} ${wd.hours}</span>`;
           }).join('');
@@ -1243,7 +1451,7 @@ function renderHours() {
             <thead>
               <tr>
                 <th>Datum</th>
-                ${workers.map(w => `<th class="worker-col">${escapeHtml(w.name)}</th>`).join('')}
+                ${workers.map(w => `<th class="worker-col">${escapeHtml(w.name)}${wpThSub(w, activeMonth)}</th>`).join('')}
                 <th>Σ Dan</th>
               </tr>
             </thead>
@@ -1256,6 +1464,9 @@ function renderHours() {
                 let dailySum = 0;
                 const cells = workers.map(w => {
                   const wd = (dayData?.workers || {})[w.name] || { hours: 0, marenda: 0, project: '' };
+                  if (!workerActiveOn(w, d.date)) {
+                    return `<td class="hcell wp-off" title="${escapeHtml(w.name)} tog dana nije u periodu rada${wd.hours > 0 ? ' · upisani sati se ne računaju' : ''}">${wd.hours > 0 ? `<div class="hc-top"><span class="hc-hours">${wd.hours}</span><span class="hc-mar">${wd.marenda || 0}</span></div>` : ''}</td>`;
+                  }
                   if (wd.hours > 0) dailySum += wd.hours;
                   if (wd.hours === 0 && !wd.project) {
                     return `<td class="hcell empty"><span class="hc-dash">—</span></td>`;
@@ -1439,7 +1650,7 @@ function renderHours() {
    ============================================================ */
 function openDayModal(dateStr) {
   ensureMonth(activeMonth);
-  const workers = state.settings.workers;
+  let workers = state.settings.workers;
 
   // Find day or create skeleton
   let day = state.hours[activeMonth].days.find(d => d.date === dateStr);
@@ -1447,6 +1658,17 @@ function openDayModal(dateStr) {
     const dn = DAY_NAMES_HR[new Date(dateStr).getDay()];
     day = { date: dateStr, day_name: dn, note: '', workers: {} };
   }
+
+  // Period rada: na popisu su radnici koji taj dan rade i oni koji za taj dan već imaju upisane sate
+  const dmHasEntry = (w) => { const e = (day.workers || {})[w.name]; return !!e && ((e.hours || 0) > 0 || (e.marenda || 0) > 0); };
+  const dmOff = new Set(workers.filter(w => !workerActiveOn(w, dateStr) && dmHasEntry(w)).map(w => w.name));
+  workers = workers.filter(w => workerActiveOn(w, dateStr) || dmHasEntry(w));
+  const dmNotes = state.settings.workers.filter(w => !workers.includes(w)).map(w => {
+    const e = workerMonthEdges(w, dateStr.slice(0, 7));
+    if (e.do && e.do < dateStr) return `${escapeHtml(w.name)} nije na popisu · zadnji radni dan ${isoToEU(e.do)}`;
+    if (e.od && e.od > dateStr) return `${escapeHtml(w.name)} nije na popisu · počinje ${isoToEU(e.od)}`;
+    return '';
+  }).filter(Boolean);
 
   // Auto-suggest projects from previous day
   const allDays = state.hours[activeMonth].days.slice().sort((a, b) => a.date.localeCompare(b.date));
@@ -1496,7 +1718,7 @@ function openDayModal(dateStr) {
           const isSuggestion = !wd.project && suggestedProj;
           return `
             <div class="day-worker-row">
-              <div class="dw-name">${escapeHtml(w.name)}</div>
+              <div class="dw-name">${escapeHtml(w.name)}${dmOff.has(w.name) ? '<span class="wp-caption">van perioda rada</span>' : ''}</div>
               <input class="input dw-proj ${isSuggestion ? 'is-suggestion' : ''}" list="day-projects"
                      data-w="${escapeHtml(w.name)}" data-f="project"
                      value="${escapeHtml(suggestedProj)}"
@@ -1516,6 +1738,7 @@ function openDayModal(dateStr) {
           `;
         }).join('')}
       </div>
+      ${dmNotes.map(t => `<div class="wp-dm-note">${WP_ICON_INFO}<span>${t}</span></div>`).join('')}
       <datalist id="day-projects">
         ${knownProjects.map(p => `<option value="${escapeHtml(p)}"></option>`).join('')}
       </datalist>
@@ -1582,6 +1805,10 @@ function openDayModal(dateStr) {
         marenda: parseFloat(mInp.value) || 0,
       };
     });
+    // Upisi radnika koji nisu na popisu (van perioda rada ili više nisu u Postavkama) ostaju netaknuti
+    for (const [n, e] of Object.entries(day.workers || {})) {
+      if (!(n in newDay.workers)) newDay.workers[n] = e;
+    }
     return newDay;
   };
 
@@ -2743,7 +2970,7 @@ async function extractPdfRows(file) {
   const pdfjs = await loadPdfJs();
   const buf = await file.arrayBuffer();
   const doc = await pdfjs.getDocument({ data: buf }).promise;
-  const rows = [];
+  const rows = [], pages = [];
   for (let p = 1; p <= doc.numPages; p++) {
     const page = await doc.getPage(p);
     const tc = await page.getTextContent();
@@ -2760,15 +2987,38 @@ async function extractPdfRows(file) {
     for (const r of lines) {
       r.parts.sort((a, b) => a.x - b.x);
       rows.push(r.parts.map(pt => pt.str).join(' '));
+      pages.push(p);
     }
   }
+  rows.pages = pages;   // stranica svakog retka: STO parser ne spaja nastavak naziva preko granice stranice
   return rows;
 }
 
 /* SR-IMPORT-PARSER-START */
+/* STO račun (PDF iz sustava STO-a). Redak artikla:
+   "00714-030 StoLevell Novo 240 3,600.00 kg 0,49 25,00 1.764,00"
+   šifra · naziv · broj pakiranja · količina + jedinica · cijena · [rabat %] · PDV % · iznos bez PDV-a
+   Količina je u engleskom zapisu (3,600.00), iznosi u hrvatskom (1.764,00).
+   Ispod retka artikla može doći nastavak naziva i veličina pakiranja ("15 kg").
+   Zaglavlje: "Broj Broj kupca Datum Mjesec Strana", ispod vrijednosti; broj računa
+   od 5 znamenki prelomi se u dva retka ("12729-01-" pa "91").
+   Redak se čita s desna (iznosi su najpouzdaniji) i provjerava se:
+   količina × cijena × (1 − rabat) ≈ iznos. Ništa se ne preskače potiho: redak koji
+   počinje šifrom artikla, a ne da se pročitati, ide u pregled označen za provjeru. */
 const INV_UNIT_RE = /^(m2|m3|mm|cm|m|kom|kg|g|t|l|lit|pal|kpl|set|par|h)$/i;
 const INV_MONEY_RE = /^-?\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?$/;
 const INV_SKIP_RE = /^(Broj\b|Naziv artikla|pakir\.|Račun\b|OIB kupca|Sto Ges|STARA RIJEKA|Mavrinci|Ulica |Telefon|www\.|info\.|HR - |Oznaka operatera|Sjedište|Trgovack|Trgovačk|MBS|IBAN|Poziv na broj|Po otpremnici|Sredstvo|Valuta|Obrada dokumenta|Mjesto i datum|Voditelj|Temeljni|Molimo|Poštovani|godine|U slučaju|Hvala|Stranica|Zagreb|\d{5} )/;
+const INV_NET_RE = /^-?(?:\d{1,3}(?:\.\d{3})+|\d+),\d{2}$/;            // iznos: 1.764,00 · 240,00
+const INV_EU_NUM_RE = /^-?(?:\d{1,3}(?:\.\d{3})+|\d+)(?:,\d{1,4})?$/;   // cijena, rabat, PDV: 0,48 · 25,00
+const INV_US_NUM_RE = /^-?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,4})?$/;   // količina: 3,600.00 · 500.00
+const INV_UNIT_TOKEN_RE = /^[A-Za-zČĆŽŠĐčćžšđ]{1,5}[123²³]?\.?$/;
+const INV_QTY_UNIT_RE = /^(-?[\d.,]*\d)([A-Za-zČĆŽŠĐčćžšđ]{1,5}[123²³]?)$/;   // "500.00m" zalijepljeno
+const INV_PACK_RE = /^(?:\d{1,3}(?:,\d{3})+|\d+)(?:[.,]\d{1,3})?$/;
+const INV_CODE_RE = /^((?:HR\s+)?\d{4,7}(?:-\d{1,4}){0,2}-?)(?=\s|$)/;
+const INV_ITEM_START_RE = /^(?:HR\s+)?\d{4,7}-\d{2,4}\b/;             // redak počinje šifrom artikla
+const INV_NO_FULL_RE = /^\d{3,7}-\d{2}-\d{2}$/;                        // 12729-01-91 · 9094-01-91
+const INV_DATE_TOKEN_RE = /\b\d{1,2}[./]\d{1,2}[./]\d{4}\b/;
+const INV_MONEY_G_RE = /-?\d{1,3}(?:\.\d{3})*,\d{2}\b/g;
 
 function invParseDate(s) {
   const m = String(s || '').match(/^(\d{1,2})[./](\d{1,2})[./](\d{2,4})$/);
@@ -2777,61 +3027,209 @@ function invParseDate(s) {
   if (y.length === 2) y = '20' + y;
   return euToISO(`${m[1].padStart(2, '0')}/${m[2].padStart(2, '0')}/${y}`);
 }
+function invNum(tok, fmt) {
+  const s = String(tok || '');
+  if (fmt === 'us') return INV_US_NUM_RE.test(s) ? parseFloat(s.replace(/,/g, '')) : null;
+  return INV_EU_NUM_RE.test(s) ? parseFloat(s.replace(/\./g, '').replace(',', '.')) : null;
+}
+/* Provjera retka; tolerancija raste s količinom jer je cijena na računu zaokružena na cente */
+function invCheck(qty, price, rabatPct, net, priceTok) {
+  if (!(Math.abs(qty) > 0) || price === null) return false;
+  const f = 1 - (Number(rabatPct) || 0) / 100;
+  const dm = String(priceTok || '').match(/,(\d+)$/);
+  const dec = Math.max(dm ? dm[1].length : 0, 2);
+  const tol = 0.011 + Math.abs(qty) * 0.5 * Math.pow(10, -dec) * Math.abs(f);
+  return Math.abs(qty * price * f - net) <= tol;
+}
+/* Stavka bez prave šifre i naziva (npr. kad se redak PDF-a raspadne na dva) */
+function invWeakIdentity(it) {
+  return !!it && !INV_ITEM_START_RE.test(it.code || '') && /^[\d.,\s-]*$/.test(it.name || '');
+}
+function invApplyHead(it, headLine) {
+  const cm = headLine.match(INV_CODE_RE);
+  it.code = cm ? cm[1].trim() : it.code;
+  it.name = ((cm ? headLine.slice(cm[0].length) : headLine).trim() || it.code || 'Stavka').slice(0, 160);
+}
 
-/* Redak artikla: "ŠIFRA NAZIV… PAKIR KOLIČINA JED CIJENA [RABAT] PDV IZNOS_BEZ_PDV" */
+/* Redak artikla → stavka ili null. Tumačenja (sa ili bez rabata, format količine) biraju se provjerom. */
 function tryParseInvoiceItemRow(line) {
-  const qtyRe = /(\d+)\s+(\d+\.\d{1,2})\s*([A-Za-z0-9]{1,4})\b/g;
-  let m;
-  while ((m = qtyRe.exec(line)) !== null) {
-    if (!INV_UNIT_RE.test(m[3])) continue;
-    const rest = line.slice(m.index + m[0].length).trim();
-    if (!rest) continue;
-    const toks = rest.split(/\s+/);
-    if (toks.length < 3 || toks.length > 4) continue;
-    if (!toks.every(t2 => INV_MONEY_RE.test(t2))) continue;
-    const prefix = line.slice(0, m.index).trim();
-    const codeM = prefix.match(/^((?:HR\s+)?\d{4,6}(?:-\d{1,3})?-?)(?:\s+|$)/);
+  const toks = String(line || '').replace(/\s+/g, ' ').trim().split(' ');
+  const n = toks.length;
+  if (n < 5) return null;
+  const netStrict = INV_NET_RE.test(toks[n - 1]);
+  if (!netStrict && !INV_EU_NUM_RE.test(toks[n - 1])) return null;
+  const net = invNum(toks[n - 1], 'eu');
+  const vatPct = invNum(toks[n - 2], 'eu');
+  if (vatPct === null || vatPct < 0 || vatPct > 30) return null;
+  const variants = [{ priceAt: n - 3, rabatAt: -1 }];
+  if (n >= 6 && INV_EU_NUM_RE.test(toks[n - 4]) && INV_EU_NUM_RE.test(toks[n - 3])) variants.push({ priceAt: n - 4, rabatAt: n - 3 });
+  let best = null;
+  for (const v of variants) {
+    const price = invNum(toks[v.priceAt], 'eu');
+    if (price === null) continue;
+    const rabatPct = v.rabatAt >= 0 ? invNum(toks[v.rabatAt], 'eu') : null;
+    if (rabatPct !== null && (rabatPct < 0 || rabatPct > 100)) continue;
+    let i = v.priceAt - 1;
+    if (i < 0) continue;
+    let unit = '', qtyTok;
+    const glued = toks[i].match(INV_QTY_UNIT_RE);
+    if (i >= 1 && INV_UNIT_TOKEN_RE.test(toks[i])) { unit = toks[i].replace(/\.$/, ''); i--; qtyTok = toks[i]; }
+    else if (glued) { qtyTok = glued[1]; unit = glued[2]; }
+    else qtyTok = toks[i];
+    const cands = [];
+    const qUS = invNum(qtyTok, 'us'), qEU = invNum(qtyTok, 'eu');
+    if (qUS !== null) cands.push(qUS);
+    if (qEU !== null && qEU !== qUS) cands.push(qEU);
+    if (!cands.length) continue;
+    let qty = cands.find(q => invCheck(q, price, rabatPct, net, toks[v.priceAt]));
+    const ok = qty !== undefined;
+    if (!ok) qty = cands[0];
+    i--;
+    if (i >= 1 && INV_PACK_RE.test(toks[i])) i--;   // broj pakiranja
+    const prefix = toks.slice(0, i + 1).join(' ').trim();
+    const codeM = prefix.match(INV_CODE_RE);
     const code = codeM ? codeM[1].trim() : '';
     const name = (codeM ? prefix.slice(codeM[0].length) : prefix).trim();
-    return {
-      code,
-      name: name || code || 'Stavka',
-      qty: parseFloat(m[2]) || 0,
-      unit: m[3],
-      unitPrice: parseEUAmount(toks[0]),
-      rabatPct: toks.length === 4 ? parseEUAmount(toks[1]) : null,
-      vatPct: parseEUAmount(toks[toks.length - 2]),
-      net: parseEUAmount(toks[toks.length - 1]),
-    };
+    if (!code && !name) continue;
+    if (!code && !unit && !ok) continue;
+    if (!netStrict && !ok) continue;
+    const cand = { code, name: name || code || 'Stavka', qty, unit, unitPrice: price, rabatPct, vatPct, net, ok };
+    if (!best || (ok && !best.ok)) best = cand;
+    if (ok) break;
   }
-  return null;
+  if (!best) return null;
+  const item = { code: best.code, name: best.name, qty: best.qty, unit: best.unit, unitPrice: best.unitPrice, rabatPct: best.rabatPct, vatPct: best.vatPct, net: best.net };
+  if (!best.ok) item.warn = 'Količina × cijena ne daje iznos s računa. Provjeri količinu i iznos.';
+  return item;
+}
+
+/* Redak počinje šifrom artikla, ali nije potpuna stavka: uzmi što se može i označi za provjeru */
+function invFallbackItem(line) {
+  const toks = String(line || '').replace(/\s+/g, ' ').trim().split(' ');
+  const n = toks.length;
+  if (n < 2 || !INV_NET_RE.test(toks[n - 1])) return null;
+  const net = invNum(toks[n - 1], 'eu');
+  const vatCand = n >= 3 ? invNum(toks[n - 2], 'eu') : null;
+  const hasVat = vatCand !== null && vatCand >= 0 && vatCand <= 30 && /,\d{2}$/.test(toks[n - 2]);
+  const codeM = line.match(INV_CODE_RE);
+  const code = codeM ? codeM[1].trim() : '';
+  const nameToks = [];
+  for (const t of (codeM ? line.slice(codeM[0].length) : line).trim().split(' ')) {
+    if (/^-?[\d.,]+$/.test(t)) break;
+    nameToks.push(t);
+  }
+  return {
+    code,
+    name: nameToks.join(' ') || code || 'Stavka',
+    qty: 0,
+    unit: '',
+    unitPrice: 0,
+    rabatPct: null,
+    vatPct: hasVat ? vatCand : 25,
+    net,
+    warn: 'Redak nije potpuno pročitan. Provjeri naziv, količinu, PDV i iznos.',
+  };
+}
+
+/* Iznosi s PDV-om po stavci; razlika zaokruživanja do iznosa računa raspoređuje se po centima */
+function invReconcileGross(items, totalGross) {
+  const base = items.map(it => grossFromNet(it.net, it.vatPct));
+  if (totalGross === null || totalGross === undefined) return base;
+  const sum = round2(base.reduce((a, b) => a + b, 0));
+  const diffC = Math.round((totalGross - sum) * 100);
+  if (diffC === 0 || Math.abs(diffC) > items.length) return base;
+  const order = items
+    .map((it, i) => ({ i, r: (Number(it.net) || 0) * (1 + (Number(it.vatPct) || 0) / 100) - base[i] }))
+    .sort((a, b) => diffC > 0 ? b.r - a.r : a.r - b.r);
+  const out = base.slice();
+  const step = diffC > 0 ? 0.01 : -0.01;
+  for (let k = 0; k < Math.abs(diffC); k++) out[order[k].i] = round2(out[order[k].i] + step);
+  return out;
+}
+
+/* Zaglavlje: broj računa (i kad je prelomljen u dva retka) i datum računa */
+function invParseHeader(lines, out) {
+  const takeNo = (first, idx) => {
+    let no = first;
+    for (let j = idx + 1; j <= idx + 2 && j < lines.length && !INV_NO_FULL_RE.test(no); j++) {
+      const nx = lines[j];
+      if (!/^-?\d{1,4}(?:-\d{1,4})*-?$/.test(nx)) break;
+      if (/-$/.test(no) || /^-/.test(nx)) no = no + nx;
+      else if (INV_NO_FULL_RE.test(no + '-' + nx)) no = no + '-' + nx;
+      else no = no + nx;
+    }
+    return no.replace(/-+$/, '');
+  };
+  for (let i = 0; i < lines.length && !out.invoiceNo; i++) {
+    if (!/^Broj\s+Broj kupca\s+Datum\b/i.test(lines[i])) continue;
+    for (let j = i + 1; j <= i + 2 && j < lines.length; j++) {
+      const v = lines[j].match(/^(\d{3,7}(?:-\d{1,4}){0,2}-?)\s+\d{1,8}\s+(\d{1,2}[./]\d{1,2}[./]\d{2,4})\b/);
+      if (v) { out.invoiceNo = takeNo(v[1], j); out.date = invParseDate(v[2]); break; }
+    }
+  }
+  if (!out.invoiceNo) {
+    for (let i = 0; i < lines.length; i++) {
+      const v = lines[i].match(/\b(\d{3,7}-\d{2}-(?:\d{2})?)\s+\d{1,8}\s+(\d{1,2}[./]\d{1,2}[./]\d{2,4})\b/);
+      if (v) { out.invoiceNo = takeNo(v[1], i); if (!out.date) out.date = invParseDate(v[2]); break; }
+    }
+  }
+  if (!out.date) {
+    for (const l of lines) {
+      const d = l.match(/^Mjesto i datum:.*?(\d{1,2}\.\d{1,2}\.\d{4})/);
+      if (d) { out.date = invParseDate(d[1]); break; }
+    }
+  }
 }
 
 function parseStoInvoiceRows(rows) {
-  const out = { invoiceNo: '', date: '', items: [], totalNet: null, totalGross: null };
-  let current = null, contCount = 0;
-  for (const raw of rows) {
+  const out = { invoiceNo: '', date: '', items: [], totalNet: null, totalGross: null, unparsed: [] };
+  const pages = rows && Array.isArray(rows.pages) ? rows.pages : null;
+  const lines = [], linePage = [];
+  Array.from(rows || []).forEach((raw, i) => {
     const line = String(raw || '').replace(/\s+/g, ' ').trim();
-    if (!line) continue;
-    if (!out.invoiceNo) {
-      const meta = line.match(/\b(\d{4}-\d{2}-\d{2})\b\s+\d+\s+(\d{1,2}[./]\d{1,2}[./]\d{2,4})/);
-      if (meta) { out.invoiceNo = meta[1]; out.date = invParseDate(meta[2]); }
-    }
+    if (!line) return;
+    lines.push(line);
+    linePage.push(pages ? pages[i] : 1);
+  });
+  invParseHeader(lines, out);
+  const hasTableHead = lines.some(l => /^Broj artikla\b/.test(l));
+
+  let current = null, contCount = 0, inItems = !hasTableHead, pendingHead = null;
+  const flushHead = () => { if (pendingHead) { out.unparsed.push(pendingHead); pendingHead = null; } };
+  for (let li = 0; li < lines.length; li++) {
+    const line = lines[li];
+    if (li > 0 && linePage[li] !== linePage[li - 1]) current = null;   // nastavak naziva ne prelazi na drugu stranicu
+    if (/^Broj artikla\b/.test(line)) { inItems = true; current = null; continue; }
     if (/UKUPNO ZA PLATITI/i.test(line)) {
-      const nums = line.match(/-?\d{1,3}(?:\.\d{3})*,\d{2}/g);
-      if (nums && out.totalGross === null) out.totalGross = parseEUAmount(nums[nums.length - 1]);
-      current = null; continue;
+      const nums = line.match(INV_MONEY_G_RE);
+      if (nums) out.totalGross = parseEUAmount(nums[nums.length - 1]);
+      flushHead(); current = null; inItems = !hasTableHead; continue;
     }
     if (/^Ukupno:/.test(line)) {
-      const nums = line.match(/-?\d{1,3}(?:\.\d{3})*,\d{2}/g);
-      if (nums && out.totalNet === null) out.totalNet = parseEUAmount(nums[nums.length - 1]);
-      current = null; continue;
+      const nums = line.match(INV_MONEY_G_RE);
+      if (nums) out.totalNet = parseEUAmount(nums[nums.length - 1]);
+      flushHead(); current = null; continue;
     }
     if (/^(Osnovica za PDV|PDV \d)/.test(line)) { current = null; continue; }
-    const item = tryParseInvoiceItemRow(line);
-    if (item) { out.items.push(item); current = item; contCount = 0; continue; }
-    // Nastavak naziva artikla (npr. drugi red naziva ili veličina pakiranja)
-    if (current && contCount < 3 && line.length <= 90 && !INV_SKIP_RE.test(line) && !/\d{4}-\d{2}-\d{2}\s+\d+\s+\d{1,2}[./]/.test(line)) {
+    const item = inItems ? tryParseInvoiceItemRow(line) : null;
+    if (item) {
+      if (pendingHead && invWeakIdentity(item)) { invApplyHead(item, pendingHead); pendingHead = null; }
+      flushHead();
+      out.items.push(item); current = item; contCount = 0; continue;
+    }
+    if (inItems && INV_ITEM_START_RE.test(line) && !INV_DATE_TOKEN_RE.test(line)) {
+      const fb = invFallbackItem(line);
+      if (fb) { flushHead(); out.items.push(fb); current = fb; contCount = 0; }
+      else if (current && invWeakIdentity(current)) { invApplyHead(current, line); contCount = 0; }
+      else { flushHead(); pendingHead = line; current = null; }
+      continue;
+    }
+    // Nastavak naziva artikla (drugi red naziva ili veličina pakiranja)
+    const moneyCount = (line.match(INV_MONEY_G_RE) || []).length;
+    const lastTok = line.split(' ').pop();
+    if (current && contCount < 3 && line.length <= 90 && !INV_SKIP_RE.test(line)
+        && !INV_DATE_TOKEN_RE.test(line) && moneyCount < 2 && !INV_NET_RE.test(lastTok)
+        && !/:\s*(?:-?\d|$)/.test(line)) {
       let cont = line;
       if (/-$/.test(current.code || '')) {
         const cm = cont.match(/^(\d{1,4})\b\s*/);
@@ -2839,7 +3237,18 @@ function parseStoInvoiceRows(rows) {
       }
       if (cont) current.name = (current.name + ' ' + cont).trim().slice(0, 160);
       contCount++;
+      continue;
     }
+    // Redak među stavkama s iznosima, a nije ni stavka ni zbroj: prikaži ga u pregledu
+    if (inItems && hasTableHead && moneyCount >= 2 && !INV_SKIP_RE.test(line)) out.unparsed.push(line);
+    current = null;
+  }
+  flushHead();
+  if (out.items.length) {
+    const sumNet = round2(out.items.reduce((a, it) => a + (Number(it.net) || 0), 0));
+    const netOk = out.totalNet !== null && Math.abs(sumNet - out.totalNet) < 0.005;
+    const g = invReconcileGross(out.items, netOk ? out.totalGross : null);
+    out.items.forEach((it, i) => { it.gross = g[i]; });
   }
   return out;
 }
@@ -2928,6 +3337,38 @@ function stoImportModal() {
   });
 }
 
+/* Usporedba zbroja stavki s računom (bez PDV-a i s PDV-om) */
+function stoImportTotalsCheck(parsed, totNet, totGross) {
+  const hasNet = !!parsed && parsed.totalNet !== null && parsed.totalNet !== undefined;
+  const hasGross = !!parsed && parsed.totalGross !== null && parsed.totalGross !== undefined;
+  if (!hasNet && !hasGross) return { ok: null, html: '', text: '' };
+  if (hasNet && Math.abs(totNet - parsed.totalNet) >= 0.005) {
+    return {
+      ok: false,
+      text: `Račun kaže ${eur(parsed.totalNet, 2)} bez PDV-a, a stavke daju ${eur(totNet, 2)}.`,
+      html: `<span style="color: var(--negative);">⚠ račun kaže ${eur(parsed.totalNet, 2)} bez PDV-a, ovdje je ${eur(totNet, 2)}</span>`,
+    };
+  }
+  if (hasGross && Math.abs(totGross - parsed.totalGross) >= 0.005) {
+    return {
+      ok: false,
+      text: `Račun kaže ${eur(parsed.totalGross, 2)} s PDV-om, a stavke daju ${eur(totGross, 2)}.`,
+      html: `<span style="color: var(--negative);">⚠ račun kaže ${eur(parsed.totalGross, 2)} s PDV-om, ovdje je ${eur(totGross, 2)}</span>`,
+    };
+  }
+  return {
+    ok: true,
+    text: '',
+    html: `<span style="color: var(--positive);">✓ ${hasNet && hasGross ? 'odgovara računu, bez PDV-a i s PDV-om' : hasNet ? 'zbroj bez PDV-a odgovara računu' : 'zbroj s PDV-om odgovara računu'}</span>`,
+  };
+}
+/* Je li račun već u napomeni zapisa ("Račun 12729-01-91"); 2729-01-91 nije isto što i 12729-01-91 */
+function stoNoteHasInvoice(note, invNo) {
+  if (!invNo) return false;
+  const esc = String(invNo).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp('(^|[^\\d-])' + esc + '(?![\\d-])').test(String(note || ''));
+}
+
 /* Korak 2: pregled stavki, dodjela projekata, spremanje */
 function stoImportReview(parsed) {
   const blankRow = () => ({ code: '', name: '', qty: 0, unit: '', unitPrice: 0, vatPct: 25, net: 0, gross: 0, project: '' });
@@ -2940,8 +3381,9 @@ function stoImportReview(parsed) {
         unitPrice: Number(it.unitPrice) || 0,
         vatPct: (it.vatPct === 0 || it.vatPct) ? Number(it.vatPct) : 25,
         net: round2(Number(it.net) || 0),
-        gross: grossFromNet(it.net, (it.vatPct === 0 || it.vatPct) ? it.vatPct : 25),
+        gross: (typeof it.gross === 'number' && isFinite(it.gross)) ? round2(it.gross) : grossFromNet(it.net, (it.vatPct === 0 || it.vatPct) ? it.vatPct : 25),
         project: '',
+        warn: it.warn || '',
       }))
     : [blankRow(), blankRow(), blankRow()];
 
@@ -2951,12 +3393,13 @@ function stoImportReview(parsed) {
   ].filter(Boolean).map(s => String(s).trim()).filter(Boolean))).sort();
 
   const mobile = isMobileView();
+  const dateMissing = !parsed.date && !parsed.manual;
 
   const html = `
     <div class="modal-title">${parsed.manual ? 'Ručni unos stavki materijala' : 'Pregled računa' + (parsed.invoiceNo ? ' · ' + escapeHtml(parsed.invoiceNo) : '')}</div>
     <div class="modal-sub">Provjeri stavke i svakoj dodijeli projekt — jedan račun smije ići na više projekata. Iznos s PDV-om se računa automatski.</div>
     <div class="grid grid-2" style="gap: 14px; margin-bottom: 14px;">
-      <div class="field"><label class="field-label">Datum računa</label><input class="input" id="ir-date" type="text" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" value="${isoToEU(parsed.date || new Date().toISOString().slice(0, 10))}"></div>
+      <div class="field"><label class="field-label">Datum računa</label><input class="input${dateMissing ? ' invalid' : ''}" id="ir-date" type="text" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" value="${parsed.date ? isoToEU(parsed.date) : (parsed.manual ? isoToEU(new Date().toISOString().slice(0, 10)) : '')}">${dateMissing ? '<div class="field-hint" style="color: var(--negative);">Datum nije pročitan s računa. Upiši ga.</div>' : ''}</div>
       <div class="field"><label class="field-label">Broj računa</label><input class="input" id="ir-no" value="${escapeHtml(parsed.invoiceNo || '')}" placeholder="Npr. 9094-01-91"></div>
     </div>
     <div class="field" style="margin-bottom: 14px;">
@@ -3014,15 +3457,17 @@ function stoImportReview(parsed) {
     const projLine = Object.entries(byProj).map(([p, v]) =>
       `<span class="pill ${p === 'bez projekta' ? 'red' : 'gray'}" style="margin: 2px 6px 2px 0;">${escapeHtml(p)}: <strong style="margin-left: 4px;">${eur(v, 2)}</strong></span>`
     ).join('');
-    let check = '';
-    if (parsed.totalNet !== null && parsed.totalNet !== undefined) {
-      const ok = Math.abs(totNet - parsed.totalNet) < 0.02;
-      check = ok
-        ? `<span style="color: var(--positive);">✓ zbroj bez PDV-a odgovara računu (${eur(parsed.totalNet, 2)})</span>`
-        : `<span style="color: var(--negative);">⚠ račun kaže ${eur(parsed.totalNet, 2)} bez PDV-a, ovdje je ${eur(totNet, 2)}</span>`;
+    const check = stoImportTotalsCheck(parsed, totNet, totGross).html;
+    const nWarn = rows.filter(r => r.warn).length;
+    const notes = [];
+    if (nWarn) {
+      const w = (nWarn % 10 === 1 && nWarn % 100 !== 11) ? 'stavka traži' : ([2, 3, 4].includes(nWarn % 10) && ![12, 13, 14].includes(nWarn % 100)) ? 'stavke traže' : 'stavki traži';
+      notes.push(`⚠ ${nWarn} ${w} provjeru (naziv je označen crveno)`);
     }
+    (parsed.unparsed || []).slice(0, 3).forEach(l => notes.push(`⚠ redak s računa nije pročitan: „${escapeHtml(l.length > 90 ? l.slice(0, 90) + '…' : l)}"`));
     summaryEl.innerHTML = `<div>${projLine || '<span style="color: var(--muted);">Još nijedna stavka nema projekt.</span>'}</div>` +
-      `<div style="color: var(--ink-2);">Ukupno: <strong>${eur(totGross, 2)}</strong> s PDV-om · ${eur(totNet, 2)} bez PDV-a${check ? ' · ' + check : ''}</div>`;
+      `<div style="color: var(--ink-2);">Ukupno: <strong>${eur(totGross, 2)}</strong> s PDV-om · ${eur(totNet, 2)} bez PDV-a${check ? ' · ' + check : ''}</div>` +
+      (notes.length ? `<div style="color: var(--negative);">${notes.join('<br>')}</div>` : '');
   };
 
   const renderRows = () => {
@@ -3030,7 +3475,7 @@ function stoImportReview(parsed) {
       listEl.innerHTML = rows.map((r, i) => `
       <div class="ir-card">
         <div class="ir-head-row">
-          <input class="input" data-i="${i}" data-f="name" value="${escapeHtml(r.name || '')}" placeholder="Naziv artikla" style="flex: 1;">
+          <input class="input${r.warn ? ' invalid' : ''}" data-i="${i}" data-f="name"${r.warn ? ` title="${escapeHtml(r.warn)}"` : ''} value="${escapeHtml(r.name || '')}" placeholder="Naziv artikla" style="flex: 1;">
           <button type="button" class="btn btn-ghost btn-sm btn-danger" data-del-row="${i}" title="Ukloni red">×</button>
         </div>
         <div class="ir-grid-3">
@@ -3050,7 +3495,7 @@ function stoImportReview(parsed) {
     } else {
       listEl.innerHTML = rows.map((r, i) => `
       <tr>
-        <td style="min-width: 220px;"><input class="input" data-i="${i}" data-f="name" value="${escapeHtml(r.name || '')}" placeholder="Naziv artikla" style="width: 100%; min-width: 210px;"></td>
+        <td style="min-width: 220px;"><input class="input${r.warn ? ' invalid' : ''}" data-i="${i}" data-f="name"${r.warn ? ` title="${escapeHtml(r.warn)}"` : ''} value="${escapeHtml(r.name || '')}" placeholder="Naziv artikla" style="width: 100%; min-width: 210px;"></td>
         <td><input class="input num" data-i="${i}" data-f="qty" type="text" inputmode="decimal" value="${r.qty ? String(r.qty).replace('.', ',') : ''}" style="width: 66px; text-align: right; padding: 10px 8px;"></td>
         <td><input class="input" data-i="${i}" data-f="unit" value="${escapeHtml(r.unit || '')}" style="width: 52px; padding: 10px 8px;"></td>
         <td><input class="input num" data-i="${i}" data-f="net" type="text" inputmode="decimal" value="${formatEUAmount(r.net)}" style="width: 92px; text-align: right; padding: 10px 8px;"></td>
@@ -3070,6 +3515,11 @@ function stoImportReview(parsed) {
     const i = +inp.dataset.i, f = inp.dataset.f;
     const r = rows[i];
     if (!r) return;
+    if (r.warn && f !== 'project') {
+      r.warn = '';
+      const nm = listEl.querySelector(`input[data-i="${i}"][data-f="name"]`);
+      if (nm) { nm.classList.remove('invalid'); nm.removeAttribute('title'); }
+    }
     if (f === 'net' || f === 'gross' || f === 'vatPct' || f === 'qty') {
       r[f] = parseEUAmount(inp.value);
       if (f === 'net' || f === 'vatPct') {
@@ -3115,11 +3565,15 @@ function stoImportReview(parsed) {
       if (!(Number(r.gross) > 0)) { toast(`Stavka „${r.name}" nema iznos`, 'error'); return; }
       if (!r.project) { toast(`Stavka „${r.name}" nema dodijeljen projekt`, 'error'); return; }
     }
+    const tc = stoImportTotalsCheck(parsed,
+      round2(clean.reduce((a, r) => a + (Number(r.net) || 0), 0)),
+      round2(clean.reduce((a, r) => a + (Number(r.gross) || 0), 0)));
+    if (tc.ok === false && !confirm(`${tc.text} Svejedno spremiti?`)) return;
     if (invNo) {
       let dup = 0;
       for (const k of allMonths()) {
         for (const t of (state.sto[k] || [])) {
-          if ((t.note || '').includes(invNo)) dup++;
+          if (stoNoteHasInvoice(t.note, invNo)) dup++;
         }
       }
       if (dup && !confirm(`Račun ${invNo} već postoji u aplikaciji (${dup} ${dup === 1 ? 'zapis' : 'zapisa'}). Svejedno spremiti ponovno?`)) return;
@@ -3668,7 +4122,7 @@ function godisnjiHoursInMonth(key, upToISO) {
       const end = new Date(b + 'T12:00:00');
       while (cur <= end) {
         const dow = cur.getDay();
-        if (dow >= 1 && dow <= 5) hours += 8;
+        if (dow >= 1 && dow <= 5 && workerActiveOn(w, isoDateLocal(cur))) hours += 8;
         cur.setDate(cur.getDate() + 1);
       }
     }
@@ -3684,19 +4138,6 @@ function computeMonthCosts(key) {
   const stats = computeWorkerStats(key) || [];
   const satnicaOf = {};
   for (const w of state.settings.workers) satnicaOf[w.name] = Number(w.satnica) || 0;
-  let radnici = 0, rezOsobe = 0;
-  for (const st of stats) {
-    if ((satnicaOf[st.name] || 0) > 0) radnici += st.mjesecniTrosak;
-    else rezOsobe += st.mjesecniTrosak;
-  }
-  const wNames = new Set(state.settings.workers.map(w => (w.name || '').trim().toLowerCase()));
-  for (const f of getFixedLabor()) {
-    if (!wNames.has((f.name || '').trim().toLowerCase())) rezOsobe += Number(f.amount) || 0;
-  }
-  let tekuci = 0;
-  for (const t of (state.trx[key] || [])) {
-    if (t.type === 'Trošak' && t.group === 'Tekući' && t.category !== 'Plaće') tekuci += t.amount;
-  }
   const today = todayISO();
   const inProgress = key === today.slice(0, 7);
   let frac = 1;
@@ -3705,7 +4146,24 @@ function computeMonthCosts(key) {
     const done = workdaysInMonth(key, today);
     frac = total > 0 ? Math.max(done, 1) / total : 1;
   }
-  return { radnici: radnici * frac, rezija: rezOsobe * frac + tekuci, frac, inProgress };
+  // Tekući mjesec: svaki radnik nosi dio troška koji odgovara proteklom dijelu njegovog perioda rada
+  // (bez perioda rada to je isti udio kao frac, pa se za stare podatke ništa ne mijenja)
+  let radnici = 0, rezOsobe = 0;
+  for (const st of stats) {
+    const w = state.settings.workers.find(x => x.name === st.name);
+    const f = inProgress ? workerElapsedShare(w, key, today) : 1;
+    if ((satnicaOf[st.name] || 0) > 0) radnici += st.mjesecniTrosak * f;
+    else rezOsobe += st.mjesecniTrosak * f;
+  }
+  const wNames = new Set(state.settings.workers.map(w => (w.name || '').trim().toLowerCase()));
+  for (const f of getFixedLabor()) {
+    if (!wNames.has((f.name || '').trim().toLowerCase())) rezOsobe += (Number(f.amount) || 0) * frac;
+  }
+  let tekuci = 0;
+  for (const t of (state.trx[key] || [])) {
+    if (t.type === 'Trošak' && t.group === 'Tekući' && t.category !== 'Plaće') tekuci += t.amount;
+  }
+  return { radnici, rezija: rezOsobe + tekuci, frac, inProgress };
 }
 
 function computeProjectsData() {
@@ -3742,6 +4200,8 @@ function computeProjectsData() {
         for (const wName of Object.keys(d.workers || {})) {
           const wd = d.workers[wName];
           if (!wd || !(wd.hours > 0)) continue;
+          const wAct = state.settings.workers.find(x => x.name === wName);
+          if (wAct && !workerActiveOn(wAct, d.date)) continue;   // izvan perioda rada: ne računa se
           const name = (wd.project || '').trim() || PROJ_NONE;
           const pd = ensure(name);
           if (d.date) pd.daysSet.add(d.date);
@@ -3765,7 +4225,7 @@ function computeProjectsData() {
     const satiUk = satiOdradeni + godH;
     const rRad = satiUk > 0 ? c.radnici / satiUk : 0;
     const rRez = satiUk > 0 ? c.rezija / satiUk : 0;
-    const kapacitet = nSatnica * workdaysInMonth(k, c.inProgress ? today : null) * 8;
+    const kapacitet = capacityHoursInMonth(k, c.inProgress ? today : null);   // po periodu rada svakog radnika (prije: nSatnica × radni dani × 8)
     const nepotpun = !c.inProgress && kapacitet > 0 && satiUk < 0.5 * kapacitet && (c.radnici + c.rezija) > 0.005;
 
     for (const name of Object.keys(projH)) {
@@ -5155,6 +5615,390 @@ function fiksnoHistoryModal(workerIdx) {
   });
 }
 
+/* ============================================================
+   POSTAVKE › RADNICI · period rada, odjava, bivši radnici
+   ============================================================ */
+let wpBivsiOpen = false;   // "Bivši radnici" je jedan sklopljeni redak dok se ne otvori
+
+function settingsWorkersSplit() {
+  const today = localTodayISO();
+  const all = (state.settings.workers || []).map((w, i) => ({ w, i }));
+  return {
+    aktivni: all.filter(x => !workerIsFormer(x.w, today)),
+    bivsi: all.filter(x => workerIsFormer(x.w, today)),
+  };
+}
+
+function settingsFormerRowsHtml() {
+  const { bivsi } = settingsWorkersSplit();
+  if (!bivsi.length) return '';
+  const nCols = isAdmin ? 9 : 8;
+  const money = (v, dec) => `<span class="num">${eur(Number(v) || 0, dec)}</span>`;
+  return `
+    <tr class="wp-group-row"><td colspan="${nCols}">
+      <button type="button" class="wp-group-btn${wpBivsiOpen ? ' open' : ''}" id="wp-bivsi-toggle" aria-expanded="${wpBivsiOpen ? 'true' : 'false'}">
+        <span class="chev2">›</span><strong>Bivši radnici</strong><span class="cnt">· ${bivsi.length}</span>
+        <span class="hint">U povijesti ostaje sve: sati, projekti, isplate, godišnji, dug</span>
+      </button>
+    </td></tr>
+    ${bivsi.map(({ w, i }) => {
+      const lp = workerLastPeriod(w);
+      const dug = Number(w.dug) || 0;
+      return `
+      <tr class="wp-former"${wpBivsiOpen ? '' : ' hidden'}>
+        <td><strong>${escapeHtml(w.name)}</strong>${dug > 0 ? `<span class="dug-badge" title="Dug radnika">dug ${eur(dug, 0)}</span>` : ''}</td>
+        <td class="text-right">${money(w.satnica, 2)}</td>
+        <td class="text-right">${money(w.marenda, 0)}</td>
+        <td class="text-right">${money(w.prijevoz, 0)}</td>
+        <td class="text-right">${money(w.stan, 0)}</td>
+        <td class="text-right">${money(fiksnoForMonth(w, lp.do.slice(0, 7)), 0)}</td>
+        <td class="text-right">${money(w.fiksnaIsplata, 0)}</td>
+        <td><span class="pill amber">do ${isoToEU(lp.do)}</span></td>
+        ${isAdmin ? `<td class="text-right"><button type="button" class="btn btn-sm wp-ico-btn" data-act="vrati-worker" data-i="${i}" title="Poništi odjavu ili vrati radnika od novog datuma">${WP_ICON_VRATI}Vrati</button></td>` : ''}
+      </tr>`;
+    }).join('')}`;
+}
+
+/* Kopija perioda s drugim zadnjim danom (za pregled prije spremanja) */
+function wpPeriodsWithEnd(w, endIso) {
+  const per = workerPeriods(w);
+  if (!per) return [{ od: '', do: endIso }];
+  const lp = workerLastPeriod(w);
+  return per.map(p => p === lp ? { od: p.od || '', do: endIso } : { ...p });
+}
+
+/* Odjava: zadnji radni dan, razmjerni ili puni fiksni iznosi za mjesec odlaska */
+function workerOdjavaModal(idx) {
+  const w = state.settings.workers[idx];
+  if (!w) return;
+  const lp0 = workerLastPeriod(w);
+  const lastH = workerLastHoursDate(w.name);
+  const def = (lp0 && lp0.do) || ((lastH && !(lp0 && lp0.od && lastH < lp0.od)) ? lastH : '') || localTodayISO();
+  let puni = !!(lp0 && lp0.puniMjesecDo);
+  const html = `
+    <div class="modal-title">Odjava radnika · ${escapeHtml(w.name)}</div>
+    <div class="modal-sub">${escapeHtml(w.name)} ostaje u svim podacima do zadnjeg radnog dana. Nakon toga nije u unosu sati, isplati ni troškovima.</div>
+    <div class="field">
+      <label class="field-label" for="wo-date">Zadnji radni dan</label>
+      <input class="input" id="wo-date" type="text" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" value="${isoToEU(def)}">
+      <div class="field-hint" id="wo-hint"></div>
+    </div>
+    <div class="field" id="wo-mode-wrap" style="margin-top: 16px;">
+      <div class="field-label" id="wo-mode-label"></div>
+      <div class="toggle" role="group" aria-labelledby="wo-mode-label" style="align-self: flex-start;">
+        <button type="button" data-mode="razmjerno" id="wo-mode-r">Razmjerno</button>
+        <button type="button" data-mode="puni">Puni mjesec</button>
+      </div>
+    </div>
+    <div class="wp-preview" id="wo-preview" style="margin-top: 16px;"></div>
+    <div class="wp-warn" id="wo-warn"></div>
+    <div class="wp-lists" id="wo-lists" style="margin-top: 16px;"></div>
+    <div class="modal-actions">
+      <button class="btn" data-act="cancel">Odustani</button>
+      <button class="btn btn-primary" data-act="save">${WP_ICON_ODJAVA}Odjavi radnika</button>
+    </div>
+  `;
+  const m = modal(html, { wide: true });
+  m.root.querySelector('.modal').classList.add('wp-modal');
+  const dateInp = m.root.querySelector('#wo-date');
+  attachEUDateMask(dateInp);
+
+  const update = () => {
+    const iso = euToISO(dateInp.value.trim());
+    const hint = m.root.querySelector('#wo-hint');
+    const prev = m.root.querySelector('#wo-preview');
+    const warn = m.root.querySelector('#wo-warn');
+    const lists = m.root.querySelector('#wo-lists');
+    const modeWrap = m.root.querySelector('#wo-mode-wrap');
+    if (!iso) {
+      hint.textContent = 'Upiši datum u formatu DD/MM/YYYY.';
+      prev.hidden = true; modeWrap.hidden = true; warn.textContent = ''; lists.innerHTML = '';
+      return;
+    }
+    const key = iso.slice(0, 7);
+    const next = addDaysISO(iso, 1);
+    hint.textContent = `Od ${isoToEU(next)} više ne ulazi u evidenciju.`;
+    const share = workerMonthShare({ ...w, zaposlenje: wpPeriodsWithEnd(w, iso) }, key);
+    const partial = share.udio < 1;
+    modeWrap.hidden = !partial;
+    m.root.querySelector('#wo-mode-label').textContent = `Fiksni iznosi za ${monthAccHr(key)} (fiksno, prijevoz, stan)`;
+    m.root.querySelector('#wo-mode-r').textContent = `Razmjerno · ${share.dana} od ${share.ukupno} ${hrRadnihDana(share.ukupno)}`;
+    m.root.querySelectorAll('#wo-mode-wrap [data-mode]').forEach(b => b.classList.toggle('active', (b.dataset.mode === 'puni') === puni));
+    const f = (partial && !puni) ? share.udio : 1;
+    const items = [['Fiksno', fiksnoForMonth(w, key)], ['Prijevoz', Number(w.prijevoz) || 0], ['Stan', Number(w.stan) || 0]];
+    if ((Number(w.fiksnaIsplata) || 0) > 0) items.push(['Fiksna isplata', Number(w.fiksnaIsplata) || 0]);
+    prev.hidden = false;
+    prev.innerHTML = `
+      <div class="eyebrow">${monthLabel(key)} · ${escapeHtml(w.name)}</div>
+      <div class="wp-preview-grid">${items.map(([lbl, v]) => {
+        const nv = f < 1 ? round2(v * f) : v;
+        const ch = Math.abs(nv - v) > 0.004;
+        return `<span>${lbl}</span><span class="was${ch ? ' changed' : ''}">${eur(v, 2)}</span><span class="arr">${ch ? '→' : ''}</span><span class="now">${ch ? eur(nv, 2) : 'puni iznos'}</span>`;
+      }).join('')}</div>
+      <div class="wp-preview-note">Zarada i marenda idu iz unesenih sati do ${dmEU(iso)}, kao i dosad.</div>`;
+    const after = workerHoursDaysAfter(w.name, iso);
+    warn.textContent = after
+      ? `⚠ Nakon ${isoToEU(iso)} ${after === 1 ? 'postoji 1 dan' : (after % 10 >= 2 && after % 10 <= 4 && !(after % 100 >= 12 && after % 100 <= 14)) ? `postoje ${after} dana` : `postoji ${after} dana`} s unesenim satima. Ti se sati neće računati.`
+      : '';
+    lists.innerHTML = `
+      <div>
+        <div class="eyebrow" style="margin-bottom: 8px;">Mijenja se</div>
+        <ul>
+          <li>Od ${dmEU(next)} nije u dnevnom unosu sati</li>
+          <li>Od ${monthGenHr(addCalendarMonths(key, 1))} ne ulazi u Sažetak isplate, Cashflow ni obračun projekata</li>
+          <li>Ne ulazi u kapacitet firme kod provjere evidencije</li>
+        </ul>
+      </div>
+      <div>
+        <div class="eyebrow" style="margin-bottom: 8px;">Ostaje</div>
+        <ul>
+          <li>Svi sati i projekti do ${dmEU(iso)}</li>
+          <li>Trošak rada za mjesece u periodu rada</li>
+          <li>Godišnji u Registru i dug</li>
+        </ul>
+      </div>`;
+  };
+  dateInp.addEventListener('input', update);
+  dateInp.addEventListener('blur', update);
+  update();
+  setTimeout(() => dateInp.focus(), 50);
+
+  m.root.addEventListener('click', async e => {
+    const modeBtn = e.target.closest('#wo-mode-wrap [data-mode]');
+    if (modeBtn) { puni = modeBtn.dataset.mode === 'puni'; update(); return; }
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    if (btn.dataset.act === 'cancel') { m.close(); return; }
+    if (btn.dataset.act !== 'save') return;
+    const iso = euToISO(dateInp.value.trim());
+    if (!iso) {
+      toast('Datum mora biti u formatu DD/MM/YYYY', 'error');
+      dateInp.classList.add('invalid');
+      dateInp.focus();
+      return;
+    }
+    const lp = workerLastPeriod(w);
+    if (lp && lp.od && iso < lp.od) { toast(`Zadnji radni dan ne može biti prije početka rada (${isoToEU(lp.od)})`, 'error'); return; }
+    const partial = workerMonthShare({ ...w, zaposlenje: wpPeriodsWithEnd(w, iso) }, iso.slice(0, 7)).udio < 1;
+    const snapshot = JSON.stringify(Array.isArray(w.zaposlenje) ? w.zaposlenje : null);
+    if (!workerPeriods(w)) w.zaposlenje = [{ od: '', do: iso }];
+    else lp.do = iso;
+    const cur = workerLastPeriod(w);
+    if (puni && partial) cur.puniMjesecDo = true;
+    else delete cur.puniMjesecDo;
+    if (await saveData()) {
+      m.close();
+      renderSettings();
+      toast(`${w.name} · zadnji radni dan ${isoToEU(iso)}`, 'success', 2600);
+    } else {
+      const s = JSON.parse(snapshot);
+      if (s === null) delete w.zaposlenje; else w.zaposlenje = s;
+    }
+  });
+}
+
+/* Bivši radnik: poništi odjavu (greška) ili novi period rada od datuma */
+function workerVratiModal(idx) {
+  const w = state.settings.workers[idx];
+  const lp0 = w ? workerLastPeriod(w) : null;
+  if (!w || !lp0 || !lp0.do) return;
+  const today = localTodayISO();
+  const defNew = today > lp0.do ? today : addDaysISO(lp0.do, 1);
+  let mode = 'ponisti';
+  const html = `
+    <div class="modal-title">Vrati radnika · ${escapeHtml(w.name)}</div>
+    <div class="modal-sub">Zadnji radni dan: ${isoToEU(lp0.do)}. Odaberi što se dogodilo.</div>
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <label class="wp-radio on"><input type="radio" name="wv-mode" value="ponisti" checked><span><strong>Odjava je bila greška</strong><span class="wp-caption">Radi bez prekida, kao da odjave nije bilo.</span></span></label>
+      <label class="wp-radio"><input type="radio" name="wv-mode" value="novi"><span><strong>Vraća se na posao</strong><span class="wp-caption">Novi period rada od upisanog datuma. Razdoblje između ne ulazi u isplatu ni troškove, a stari period ostaje.</span></span></label>
+    </div>
+    <div class="field" id="wv-date-wrap" style="margin-top: 14px;" hidden>
+      <label class="field-label" for="wv-date">Ponovno radi od</label>
+      <input class="input" id="wv-date" type="text" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" value="${isoToEU(defNew)}">
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-act="cancel">Odustani</button>
+      <button class="btn btn-primary" data-act="save">Spremi</button>
+    </div>
+  `;
+  const m = modal(html);
+  m.root.querySelector('.modal').classList.add('wp-modal');
+  const dateInp = m.root.querySelector('#wv-date');
+  attachEUDateMask(dateInp);
+  m.root.querySelectorAll('input[name="wv-mode"]').forEach(r => r.addEventListener('change', () => {
+    mode = r.value;
+    m.root.querySelectorAll('.wp-radio').forEach(l => l.classList.toggle('on', l.querySelector('input').checked));
+    m.root.querySelector('#wv-date-wrap').hidden = mode !== 'novi';
+    if (mode === 'novi') setTimeout(() => dateInp.focus(), 30);
+  }));
+  m.root.addEventListener('click', async e => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    if (btn.dataset.act === 'cancel') { m.close(); return; }
+    if (btn.dataset.act !== 'save') return;
+    const snapshot = JSON.stringify(w.zaposlenje);
+    const lp = workerLastPeriod(w);
+    let msg;
+    if (mode === 'novi') {
+      const od = euToISO(dateInp.value.trim());
+      if (!od) { toast('Datum mora biti u formatu DD/MM/YYYY', 'error'); dateInp.classList.add('invalid'); dateInp.focus(); return; }
+      if (od <= lp.do) { toast(`Novi period mora početi nakon ${isoToEU(lp.do)}`, 'error'); dateInp.focus(); return; }
+      w.zaposlenje.push({ od, do: '' });
+      msg = `${w.name} ponovno radi od ${isoToEU(od)}`;
+    } else {
+      lp.do = '';
+      delete lp.puniMjesecDo;
+      const per = workerPeriods(w);
+      if (per.length === 1 && !per[0].od && !per[0].do && !per[0].puniMjesecOd) delete w.zaposlenje;
+      msg = `Odjava poništena · ${w.name} radi bez prekida`;
+    }
+    if (await saveData()) {
+      m.close();
+      renderSettings();
+      toast(msg, 'success', 2600);
+    } else {
+      w.zaposlenje = JSON.parse(snapshot);
+    }
+  });
+}
+
+/* Početak rada (tekući period); kraj se upisuje preko Odjave */
+function workerPeriodModal(idx) {
+  const w = state.settings.workers[idx];
+  if (!w) return;
+  const lp0 = workerLastPeriod(w);
+  const earlier = (workerPeriods(w) || []).filter(p => p !== lp0).sort((a, b) => (a.od || '').localeCompare(b.od || ''));
+  let puni = !!(lp0 && lp0.puniMjesecOd);
+  const html = `
+    <div class="modal-title">Period rada · ${escapeHtml(w.name)}</div>
+    <div class="modal-sub">Od kojeg dana radnik ulazi u unos sati, isplatu i troškove. Prazno znači od početka evidencije.</div>
+    <div class="field">
+      <label class="field-label" for="wpm-od">Radi od</label>
+      <input class="input" id="wpm-od" type="text" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" value="${lp0 && lp0.od ? isoToEU(lp0.od) : ''}">
+      <div class="field-hint">${lp0 && lp0.do ? `Zadnji radni dan: ${isoToEU(lp0.do)}. Mijenja se preko „Odjavi".` : 'Kraj rada upisuje se preko „Odjavi".'}</div>
+    </div>
+    <div class="field" id="wpm-mode-wrap" style="margin-top: 16px;">
+      <div class="field-label" id="wpm-mode-label"></div>
+      <div class="toggle" role="group" aria-labelledby="wpm-mode-label" style="align-self: flex-start;">
+        <button type="button" data-mode="razmjerno" id="wpm-mode-r">Razmjerno</button>
+        <button type="button" data-mode="puni">Puni mjesec</button>
+      </div>
+    </div>
+    ${earlier.length ? `<div class="field-label" style="margin-top: 16px;">Raniji periodi</div><div style="margin-top: 6px;">${earlier.map(p => `<span class="per-chip">${p.od ? isoToEU(p.od) : 'od početka'} – ${p.do ? isoToEU(p.do) : 'danas'}</span>`).join('')}</div>` : ''}
+    <div class="modal-actions">
+      <button class="btn" data-act="cancel">Odustani</button>
+      <button class="btn btn-primary" data-act="save">Spremi</button>
+    </div>
+  `;
+  const m = modal(html);
+  m.root.querySelector('.modal').classList.add('wp-modal');
+  const odInp = m.root.querySelector('#wpm-od');
+  attachEUDateMask(odInp);
+  const update = () => {
+    const od = euToISO(odInp.value.trim());
+    const wrap = m.root.querySelector('#wpm-mode-wrap');
+    if (!od) { wrap.hidden = true; return; }
+    const key = od.slice(0, 7);
+    const sim = { ...w, zaposlenje: [{ od, do: (lp0 && lp0.do) || '' }] };
+    const share = workerMonthShare(sim, key);
+    wrap.hidden = !(share.udio < 1);
+    m.root.querySelector('#wpm-mode-label').textContent = `Fiksni iznosi za ${monthAccHr(key)} (fiksno, prijevoz, stan)`;
+    m.root.querySelector('#wpm-mode-r').textContent = `Razmjerno · ${share.dana} od ${share.ukupno} ${hrRadnihDana(share.ukupno)}`;
+    wrap.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('active', (b.dataset.mode === 'puni') === puni));
+  };
+  odInp.addEventListener('input', update);
+  odInp.addEventListener('blur', update);
+  update();
+
+  m.root.addEventListener('click', async e => {
+    const modeBtn = e.target.closest('#wpm-mode-wrap [data-mode]');
+    if (modeBtn) { puni = modeBtn.dataset.mode === 'puni'; update(); return; }
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    if (btn.dataset.act === 'cancel') { m.close(); return; }
+    if (btn.dataset.act !== 'save') return;
+    const raw = odInp.value.trim();
+    const od = raw ? euToISO(raw) : '';
+    if (raw && !od) { toast('Datum mora biti u formatu DD/MM/YYYY', 'error'); odInp.classList.add('invalid'); odInp.focus(); return; }
+    if (od && lp0 && lp0.do && od > lp0.do) { toast(`Početak ne može biti nakon zadnjeg radnog dana (${isoToEU(lp0.do)})`, 'error'); return; }
+    const prevEnd = earlier.reduce((a, p) => (p.do && p.do > a ? p.do : a), '');
+    if (earlier.length && (!od || od <= prevEnd)) { toast(`Početak mora biti nakon ranijeg perioda (${isoToEU(prevEnd)})`, 'error'); return; }
+    const snapshot = JSON.stringify(Array.isArray(w.zaposlenje) ? w.zaposlenje : null);
+    if (!workerPeriods(w)) {
+      if (od) w.zaposlenje = [{ od, do: '' }];
+    } else {
+      lp0.od = od;
+    }
+    const cur = workerLastPeriod(w);
+    if (cur) {
+      const partial = od && workerMonthShare({ ...w, zaposlenje: [{ od, do: cur.do || '' }] }, od.slice(0, 7)).udio < 1;
+      if (puni && partial) cur.puniMjesecOd = true; else delete cur.puniMjesecOd;
+      const per = workerPeriods(w);
+      if (per.length === 1 && !per[0].od && !per[0].do && !per[0].puniMjesecDo) delete w.zaposlenje;
+    }
+    if (await saveData()) {
+      m.close();
+      renderSettings();
+      toast(od ? `${w.name} radi od ${isoToEU(od)}` : `${w.name} · od početka evidencije`, 'success', 2200);
+    } else {
+      const s = JSON.parse(snapshot);
+      if (s === null) delete w.zaposlenje; else w.zaposlenje = s;
+    }
+  });
+}
+
+/* CSS za period rada (Postavke, Evidencija, modali), iz app.js da deploy ostane jedan file */
+function injectWorkerPeriodCss() {
+  if (document.getElementById('sr-wp-css')) return;
+  const st = document.createElement('style');
+  st.id = 'sr-wp-css';
+  st.textContent = `
+    .wp-caption { display: block; font-size: 11px; font-weight: 400; color: var(--muted); margin-top: 3px; letter-spacing: 0; text-transform: none; }
+    .wp-prorata { border-bottom: 1px dotted currentColor; cursor: help; }
+    .hours-table th.worker-col .wp-th-sub { font-family: var(--font-mono); font-size: 10px; font-weight: 500; color: #8a6a15; margin-top: 2px; }
+    .hours-table-v2 td.hcell.wp-off { background: repeating-linear-gradient(135deg, var(--surface-2) 0 6px, #eae8e0 6px 12px); }
+    .hours-table-v2 td.hcell.wp-off .hc-top { opacity: .55; text-decoration: line-through; }
+    .hrs-chip.wp-off { opacity: .55; text-decoration: line-through; }
+    .wp-period-btn { font: inherit; font-size: 13px; color: var(--muted); background: none; border: 0; padding: 4px 0; cursor: pointer; white-space: nowrap; text-decoration: underline dotted; text-underline-offset: 3px; }
+    .wp-period-btn:hover { color: var(--ink); }
+    .wp-period-text { font-size: 13px; color: var(--muted); white-space: nowrap; }
+    tr.wp-group-row td { padding: 0 !important; background: var(--surface-2); }
+    .table tr.wp-group-row:hover td { background: var(--surface-2); }
+    .wp-group-btn { width: 100%; display: flex; align-items: center; gap: 10px; padding: 12px 16px; font: inherit; font-size: 13px; color: var(--ink-2); background: none; border: 0; cursor: pointer; text-align: left; }
+    .wp-group-btn .chev2 { display: inline-flex; transition: transform .2s var(--ease-snap); color: var(--muted-2); font-size: 15px; }
+    .wp-group-btn.open .chev2 { transform: rotate(90deg); }
+    .wp-group-btn .cnt { color: var(--muted); }
+    .wp-group-btn .hint { margin-left: auto; font-size: 12px; color: var(--muted); }
+    tr.wp-former td { color: var(--muted); }
+    tr.wp-former td strong { color: var(--ink-2); }
+    .wp-preview { background: var(--surface-2); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+    .wp-preview-grid { display: grid; grid-template-columns: minmax(0, 1fr) auto 24px auto; gap: 6px 12px; align-items: baseline; font-size: 13px; }
+    .wp-preview-grid .was { font-family: var(--font-mono); color: var(--muted-2); text-align: right; }
+    .wp-preview-grid .was.changed { text-decoration: line-through; }
+    .wp-preview-grid .arr { text-align: center; color: var(--muted-2); }
+    .wp-preview-grid .now { font-family: var(--font-mono); font-weight: 600; text-align: right; }
+    .wp-preview-note { font-size: 12px; color: var(--muted); border-top: 1px dashed var(--line-strong); padding-top: 8px; }
+    .wp-warn { font-size: 12px; color: var(--negative); margin-top: 10px; }
+    .wp-warn:empty { display: none; }
+    .wp-lists { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .wp-lists ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.55; color: var(--ink-2); }
+    .wp-radio { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; cursor: pointer; font-size: 14px; }
+    .wp-radio input { margin-top: 3px; accent-color: var(--acc); }
+    .wp-radio.on { border-color: var(--acc); box-shadow: 0 0 0 3px var(--acc-soft); }
+    .wp-dm-note { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); margin-top: 10px; }
+    .wp-ico-btn svg { width: 14px; height: 14px; flex: none; }
+    .wp-workers-table th, .wp-workers-table td { padding-left: 10px; padding-right: 10px; }
+    .wp-workers-table input.input.num { min-width: 72px; }
+    .wp-workers-table input.input[data-f="name"] { min-width: 96px; }
+    .modal.wp-modal { max-height: calc(100vh - 40px); max-height: calc(100dvh - 40px); overflow-y: auto; overscroll-behavior: contain; }
+    @media (max-width: 640px) {
+      .wp-lists { grid-template-columns: 1fr; }
+      .wp-group-btn .hint { display: none; }
+    }
+  `;
+  document.head.appendChild(st);
+}
+
 function renderSettings() {
   const panel = document.getElementById('panel-settings');
   panel.innerHTML = `
@@ -5219,7 +6063,7 @@ function renderSettings() {
       <div class="card-head">
         <div>
           <div class="card-title">Radnici</div>
-          <div class="card-sub">Satnice, marenda, prijevoz, stan, fiksno · Fiksna isplata: ako je > 0, radnik ima točno taj iznos za isplatu svaki mjesec (npr. Dragan 900), bez obzira na sate i marendu</div>
+          <div class="card-sub">Satnice, marenda, prijevoz, stan, fiksno · Fiksna isplata: ako je > 0, radnik ima točno taj iznos za isplatu svaki mjesec (npr. Dragan 900), bez obzira na sate i marendu · Period rada: od kada do kada radnik ulazi u unos sati, isplatu i troškove</div>
         </div>
         ${isAdmin ? `<button class="btn btn-primary admin-only" id="add-worker">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -5227,7 +6071,7 @@ function renderSettings() {
         </button>` : ''}
       </div>
       <div class="table-scroll">
-        <table class="table">
+        <table class="table wp-workers-table">
           <thead>
             <tr>
               <th>Radnik</th>
@@ -5237,11 +6081,12 @@ function renderSettings() {
               <th class="text-right">Stan/mj. (€)</th>
               <th class="text-right">Fiksno/mj. (€)</th>
               <th class="text-right">Fiksna isplata/mj. (€)</th>
+              <th>Period rada</th>
               ${isAdmin ? '<th class="text-right">Akcije</th>' : ''}
             </tr>
           </thead>
           <tbody>
-            ${state.settings.workers.map((w, i) => `
+            ${settingsWorkersSplit().aktivni.map(({ w, i }) => `
               <tr>
                 <td>${isAdmin
                   ? `<input class="input" value="${escapeHtml(w.name)}" data-w="${i}" data-f="name" style="max-width: 180px;">`
@@ -5263,13 +6108,18 @@ function renderSettings() {
                     ? `<input class="input num" type="number" step="0.5" value="${Number(w[f]) || 0}" data-w="${i}" data-f="${f}" style="max-width: 100px; margin-left: auto; text-align: right;">`
                     : `<span class="num">${eur(Number(w[f]) || 0, f === 'satnica' ? 2 : 0)}</span>`}</td>`;
                 }).join('')}
-                ${isAdmin ? `<td class="text-right">
-                  <button class="btn btn-ghost btn-sm btn-danger" data-act="del-worker" data-i="${i}" title="Obriši">
+                <td>${isAdmin
+                  ? `<button type="button" class="wp-period-btn" data-act="period-worker" data-i="${i}" title="Uredi početak rada">${escapeHtml(workerPeriodText(w))}</button>`
+                  : `<span class="wp-period-text">${escapeHtml(workerPeriodText(w))}</span>`}</td>
+                ${isAdmin ? `<td class="text-right" style="white-space: nowrap;">
+                  <button type="button" class="btn btn-sm wp-ico-btn" data-act="odjavi-worker" data-i="${i}" title="Zadnji radni dan · radnik ostaje u povijesti">${WP_ICON_ODJAVA}Odjavi</button>
+                  ${workerHasHistory(w) ? '' : `<button class="btn btn-ghost btn-sm btn-danger" data-act="del-worker" data-i="${i}" title="Obriši (radnik još nema nijedan upis)">
                     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
-                  </button>
+                  </button>`}
                 </td>` : ''}
               </tr>
             `).join('')}
+            ${settingsFormerRowsHtml()}
           </tbody>
         </table>
       </div>
@@ -5359,6 +6209,13 @@ function renderSettings() {
   attachEUAmountMask(panel.querySelector('#set-limit'));
   panel.querySelector('#dl-json')?.addEventListener('click', downloadJson);
   panel.querySelector('#dl-xlsx')?.addEventListener('click', downloadXlsx);
+  panel.querySelector('#wp-bivsi-toggle')?.addEventListener('click', (e) => {
+    wpBivsiOpen = !wpBivsiOpen;
+    const b = e.currentTarget;
+    b.classList.toggle('open', wpBivsiOpen);
+    b.setAttribute('aria-expanded', wpBivsiOpen ? 'true' : 'false');
+    panel.querySelectorAll('tr.wp-former').forEach(tr => { tr.hidden = !wpBivsiOpen; });
+  });
   panel.querySelector('#toggle-admin')?.addEventListener('click', showPinModal);
   panel.querySelector('#clear-cache')?.addEventListener('click', () => {
     if (confirm('Obrisati lokalni cache backup?')) {
@@ -5386,7 +6243,7 @@ function renderSettings() {
       }
     });
     panel.querySelector('#add-worker')?.addEventListener('click', async () => {
-      state.settings.workers.push({ name: 'Novi radnik', satnica: 0, marenda: 4, prijevoz: 70, stan: 0, fiksno: 1100, fiksnaIsplata: 0 });
+      state.settings.workers.push({ name: 'Novi radnik', satnica: 0, marenda: 4, prijevoz: 70, stan: 0, fiksno: 1100, fiksnaIsplata: 0, zaposlenje: [{ od: localTodayISO(), do: '' }] });
       if (await saveData()) renderSettings();
     });
     panel.querySelectorAll('[data-act="del-worker"]').forEach(b => b.addEventListener('click', async () => {
@@ -5394,6 +6251,9 @@ function renderSettings() {
       state.settings.workers.splice(parseInt(b.dataset.i), 1);
       if (await saveData()) renderSettings();
     }));
+    panel.querySelectorAll('[data-act="odjavi-worker"]').forEach(b => b.addEventListener('click', () => workerOdjavaModal(parseInt(b.dataset.i))));
+    panel.querySelectorAll('[data-act="vrati-worker"]').forEach(b => b.addEventListener('click', () => workerVratiModal(parseInt(b.dataset.i))));
+    panel.querySelectorAll('[data-act="period-worker"]').forEach(b => b.addEventListener('click', () => workerPeriodModal(parseInt(b.dataset.i))));
     panel.querySelector('#save-fixed')?.addEventListener('click', async () => {
       const list = (state.settings.fixedLabor || []).map(f => ({ ...f }));
       panel.querySelectorAll('[data-fl]').forEach(inp => {
@@ -5485,9 +6345,10 @@ function downloadXlsx() {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(cfRows), 'CASHFLOW');
 
   // Settings
-  const setRows = [['Radnik', 'Satnica', 'Marenda', 'Prijevoz', 'Stan', 'Fiksno', 'Fiksna isplata']];
+  const setRows = [['Radnik', 'Satnica', 'Marenda', 'Prijevoz', 'Stan', 'Fiksno', 'Fiksna isplata', 'Radi od', 'Radi do']];
   for (const w of state.settings.workers) {
-    setRows.push([w.name, w.satnica, w.marenda, w.prijevoz, w.stan, w.fiksno, Number(w.fiksnaIsplata) || 0]);
+    const lp = workerLastPeriod(w);
+    setRows.push([w.name, w.satnica, w.marenda, w.prijevoz, w.stan, w.fiksno, Number(w.fiksnaIsplata) || 0, lp && lp.od ? isoToEU(lp.od) : '', lp && lp.do ? isoToEU(lp.do) : '']);
   }
   if ((state.settings.fixedLabor || []).length) {
     setRows.push([]);
@@ -5533,7 +6394,7 @@ function downloadXlsx() {
   for (const k of Object.keys(state.hours || {})) {
     const h = state.hours[k];
     if (!h?.days?.length) continue;
-    const workers = state.settings.workers.map(w => w.name);
+    const workers = workersForMonthView(k).map(w => w.name);
     const rows = [['Datum', 'Dan', ...workers.flatMap(n => [n + ' Sati', n + ' Mar.'])]];
     for (const d of h.days) {
       rows.push([d.date, d.day_name, ...workers.flatMap(n => [d.workers?.[n]?.hours || 0, d.workers?.[n]?.marenda || 0])]);
@@ -6368,7 +7229,12 @@ function rokStatus(item) {
 
 function renderRegistar() {
   ensureRegistar();
-  const workers = state.settings.workers || [];
+  const gYearW = String(registarYear);
+  const workers = (state.settings.workers || []).filter(w => {
+    if (workerActiveInRange(w, `${gYearW}-01-01`, `${gYearW}-12-31`)) return true;
+    const g = state.registar.godisnji[w.name];
+    return !!g && (g.periodi || []).some(p => (p.od ? p.od.slice(0, 4) === gYearW : String(p.godina || '') === gYearW));
+  });
   const rokovi = state.registar.rokovi.map((r, i) => ({ ...r, _idx: i }));
   const sorted = rokovi.slice().sort((a, b) => {
     const sa = rokStatus(a), sb = rokStatus(b);
@@ -6387,7 +7253,7 @@ function renderRegistar() {
       .slice().sort((a, b) => (a.od || `${a.godina || '0000'}-00-00`).localeCompare(b.od || `${b.godina || '0000'}-00-00`));
     const iskoristeno = periodi.reduce((a, p) => a + (Number(p.dana) || 0), 0);
     const ukupno = Number(g.ukupno) || 0;
-    return { name: w.name, ukupno, iskoristeno, preostalo: ukupno - iskoristeno, periodi };
+    return { name: w.name, ukupno, iskoristeno, preostalo: ukupno - iskoristeno, periodi, rub: workerYearEdges(w, gYear) };
   });
 
   const panel = document.getElementById('panel-registar');
@@ -6504,7 +7370,7 @@ function renderRegistar() {
           <tbody>
             ${gRows.length === 0 ? `<tr><td colspan="5" style="text-align: center; padding: 32px 12px; color: var(--muted);">Nema radnika u Postavkama.</td></tr>` : gRows.map(r => `
               <tr class="god-row ${isAdmin ? 'clickable' : ''}" data-worker="${escapeHtml(r.name)}">
-                <td><strong>${escapeHtml(r.name)}</strong></td>
+                <td><strong>${escapeHtml(r.name)}</strong>${(r.rub.od || r.rub.do) ? `<span class="pill amber" style="margin-left: 8px;">${[r.rub.od ? 'od ' + isoToEU(r.rub.od) : '', r.rub.do ? 'do ' + isoToEU(r.rub.do) : ''].filter(Boolean).join(' ')}</span>` : ''}</td>
                 <td class="num text-right">${r.ukupno ? r.ukupno : '<span style="color: var(--muted-2);">—</span>'}</td>
                 <td class="num text-right" style="font-weight: 600;">${r.iskoristeno}</td>
                 <td class="num text-right" style="font-weight: 600; color: ${r.ukupno ? (r.preostalo < 0 ? 'var(--negative)' : 'var(--positive)') : 'var(--muted-2)'};">${r.ukupno ? r.preostalo : '—'}</td>
@@ -6753,6 +7619,7 @@ function godisnjiModal(workerName) {
 async function boot() {
   injectExtraCss();
   injectObracunCss();
+  injectWorkerPeriodCss();
   // Restore admin from localStorage if exists
   if (API.pin) {
     try {
