@@ -113,7 +113,7 @@ function toast(msg, type = '', duration = 2500) {
 }
 
 /* ---------- MODAL HELPER ---------- */
-function modal(html, opts = {}) {
+function modalV3(html, opts = {}) {
   const mount = document.getElementById('modalMount');
   mount.innerHTML = `<div class="modal-backdrop"><div class="modal ${opts.wide ? 'modal-wide' : ''}">${html}</div></div>`;
   const backdrop = mount.querySelector('.modal-backdrop');
@@ -616,7 +616,7 @@ function daysInMonth(monthKey) {
 }
 
 /* ---------- COMPUTATIONS ---------- */
-function computeCashflowSummary() {
+function computeCashflowSummaryV3() {
   const months = allMonths();
   const summary = {};
   for (const key of months) {
@@ -1184,6 +1184,7 @@ function renderCashflow() {
           </tfoot>
         </table>
       </div>
+      ${cashflowPlaceNapomenaHtml(summary, months)}
     </div>
   `;
 
@@ -1996,6 +1997,8 @@ function renderTrx() {
       </div>
     </div>
 
+    ${v4PonavljajuciHtml(activeMonth)}
+
     <div class="card">
       <div class="card-head">
         <div>
@@ -2032,7 +2035,7 @@ function renderTrx() {
                 <tr>
                   <td class="col-date num">${formatDate(t.date)}</td>
                   <td>${typePill(t.type)}</td>
-                  <td><strong>${escapeHtml(t.partner)}</strong></td>
+                  <td><strong${t.group === 'Isključi' ? ' style="text-decoration: line-through; color: var(--muted);"' : ''}>${escapeHtml(t.partner)}</strong>${trxChipsHtml(t)}</td>
                   <td class="num text-right" style="font-weight: 600;">${eur(t.amount, 2)}</td>
                   <td><span class="pill gray">${escapeHtml(t.category || '—')}</span></td>
                   <td>${groupPill(t.group)}</td>
@@ -2293,7 +2296,7 @@ function groupPill(g) {
   return `<span class="pill gray">${g || '—'}</span>`;
 }
 
-function trxModal(idx = null) {
+function trxModalV3(idx = null) {
   ensureMonth(activeMonth);
   const t = idx !== null ? state.trx[activeMonth][idx] : { date: new Date().toISOString().slice(0, 10), type: 'Trošak', partner: '', amount: 0, category: '', group: 'Tekući' };
   const partners = Array.from(new Set(allMonths().flatMap(k => (state.trx[k] || []).map(x => x.partner)).filter(Boolean))).sort();
@@ -4134,7 +4137,7 @@ function godisnjiHoursInMonth(key, upToISO) {
    - radnici: ukupni mjesecni trosak firme za radnike sa satnicom (fiksno + isplata + prijevoz + stan)
    - rezija:  fiksne osobe (bez duplikata s radnicima) + radnici bez satnice + tekuci troskovi bez placa
    Za tekuci kalendarski mjesec fiksni dio se razmjerno smanjuje na protekle radne dane. */
-function computeMonthCosts(key) {
+function computeMonthCostsV3(key) {
   const stats = computeWorkerStats(key) || [];
   const satnicaOf = {};
   for (const w of state.settings.workers) satnicaOf[w.name] = Number(w.satnica) || 0;
@@ -4166,7 +4169,7 @@ function computeMonthCosts(key) {
   return { radnici, rezija: rezOsobe + tekuci, frac, inProgress };
 }
 
-function computeProjectsData() {
+function computeProjectsDataV3() {
   const map = {};
   const ensure = (name) => {
     if (!map[name]) map[name] = { name, materijal: 0, rad: 0, rez: 0, radIsplata: 0, sati: 0, months: {}, workers: {}, stoCount: 0, lastActivity: '', daysSet: new Set(), nepotpunSet: new Set(), inProgressSet: new Set() };
@@ -4423,6 +4426,7 @@ function renderProjects() {
         <h1 class="page-title">Projekti</h1>
       </div>
     </div>
+    ${renderProjektiPregledHtml(all)}
     <div style="font-size: 13.5px; color: var(--muted); margin: -12px 0 14px;">Odaberi grupu, zatim projekt</div>
 
     <div class="pick-list">
@@ -4477,6 +4481,7 @@ function renderProjects() {
     projectsGroup = row.dataset.group;
     renderProjects();
   }));
+  bindProjektiPregled(panel, all);
   panel.querySelectorAll('.pick-row[data-proj]').forEach(row => row.addEventListener('click', () => {
     activeProject = row.dataset.proj;
     renderProjects();
@@ -4600,7 +4605,7 @@ function toggleProjZakljucen(projName, isZakljucen) {
 }
 
 /* Nova / uredi uplata za projekt */
-function obUplataModal(projName, idx = null) {
+function obUplataModalV3(projName, idx = null) {
   const rec = ensureObracunRec(projName);
   const list = rec.uplate;
   const u = idx !== null ? list[idx] : { date: todayISO(), amount: 0, note: '' };
@@ -4659,7 +4664,7 @@ function obUplataModal(projName, idx = null) {
 }
 
 /* Novi / uredi ručni trošak projekta (podizvođači, najam, kontejner…) */
-function obTrosakModal(projName, idx = null) {
+function obTrosakModalV3(projName, idx = null) {
   const rec = ensureObracunRec(projName);
   const list = rec.troskovi;
   const t = idx !== null ? list[idx] : { date: todayISO(), amount: 0, note: '' };
@@ -5000,7 +5005,7 @@ function bindObracunDetail(panel, p) {
   });
 }
 
-function renderProjectDetail(p) {
+function renderProjectDetailV3(p) {
   const panel = document.getElementById('panel-projects');
   const isNone = p.name === PROJ_NONE;
   const displayName = isNone ? 'Bez projekta' : p.name;
@@ -6179,6 +6184,8 @@ function renderSettings() {
       ${isAdmin ? '<div style="margin-top: 16px;"><button class="btn btn-primary" id="save-fixed">Spremi fiksni rad</button></div>' : ''}
     </div>
 
+    ${v4PravilaCardHtml()}
+
     <div class="card">
       <div class="card-head">
         <div>
@@ -6224,6 +6231,7 @@ function renderSettings() {
       toast('Lokalni cache obrisan');
     }
   });
+  bindPravilaCard(panel);
   if (isAdmin) {
     panel.querySelector('#save-general')?.addEventListener('click', async () => {
       const limit = parseEUAmount(panel.querySelector('#set-limit').value) || 30000;
@@ -6812,7 +6820,7 @@ function renderForecastYear(panel) {
   }
 }
 
-function forecastModal(idx = null) {
+function forecastModalV3(idx = null) {
   ensureForecast();
   const it = idx !== null ? state.forecast[idx] : { label: '', category: 'Ostalo', amount: 0, validFrom: activeMonth, validTo: '', note: '', active: true };
   const allCats = Array.from(new Set([...FORECAST_CATEGORIES, ...(state.forecast || []).map(x => x.category).filter(Boolean)])).sort();
@@ -7616,10 +7624,2224 @@ function godisnjiModal(workerName) {
 }
 
 
+/* Modal (v4): kao modalV3, uz opts.xl (široki pregled) i opts.sticky (klik izvan ne zatvara,
+   Escape pita prije zatvaranja). Zatvoren modal više ne sluša Escape. */
+function modal(html, opts = {}) {
+  const mount = document.getElementById('modalMount');
+  mount.innerHTML = `<div class="modal-backdrop"><div class="modal ${opts.xl ? 'modal-xl' : (opts.wide ? 'modal-wide' : '')}">${html}</div></div>`;
+  const backdrop = mount.querySelector('.modal-backdrop');
+  let open = true;
+  const esc = (e) => {
+    if (e.key !== 'Escape' || !open) return;
+    if (opts.sticky && !confirm('Zatvoriti bez spremanja?')) return;
+    close();
+  };
+  const close = () => {
+    if (!open) return;
+    open = false;
+    document.removeEventListener('keydown', esc);
+    if (mount.contains(backdrop)) mount.innerHTML = '';
+    if (opts.onClose) opts.onClose();
+  };
+  backdrop.addEventListener('click', e => { if (e.target === backdrop && !opts.sticky) close(); });
+  document.addEventListener('keydown', esc);
+  return { close, root: backdrop };
+}
+
+/* CSS za v4 (PDV na projektima, troškovi firme, ponavljajući troškovi) · iz app.js da deploy ostane jedan file */
+function injectV4Css() {
+  if (document.getElementById('sr-v4-css')) return;
+  const st = document.createElement('style');
+  st.id = 'sr-v4-css';
+  st.textContent = `
+    .modal-backdrop { overflow-y: auto; grid-template-columns: minmax(0, 1fr); }
+    #panel-projects .grid > * { min-width: 0; }
+    .modal-actions { flex-wrap: wrap; }
+    .modal.modal-xl { max-width: 1180px; }
+    .v4-eyebrow { font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+    .v4-sub { font-size: 12px; color: var(--muted); margin-top: 2px; font-weight: 400; font-family: var(--font-body); white-space: normal; }
+    .v4-note { font-size: 13.5px; color: var(--ink-2); background: var(--surface-2); border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; }
+    .pill.pdv25 { background: var(--acc-cashflow-soft); color: var(--acc-cashflow); }
+    .pill.ppo { background: var(--acc-forecast-soft); color: var(--acc-forecast); }
+
+    /* PDV na uplatama (detalj projekta) */
+    .v4-pdv { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--radius-lg); padding: 18px 22px; margin-bottom: 20px; }
+    .v4-pdv.treba { background: #fbf6e8; border-color: #e3d3a4; }
+    .v4-pdv.treba .v4-eyebrow { color: #7a5c10; }
+    .v4-pdv-txt { min-width: 0; flex: 1 1 320px; }
+    .v4-pdv-sub { font-size: 14px; color: var(--ink-2); margin-top: 4px; }
+    .toggle.v4-toggle { flex-wrap: wrap; }
+    .toggle.v4-toggle button { min-height: 44px; padding: 10px 18px; font-size: 13.5px; }
+    .toggle.v4-toggle button:disabled { cursor: default; }
+    .kpi-cell.v4-amber { background: #fbf6e8; }
+    .kpi-cell.v4-amber .stat-label, .kpi-cell.v4-amber .stat-value, .kpi-cell.v4-amber .stat-sub { color: #7a5c10; }
+    .kpi-cell.v4-kpi-green { background: var(--positive-soft); }
+    .kpi-cell.v4-kpi-green .stat-label, .kpi-cell.v4-kpi-green .stat-value, .kpi-cell.v4-kpi-green .stat-sub { color: var(--positive); }
+    .kpi-cell.v4-kpi-red { background: var(--negative-soft); }
+    .kpi-cell.v4-kpi-red .stat-label, .kpi-cell.v4-kpi-red .stat-value, .kpi-cell.v4-kpi-red .stat-sub { color: var(--negative); }
+
+    /* Od prihoda do zarade, PDV na projektu */
+    .v4-casc-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: baseline; padding: 11px 2px; border-bottom: 1px solid var(--line); font-size: 14px; }
+    .v4-casc-row .v { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; font-weight: 500; }
+    .v4-casc-sub { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+    .v4-casc-row.hl { padding: 13px 12px; margin: 4px 0; background: var(--surface-2); border-radius: 10px; border-bottom: none; font-size: 15px; font-weight: 600; }
+    .v4-casc-row.hl .v { font-weight: 600; }
+    .v4-casc-row.hl.pos { background: var(--positive-soft); color: var(--positive); }
+    .v4-casc-row.hl.neg { background: var(--negative-soft); color: var(--negative); }
+    .v4-casc-row.hl.amber { background: #fbf6e8; color: #7a5c10; }
+    .v4-casc-row.hl.amber .v4-casc-sub { color: #7a5c10; }
+    .v4-casc-row.tot { font-weight: 600; border-bottom: none; border-top: 2px solid var(--line-strong); padding-top: 13px; margin-top: 2px; }
+    .v4-casc-row.tot .v { font-weight: 600; }
+
+    /* Scenariji PDV-a */
+    .card.v4-scen { display: flex; flex-direction: column; gap: 2px; }
+    .v4-scen-row { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+    .v4-scen-row .v { font-family: var(--font-mono); font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .v4-scen-note { font-size: 13px; padding-top: 8px; }
+    .v4-scen-note.neg { color: var(--negative); }
+    .v4-scen-note.pos { color: var(--positive); }
+    .v4-hint { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; color: var(--ink-2); }
+    .v4-hint:last-child { border-bottom: none; }
+    .v4-hint .no { font-family: var(--font-mono); font-size: 12px; font-weight: 600; color: var(--muted); padding-top: 1px; }
+
+    /* Tablice v4 */
+    .table.v4-tbl th { padding: 10px 12px; }
+    .table.v4-tbl td { padding: 11px 12px; vertical-align: top; }
+    .table.v4-tbl td.num, #panel-projects .table td.num { white-space: nowrap; }
+    .table.v4-tbl.v4-tight th, .table.v4-tbl.v4-tight td { padding-left: 8px; padding-right: 8px; }
+    .table.v4-tbl.v4-tight td.num { font-size: 13px; }
+    .table.v4-tbl.v4-tight td:first-child { min-width: 130px; }
+    .v4-two { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; margin-bottom: 24px; }
+    .v4-two > .card { min-width: 0; }
+    .v4-two > .card:first-child { flex: 1.3 1 560px; }
+    .v4-two > .card:last-child { flex: 1 1 420px; }
+    .v4-x { color: var(--muted-2); font-size: 16px; line-height: 1; cursor: pointer; padding: 0 4px; }
+    .v4-x:hover { color: var(--negative); }
+    .v4-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+
+    /* Modali: radio kartice, izračun */
+    .v4-opts { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+    .v4-opt { display: flex; align-items: flex-start; gap: 12px; width: 100%; min-height: 44px; padding: 11px 14px; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; cursor: pointer; font-family: inherit; transition: border-color .15s, background .15s; }
+    .v4-opt:hover { border-color: var(--line-strong); }
+    .v4-opt.on { border-color: var(--ink-2); background: var(--surface-2); }
+    .v4-radio { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--line-strong); flex-shrink: 0; margin-top: 2px; background: var(--surface); }
+    .v4-opt.on .v4-radio { border: 5px solid var(--ink-2); }
+    .v4-opt-txt { display: flex; flex-direction: column; min-width: 0; }
+    .v4-opt-txt .t { font-size: 14px; font-weight: 500; color: var(--ink); }
+    .v4-opt-txt .s { font-size: 12.5px; color: var(--muted); margin-top: 1px; }
+    .v4-sum { margin-top: 14px; background: var(--surface-2); border-radius: 12px; padding: 12px 14px; }
+    .v4-sum-row { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; padding: 4px 0; }
+    .v4-sum-row > span:last-child { font-family: var(--font-mono); font-weight: 600; white-space: nowrap; }
+    .v4-sum-row em { font-style: normal; color: var(--muted); }
+    .v4-sum-row.tot { border-top: 1px solid var(--line-strong); margin-top: 4px; padding-top: 8px; font-weight: 600; }
+    .v4-sum-note { font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--line); margin-top: 6px; padding-top: 8px; }
+    .v4-pdvrow { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; margin-top: 16px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; }
+    .v4-effect { margin-top: 14px; padding: 12px 14px; border-radius: 12px; font-size: 13.5px; background: var(--surface-2); color: var(--ink-2); }
+    .v4-effect .t { font-weight: 600; margin-bottom: 2px; color: var(--ink); }
+    .v4-effect.ok { background: var(--positive-soft); }
+    .v4-effect.ok .t { color: var(--positive); }
+    .v4-effect.warn { background: #fbf6e8; }
+    .v4-effect.warn .t { color: #7a5c10; }
+
+    /* Projekti · pregled */
+    .v4-warn { background: #fbf6e8; border: 1px solid #e3d3a4; border-radius: var(--radius-lg); padding: 4px 18px; margin-bottom: 24px; }
+    .v4-warn-row { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 12px 0; border-bottom: 1px solid #ecdfb8; font-size: 14px; color: var(--ink-2); }
+    .v4-warn-row:last-child { border-bottom: none; }
+    .v4-warn-row .btn { flex-shrink: 0; background: var(--surface); }
+    .v4-ne { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+    .v4-ne > div { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+    .v4-ne strong { display: block; font-size: 14px; font-weight: 600; }
+    .v4-ne span { display: block; font-size: 12.5px; color: var(--muted); margin-top: 3px; }
+
+    @media (max-width: 760px) {
+      .modal.modal-xl { padding: 20px 14px; max-width: 100%; }
+      .v4-pdv { padding: 16px; }
+      .toggle.v4-toggle { width: 100%; }
+      .toggle.v4-toggle button { flex: 1 1 auto; padding: 10px 12px; }
+      .v4-warn-row { flex-direction: column; align-items: flex-start; }
+    }
+  `;
+  document.head.appendChild(st);
+}
+
+/* ============================================================
+   v4 · PDV, TROŠKOVI FIRME, UVOZ IZVODA, PONAVLJAJUĆI TROŠKOVI
+   Sve je dodano uz postojeće podatke. Nova polja su opcionalna
+   (stari zapisi bez njih rade kao i prije) i ništa se ne briše.
+   ============================================================ */
+
+/* ---------- PDV na računima: iste opcije svuda u aplikaciji ---------- */
+const PDV_PRESETS = {
+  bez:  { stopa: 0,  odbitak: 0,   naziv: 'Bez PDV-a', kratko: 'bez PDV-a', vraca: 'ništa', sub: 'Podizvođač s prijenosom porezne obveze, banka, osiguranje, privatni najam', note: 'Na računu nema PDV-a, pa je cijeli iznos trošak.' },
+  p25:  { stopa: 25, odbitak: 100, naziv: 'PDV 25 % · vraća se sve', kratko: '25 % · sve', vraca: 'sve', sub: 'Materijal, alat, usluge, telekom, Caddy (teretno vozilo N1)', note: 'Trošak = iznos ÷ 1,25. Cijeli PDV firma odbija od PDV-a koji duguje.' },
+  p25h: { stopa: 25, odbitak: 50,  naziv: 'PDV 25 % · vraća se pola', kratko: '25 % · pola', vraca: 'pola', sub: 'Osobni automobil: gorivo, servis, gume, najam', note: 'Za osobne automobile zakon dopušta odbitak samo 50 % PDV-a. Trošak = iznos × 0,90.' },
+  p13:  { stopa: 13, odbitak: 100, naziv: 'PDV 13 % · vraća se sve', kratko: '13 % · sve', vraca: 'sve', sub: 'Smještaj radnika u hotelu ili apartmanu, račun na firmu', note: 'Trošak = iznos ÷ 1,13.' },
+  p0:   { stopa: 25, odbitak: 0,   naziv: 'PDV 25 % · ne vraća se', kratko: '25 % · ništa', vraca: 'ništa', sub: 'Reprezentacija (ručak, poklon), račun bez OIB-a firme', note: 'PDV je plaćen, ali se ne smije odbiti, pa je cijeli iznos trošak.' },
+};
+const PDV_ORDER = ['bez', 'p25', 'p25h', 'p13', 'p0'];
+/* Račun (ukupno za platiti) → PDV na računu, koliko se vraća firmi i stvarni trošak */
+function pdvSplit(gross, mode) {
+  const P = PDV_PRESETS[mode] || PDV_PRESETS.bez;
+  const a = Number(gross) || 0;
+  const pdvRac = round2(a * P.stopa / (100 + P.stopa));
+  const vraca = round2(pdvRac * P.odbitak / 100);
+  return { racun: round2(a), pdvRac, vraca, trosak: round2(a - vraca) };
+}
+
+/* ---------- Normalizacija naziva (bez dijakritike, mala slova) ---------- */
+const srNorm = (s) => String(s ?? '').toLowerCase().replace(/đ/g, 'd').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
+const srEsc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/* Token: običan tekst traži se kao dio naziva; '=' ili kratki token (do 3 znaka) traži se kao cijela riječ */
+function srMatchToken(normText, token) {
+  let t = srNorm(token);
+  if (!t || !normText) return false;
+  let whole = false;
+  if (t[0] === '=') { whole = true; t = t.slice(1).trim(); }
+  if (!t) return false;
+  if (whole || t.replace(/[^a-z0-9]/g, '').length <= 3) {
+    return new RegExp('(^|[^a-z0-9])' + srEsc(t) + '($|[^a-z0-9])').test(normText);
+  }
+  return normText.includes(t);
+}
+const SR_STOP = new Set(['doo', 'd.o.o', 'dd', 'd.d', 'za', 'vl', 'obrt', 'usluge', 'usluga', 'trgovinu', 'trgovina', 'proizvodnju', 'gradenje', 'gradevinarstvo', 'drustvo', 'ograni', 'ogranicenom', 'odgovornoscu', 'rijeka', 'zagreb', 'zgrada', 'kartica', 'the', 'and']);
+/* ---------- PDV pravila po partneru (Postavke) ----------
+   match: tekstovi po kojima se partner prepoznaje u Troškovima
+   pdv:   bez · p25 · p25h · p13 · p0 (vidi PDV_PRESETS)
+   kamo:  rezija · projekt · ulaganje · ne (ne ide u projekte)
+   partner: uobičajeni naziv partnera u Troškovima (ako je zadan)
+   Sprema se u state.pdvPravila tek kad se prvi put nešto promijeni. */
+const DEFAULT_PDV_PRAVILA = [
+  { id: 'a1kontrol', naziv: 'A1 Kontrol Centar', sto: 'Procjena rizika', match: ['a1 kontrol'], pdv: 'p25', kamo: 'rezija', kat: 'Procjena rizika', grupa: 'Nepredviđeni', status: 'provjeriti', napomena: '1.018,75 € = 815,00 € + 25 %', vrsta: 'nepredvideni' },
+  { id: 'pia', naziv: 'Porsche Inter Auto', sto: 'Servis vozila', match: ['porsche inter auto', 'pia rijeka'], pdv: 'p25h', kamo: 'rezija', kat: 'Servis vozila', grupa: 'Nepredviđeni', partner: 'Porsche Inter Auto', status: 'odluceno', napomena: 'Kao gorivo: pola za sve račune', vrsta: 'nepredvideni' },
+  { id: 'porsche', naziv: 'Porsche Leasing', sto: 'Rata leasinga', match: ['porsche'], pdv: 'bez', kamo: 'rezija', kat: 'Leasing', grupa: 'Tekući', partner: 'Porsche', status: 'odluceno', napomena: 'Rata financijskog leasinga nema PDV-a. Učešće i otkup vozila su ulaganje.', vrsta: 'tekuci' },
+  { id: 'adria', naziv: 'Adria Oil', sto: 'Gorivo', match: ['adria oil'], pdv: 'p25h', kamo: 'rezija', kat: 'Gorivo', grupa: 'Tekući', partner: 'Adria Oil', status: 'odluceno', napomena: 'Pola za sve račune, bez podjele po vozilu', vrsta: 'tekuci' },
+  { id: 'stan', naziv: 'Stan · najam', sto: 'Smještaj radnika', match: ['=stan', 'rozic', 'zmaric'], pdv: 'bez', kamo: 'rezija', kat: 'Smještaj', grupa: 'Tekući', partner: 'Stan', status: 'zakon', napomena: 'Privatni najmodavci, plaća se početkom mjeseca za taj mjesec', vrsta: 'tekuci' },
+  { id: 'jojo', naziv: 'Invoice, vl. Josip Bičanić (Jojo)', sto: 'Knjigovodstvo', match: ['jojo', 'invoice'], pdv: 'bez', kamo: 'rezija', kat: 'Knjigovodstvo', grupa: 'Tekući', partner: 'Jojo', status: 'provjeriti', napomena: 'Obrt, račun za prethodni mjesec. Ako se na računu pojavi PDV, pravilo je 25 % · sve', vrsta: 'tekuci' },
+  { id: 'a1', naziv: 'A1 Hrvatska', sto: 'Telekom', match: ['=a1', 'a1 hrvatska'], pdv: 'p25', kamo: 'rezija', kat: 'Komunalije', grupa: 'Tekući', partner: 'A1', status: 'provjeriti', napomena: 'Račun glasi na firmu', vrsta: 'tekuci' },
+  { id: 'ht', naziv: 'Hrvatski Telekom', sto: 'Telekom', match: ['hrvatski telekom', '=ht', '328,41'], pdv: 'p25', kamo: 'rezija', kat: 'Komunalije', grupa: 'Tekući', partner: 'Hrvatski Telekom', status: 'provjeriti', napomena: 'Do svibnja 2026, zatim A1', vrsta: 'tekuci' },
+  { id: 'pondi', naziv: 'Pondi', sto: 'e-poslovanje', match: ['pondi'], pdv: 'p25', kamo: 'rezija', kat: 'e-poslovanje', grupa: 'Tekući', partner: 'Pondi', status: 'provjeriti', napomena: '5,00 € mjesečno', vrsta: 'tekuci' },
+  { id: 'hrt', naziv: 'HRT', sto: 'Pristojba', match: ['=hrt'], pdv: 'bez', kamo: 'rezija', kat: 'Komunalije', grupa: 'Tekući', partner: 'HRT', status: 'zakon', napomena: 'Pristojba nema PDV-a', vrsta: 'tekuci' },
+  { id: 'generali', naziv: 'Generali Osiguranje', sto: 'Osiguranje', match: ['generali'], pdv: 'bez', kamo: 'rezija', kat: 'Osiguranje', grupa: 'Tekući', partner: 'Generali Osiguranje', status: 'zakon', napomena: 'Osiguranje je oslobođeno PDV-a', vrsta: 'tekuci' },
+  { id: 'pbz', naziv: 'PBZ', sto: 'Kamate i naknade', match: ['=pbz', 'privredna banka'], pdv: 'bez', kamo: 'rezija', kat: 'Bankovne naknade', grupa: 'Tekući', partner: 'PBZ', status: 'zakon', napomena: 'Bankovne usluge oslobođene su PDV-a. Rata kredita ne ulazi u režiju.', vrsta: 'tekuci' },
+  { id: 'porezna', naziv: 'Porezna uprava', sto: 'PDV, porez na dobit', match: ['porezna', 'ministarstvo financija'], pdv: 'bez', kamo: 'ne', kat: 'Porez', grupa: 'Tekući', partner: 'Porezna uprava', status: 'zakon', napomena: 'Uplata PDV-a i akontacija poreza na dobit ne ulaze u režiju', vrsta: 'tekuci' },
+  { id: 'operor', naziv: 'Operor Gradnja d.o.o.', sto: 'Podizvođač', match: ['operor'], pdv: 'bez', kamo: 'projekt', kat: 'Podizvođač', grupa: 'Nepredviđeni', partner: 'Operor Gradnja d.o.o.', status: 'odluceno', napomena: 'Prijenos porezne obveze. Ide na projekt na kojem je radio.', vrsta: 'nepredvideni' },
+  { id: 'materijal', naziv: 'B.C. Commerce, Malin Promet, Jadran-Impex, Förch, Semmler, Oling, Vulkal', sto: 'Materijal', match: ['b.c. commerce', 'bc commerce', 'malin promet', 'jadran-impex', 'jadran impex', 'jadramp', 'forch', 'semmler', '=oling', '=orling', 'vulkal'], pdv: 'p25', kamo: 'rezija', kat: 'Materijal', grupa: 'Nepredviđeni', status: 'provjeriti', napomena: 'Na projekt kad je za jedno gradilište, inače režija', vrsta: 'nepredvideni' },
+  { id: 'autoklub', naziv: 'Autoklub Rijeka, Auto Klub', sto: 'Tehnički pregled', match: ['auto klub', 'autoklub', 'akri stp', 'akr stp'], pdv: 'p25h', kamo: 'rezija', kat: 'Tehnički pregled', grupa: 'Nepredviđeni', status: 'provjeriti', napomena: 'Pristojbe na istom računu nemaju PDV', vrsta: 'nepredvideni' },
+  { id: 'odvjetnik', naziv: 'Odvjetnik Toni Primorac', sto: 'Pravne usluge', match: ['primorac'], pdv: 'p25', kamo: 'rezija', kat: 'Pravne usluge', grupa: 'Nepredviđeni', status: 'provjeriti', napomena: '1.031,25 € = 825,00 € + 25 %', vrsta: 'nepredvideni' },
+  { id: 'lijecnicki', naziv: 'PRO Vita, NZZJZ PGŽ', sto: 'Liječnički pregledi', match: ['pro vita', 'zavod za javno zdravstvo', 'nzzjz', 'zdravstvenu skrb'], pdv: 'bez', kamo: 'rezija', kat: 'Liječnički', grupa: 'Nepredviđeni', status: 'zakon', napomena: 'Zdravstvene usluge oslobođene su PDV-a', vrsta: 'nepredvideni' },
+  { id: 'pristojbe', naziv: 'Državni proračun · pristojbe', sto: 'Dozvole, pristojbe', match: ['drzavni proracun'], pdv: 'bez', kamo: 'rezija', kat: 'Pristojbe', grupa: 'Nepredviđeni', partner: 'Državni proračun', status: 'zakon', napomena: 'Dozvole za boravak i rad, sudske pristojbe', vrsta: 'nepredvideni' },
+];
+const PRAVILO_STATUS = {
+  odluceno: { naziv: 'Odlučeno', cls: 'green' },
+  zakon: { naziv: 'Po zakonu', cls: 'gray' },
+  provjeriti: { naziv: 'Provjeriti na računu', cls: 'amber' },
+  odaberi: { naziv: 'Odaberi', cls: 'red' },
+};
+const KAMO_NAZIV = { rezija: 'režija', projekt: 'na projekt', ulaganje: 'ulaganje', ne: 'ne ide u projekte' };
+function pdvPravila() {
+  return (state && Array.isArray(state.pdvPravila) && state.pdvPravila.length) ? state.pdvPravila : DEFAULT_PDV_PRAVILA;
+}
+function praviloZaNaziv(name) {
+  const n = srNorm(name);
+  if (!n) return null;
+  for (const r of pdvPravila()) {
+    if (!r || r.active === false) continue;
+    if ((r.match || []).some(tok => srMatchToken(n, tok))) return r;
+  }
+  return null;
+}
+
+/* ---------- Transakcija: PDV na računu i kamo ide trošak ---------- */
+const TRX_NE_KATEGORIJE = new Set(['place', 'placa', 'pdv', 'porez', 'kredit', 'pozajmica', 'davanja', 'doprinosi', 'storno']);
+function trxPdvMode(t) {
+  if (t && PDV_PRESETS[t.pdv]) return { mode: t.pdv, izvor: 'racun' };
+  const r = praviloZaNaziv(t && t.partner);
+  if (r && PDV_PRESETS[r.pdv]) return { mode: r.pdv, izvor: 'pravilo', pravilo: r };
+  return { mode: 'bez', izvor: 'nema' };
+}
+/* dest: rezija · projekt · projekt-bez (ide na projekt, ali projekt nije odabran) · ulaganje · ne · null (nije trošak) */
+function trxDestInfo(t) {
+  if (!t || t.type !== 'Trošak') return { dest: null };
+  if (t.group !== 'Tekući' && t.group !== 'Nepredviđeni') return { dest: null };
+  if (t.dest === 'projekt') return { dest: t.proj ? 'projekt' : 'projekt-bez', izvor: 'rucno' };
+  if (t.dest === 'rezija' || t.dest === 'ulaganje' || t.dest === 'ne') return { dest: t.dest, izvor: 'rucno' };
+  if (TRX_NE_KATEGORIJE.has(srNorm(t.category))) return { dest: 'ne', izvor: 'kategorija' };
+  const r = praviloZaNaziv(t.partner);
+  if (r && r.kamo) return { dest: r.kamo === 'projekt' ? 'projekt-bez' : r.kamo, izvor: 'pravilo', pravilo: r };
+  return { dest: 'rezija', izvor: 'grupa' };
+}
+const monthIdx = (key) => { const [y, m] = String(key).split('-').map(Number); return y * 12 + (m - 1); };
+const dayDiff = (a, b) => Math.round((new Date(a + 'T12:00:00') - new Date(b + 'T12:00:00')) / 86400000);
+
+/* ---------- Ponavljajući troškovi iz Prognoze: plaćeno / očekivano / procjena ----------
+   Ništa se ne upisuje samo od sebe: stavka iz Prognoze je "plaćena" kad u Troškovima
+   tog mjeseca postoji transakcija istog partnera. */
+function prognozaJePlaca(it) { return /plac|doprinos/.test(srNorm((it.category || '') + ' ' + (it.label || ''))); }
+function prognozaJeProcjena(it) {
+  const s = srNorm((it.category || '') + ' ' + (it.label || '') + ' ' + (it.note || ''));
+  return /gorivo|telekom|bankovn|plac|doprinos|procjen|varira/.test(s);
+}
+function prognozaTokens(it) {
+  if (it.partner && String(it.partner).trim()) return String(it.partner).split(',').map(s => s.trim()).filter(Boolean);
+  const l = srNorm((it.label || '') + ' ' + (it.category || ''));
+  const out = [];
+  if (/porsche/.test(l)) out.push('porsche');
+  if (/\bstan\b|smjestaj|najam/.test(l)) out.push('=stan', 'rozic', 'zmaric');
+  if (/adria/.test(l)) out.push('adria oil');
+  if (/hrvatski telekom|\bht\b/.test(l)) out.push('hrvatski telekom', '=ht', '328,41');
+  if (/\ba1\b/.test(l)) out.push('=a1', 'a1 hrvatska');
+  if (/jojo|knjigovod|invoice/.test(l)) out.push('jojo', 'invoice');
+  if (/\bpbz\b/.test(l)) out.push('=pbz');
+  if (/\bhrt\b/.test(l)) out.push('=hrt');
+  if (/pondi/.test(l)) out.push('pondi');
+  if (/generali|osiguran/.test(l)) out.push('generali');
+  return out;
+}
+/* Pravilo koje odgovara stavci Prognoze (za PDV i za sparivanje s Troškovima) */
+function prognozaPravilo(it) {
+  const toks = prognozaTokens(it);
+  for (const r of pdvPravila()) {
+    if (!r || r.active === false) continue;
+    if (toks.some(tok => (r.match || []).some(m => srNorm(m).replace(/^=/, '') === srNorm(tok).replace(/^=/, '')))) return r;
+  }
+  return null;
+}
+function prognozaStatusZaMjesec(key) {
+  const items = forecastItemsForMonth(key);
+  const curKey = todayISO().slice(0, 7);
+  const trx = (state.trx[key] || []).filter(t => t && t.type === 'Trošak' && t.group !== 'Isključi');
+  const used = new Set();
+  const stavke = [];
+  const placaItems = items.filter(prognozaJePlaca);
+  for (const it of items.filter(x => !prognozaJePlaca(x))) {
+    const toks = prognozaTokens(it);
+    const pr = it.partner ? null : prognozaPravilo(it);
+    const matched = trx.filter(t => {
+      if (used.has(t)) return false;
+      if (srNorm(t.category) === 'kredit') return false;
+      if (pr) { const tr = praviloZaNaziv(t.partner); return !!tr && tr.id === pr.id; }
+      const n = srNorm(t.partner);
+      return toks.some(tok => srMatchToken(n, tok));
+    });
+    matched.forEach(t => used.add(t));
+    const placeno = round2(matched.reduce((a, t) => a + (Number(t.amount) || 0), 0));
+    const status = matched.length ? 'placeno' : (key < curKey ? 'nema' : (prognozaJeProcjena(it) ? 'procjena' : 'ocekivano'));
+    stavke.push({ it, matched, placeno, iznos: round2(Number(it.amount) || 0), status, pravilo: pr || praviloZaNaziv(it.label), placa: false, nepoznato: !toks.length });
+  }
+  if (placaItems.length) {
+    const matched = trx.filter(trxJePlaca);
+    const placeno = round2(matched.reduce((a, t) => a + (Number(t.amount) || 0), 0));
+    const iznos = round2(placaItems.reduce((a, it) => a + (Number(it.amount) || 0), 0));
+    const status = matched.length ? 'placeno' : (key < curKey ? 'nema' : 'procjena');
+    stavke.push({ it: { label: 'Plaće i davanja', category: 'Plaće' }, items: placaItems, matched, placeno, iznos, status, pravilo: null, placa: true });
+  }
+  return { stavke, key };
+}
+
+/* ---------- Plaće za mjesec rada ----------
+   Keš dio: „Za isplatu" iz Evidencije sati i stan, po radniku.
+   Službeni dio (neto i davanja): Plaće iz Troškova (kategorija Plaće) upisane sljedeći mjesec,
+   kad se isplaćuju; npr. isplata 11/08 je plaća za srpanj. Dok nisu upisane, uzimaju se stavke
+   plaća iz Prognoze, a bez njih fiksno radnika i fiksni rad iz Postavki. */
+const trxJePlaca = (t) => !!t && t.type === 'Trošak' && /^(place|placa|davanja|doprinosi)$/.test(srNorm(t.category));
+function placeIzTroskova(key) {
+  const list = (state.trx[addCalendarMonths(key, 1)] || []).filter(t => trxJePlaca(t) && t.group !== 'Isključi');
+  return list.length ? round2(list.reduce((a, t) => a + (Number(t.amount) || 0), 0)) : null;
+}
+/* razmjerno: tekući mjesec ide razmjerno proteklim radnim danima (projekti); Cashflow uzima cijeli mjesec */
+function placeZaMjesec(key, razmjerno = false) {
+  const stats = computeWorkerStats(key) || [];
+  const workers = state.settings.workers || [];
+  const today = todayISO();
+  const inProgress = key === today.slice(0, 7);
+  let frac = 1;
+  if (inProgress && razmjerno) {
+    const total = workdaysInMonth(key);
+    const done = workdaysInMonth(key, today);
+    frac = total > 0 ? Math.max(done, 1) / total : 1;
+  }
+  let kes = 0, fiksno = 0;
+  for (const st of stats) {
+    const w = workers.find(x => x.name === st.name);
+    const f = (inProgress && razmjerno) ? workerElapsedShare(w, key, today) : 1;
+    kes += ((Number(st.zaIsplatu) || 0) + (Number(st.stan) || 0)) * f;
+    fiksno += (Number(st.fiksno) || 0) * f;
+  }
+  let sluzbeno = inProgress ? null : placeIzTroskova(key);
+  let izvor = 'troskovi';
+  if (sluzbeno === null) {
+    const fc = forecastItemsForMonth(key).filter(prognozaJePlaca);
+    if (fc.length) {
+      sluzbeno = fc.reduce((a, it) => a + (Number(it.amount) || 0), 0) * frac;
+      izvor = 'prognoza';
+    } else {
+      const wNames = new Set(workers.map(w => srNorm(w.name)));
+      const fiksniRad = getFixedLabor().filter(f => !wNames.has(srNorm(f.name))).reduce((a, f) => a + (Number(f.amount) || 0), 0);
+      sluzbeno = fiksno + fiksniRad * frac;
+      izvor = 'postavke';
+    }
+  }
+  return { kes, sluzbeno, izvor, rad: kes + sluzbeno, frac, inProgress };
+}
+
+/* ---------- Režija mjeseca: fiksni troškovi bez plaća, bez PDV-a koji se vraća ---------- */
+function rezijaZaMjesec(key) {
+  const out = { bruto: 0, vraca: 0, stavke: [], ulaganja: 0, ulaganjaStavke: [], ocekivanoBruto: 0, ocekivanoVraca: 0, ocekivanoStavke: [] };
+  for (const t of (state.trx[key] || [])) {
+    if (trxDestInfo(t).dest !== 'rezija') continue;
+    const pm = trxPdvMode(t);
+    const s = pdvSplit(t.amount, pm.mode);
+    out.bruto += s.racun; out.vraca += s.vraca;
+    out.stavke.push({ t, ...s, mode: pm.mode });
+  }
+  const ki = monthIdx(key);
+  for (const mk of Object.keys(state.trx || {})) {
+    for (const t of (state.trx[mk] || [])) {
+      if (trxDestInfo(t).dest !== 'ulaganje') continue;
+      const n = Math.max(1, Math.round(Number(t.ulaganjeMj) || 60));
+      const diff = ki - monthIdx(String(t.date || mk).slice(0, 7));
+      if (diff < 0 || diff >= n) continue;
+      const s = pdvSplit(t.amount, trxPdvMode(t).mode);
+      out.ulaganja += s.trosak / n;
+      out.ulaganjaStavke.push({ t, mjesecno: round2(s.trosak / n), n });
+    }
+  }
+  if (key === todayISO().slice(0, 7)) {
+    for (const x of prognozaStatusZaMjesec(key).stavke) {
+      if (x.status === 'placeno' || x.placa || x.nepoznato) continue;
+      const r = x.pravilo;
+      if (r && r.kamo && r.kamo !== 'rezija') continue;
+      const s = pdvSplit(x.iznos, r && PDV_PRESETS[r.pdv] ? r.pdv : 'bez');
+      out.ocekivanoBruto += s.racun; out.ocekivanoVraca += s.vraca;
+      out.ocekivanoStavke.push({ ...x, ...s });
+    }
+  }
+  out.bruto = round2(out.bruto); out.vraca = round2(out.vraca); out.ulaganja = round2(out.ulaganja);
+  out.ocekivanoBruto = round2(out.ocekivanoBruto); out.ocekivanoVraca = round2(out.ocekivanoVraca);
+  out.ukBruto = round2(out.bruto + out.ulaganja + out.ocekivanoBruto);
+  out.ukVraca = round2(out.vraca + out.ocekivanoVraca);
+  out.neto = round2(out.ukBruto - out.ukVraca);
+  return out;
+}
+
+/* Stvarni trošak mjeseca (v4):
+   rad    = plaće za mjesec rada: keš isplate iz Evidencije i službene plaće (neto i davanja)
+   režija = Tekući i Nepredviđeni troškovi koji nisu plaće, PDV, porez, kredit, pozajmica,
+            ulaganje ni trošak projekta, umanjeni za PDV koji se vraća; ulaganja po mjesecima.
+   Tekući kalendarski mjesec ide razmjerno proteklim radnim danima. */
+function computeMonthCosts(key) {
+  const pl = placeZaMjesec(key, true);
+  const rz = rezijaZaMjesec(key);
+  const frac = pl.frac;
+  return {
+    kes: pl.kes, sluzbeno: pl.sluzbeno, sluzbenoIzvor: pl.izvor, rad: pl.rad,
+    rezBruto: rz.ukBruto * frac, rezVraca: rz.ukVraca * frac, rezija: rz.neto * frac,
+    rez: rz, frac, inProgress: pl.inProgress,
+  };
+}
+
+/* ---------- Cashflow: plaće se broje jednom ----------
+   Stupac Radnici = plaće po mjesecu rada (keš isplate iz Evidencije i službene plaće).
+   Plaće upisane u Troškovima su službeni dio tih istih plaća, pa se ne zbrajaju još jednom u Tekuće. */
+function computeCashflowSummary() {
+  const months = allMonths();
+  const summary = {};
+  for (const key of months) {
+    const s = { prihodi: 0, tekuci: 0, nepredvideni: 0, pozajmica: 0, placeUTroskovima: 0 };
+    for (const t of (state.trx[key] || [])) {
+      if (t.group === 'Prihodi') s.prihodi += t.amount;
+      else if (t.group === 'Tekući' || t.group === 'Nepredviđeni') {
+        if (trxJePlaca(t)) { s.placeUTroskovima += Number(t.amount) || 0; continue; }
+        if (t.group === 'Tekući') s.tekuci += t.amount;
+        else s.nepredvideni += t.amount;
+      }
+    }
+    s.sto = (state.sto[key] || []).reduce((a, t) => a + t.amount, 0);
+    const pl = placeZaMjesec(key);
+    s.radnici = pl.rad;
+    s.radniciRazrada = pl;
+    s.troskoviUkupno = s.tekuci + s.nepredvideni + s.sto + s.radnici;
+    s.neto = s.prihodi - s.troskoviUkupno;
+    summary[key] = s;
+  }
+  return summary;
+}
+function cashflowPlaceNapomenaHtml(summary, months) {
+  const nabroji = (l) => l.length > 1 ? l.slice(0, -1).join(', ') + ' i ' + l[l.length - 1] : (l[0] || '');
+  const mj = (l) => nabroji(l.map(k => monthLabelShort(k).toLowerCase()));
+  const izv = (k) => (summary[k].radniciRazrada || {}).izvor;
+  const prog = months.filter(k => izv(k) === 'prognoza');
+  const post = months.filter(k => izv(k) === 'postavke');
+  const dio = ['Radnici = plaće po mjesecu rada: keš isplate iz Evidencije sati i službene plaće (neto i davanja).',
+    'Službene plaće uzimaju se iz Troškova (kategorija Plaće) upisanih sljedeći mjesec, kad se isplaćuju, pa se ne zbrajaju još jednom u Tekuće.'];
+  if (prog.length) dio.push(`Za ${mj(prog)} plaće još nisu upisane, pa je uzet iznos plaća iz Prognoze.`);
+  if (post.length) dio.push(`Za ${mj(post)} nema ni Prognoze, pa je uzeto fiksno radnika i fiksni rad iz Postavki.`);
+  return `<div style="font-size: 12.5px; color: var(--muted); margin-top: 12px;">${escapeHtml(dio.join(' '))}</div>`;
+}
+
+/* ---------- Projekti: troškovi iz Troškova koji su stavljeni na projekt ---------- */
+function trxNaProjektima() {
+  const map = {};
+  for (const mk of Object.keys(state.trx || {})) {
+    (state.trx[mk] || []).forEach((t, i) => {
+      if (trxDestInfo(t).dest !== 'projekt') return;
+      (map[t.proj] = map[t.proj] || []).push({ t, mk, i });
+    });
+  }
+  return map;
+}
+const srPrvaRijec = (name) => {
+  const toks = srNorm(name).split(/[^a-z0-9]+/).filter(w => w.length >= 4 && !SR_STOP.has(w));
+  return toks[0] || '';
+};
+/* Ručni trošak projekta (obračun): stari zapisi imaju samo iznos bez PDV-a */
+function rucniTrosakInfo(r) {
+  const mode = PDV_PRESETS[r.pdv] ? r.pdv : null;
+  const trosak = round2(Number(r.amount) || 0);
+  if (!mode) return { racun: trosak, vraca: 0, trosak, mode: null };
+  const racun = round2(Number(r.iznosRacuna) || 0);
+  const s = pdvSplit(racun, mode);
+  return { racun, vraca: s.vraca, trosak, mode };
+}
+/* Uplata investitora: PDV na uplati (vlastiti izbor ili postavka projekta) */
+function uplataInfo(u, rezimProjekta) {
+  const vlastiti = (u.pdv === 'pdv25' || u.pdv === 'ppo') ? u.pdv : null;
+  const mode = vlastiti || rezimProjekta || null;
+  const a = round2(Number(u.amount) || 0);
+  const osn = mode === 'pdv25' ? round2(a / 1.25) : (mode === 'ppo' ? a : null);
+  return { amount: a, mode, vlastiti: !!vlastiti, osn, pdv: osn === null ? null : round2(a - osn) };
+}
+
+function computeProjectsData() {
+  const map = {};
+  const ensure = (name) => {
+    if (!map[name]) map[name] = { name, materijal: 0, rad: 0, rez: 0, radKes: 0, radSluzbeno: 0, rezBruto: 0, rezVraca: 0, radIsplata: 0, sati: 0, months: {}, workers: {}, stoCount: 0, lastActivity: '', daysSet: new Set(), nepotpunSet: new Set(), inProgressSet: new Set(), procjenaSet: new Set() };
+    return map[name];
+  };
+  const mEnsure = (p, k) => {
+    if (!p.months[k]) p.months[k] = { materijal: 0, rad: 0, rez: 0, sati: 0, udio: 0 };
+    return p.months[k];
+  };
+  const months = allMonths();
+  const today = todayISO();
+  const firma = {};
+
+  for (const k of months) {
+    for (const t of (state.sto[k] || [])) {
+      const name = (t.project || '').trim() || PROJ_NONE;
+      const p = ensure(name);
+      p.materijal += t.amount;
+      p.stoCount++;
+      mEnsure(p, k).materijal += t.amount;
+      if (k > p.lastActivity) p.lastActivity = k;
+    }
+
+    const projH = {};
+    const projW = {};
+    let satiOdradeni = 0;
+    const h = state.hours[k];
+    if (h && h.days) {
+      for (const d of h.days) {
+        for (const wName of Object.keys(d.workers || {})) {
+          const wd = d.workers[wName];
+          if (!wd || !(wd.hours > 0)) continue;
+          const wAct = state.settings.workers.find(x => x.name === wName);
+          if (wAct && !workerActiveOn(wAct, d.date)) continue;
+          const name = (wd.project || '').trim() || PROJ_NONE;
+          const pd = ensure(name);
+          if (d.date) pd.daysSet.add(d.date);
+          if (k > pd.lastActivity) pd.lastActivity = k;
+          const w = state.settings.workers.find(x => x.name === wName);
+          if (!w || !(w.satnica > 0)) continue;
+          satiOdradeni += wd.hours;
+          projH[name] = (projH[name] || 0) + wd.hours;
+          if (!projW[name]) projW[name] = {};
+          if (!projW[name][wName]) projW[name][wName] = { sati: 0, dani: new Set() };
+          projW[name][wName].sati += wd.hours;
+          if (d.date) projW[name][wName].dani.add(d.date);
+          pd.radIsplata += wd.hours * w.satnica + (wd.marenda || 0);
+        }
+      }
+    }
+
+    const c = computeMonthCosts(k);
+    const godH = godisnjiHoursInMonth(k, c.inProgress ? today : null);
+    const satiUk = satiOdradeni + godH;
+    const per = (v) => satiUk > 0 ? v / satiUk : 0;
+    const rRad = per(c.rad), rRez = per(c.rezija);
+    const rKes = per(c.kes), rSl = per(c.sluzbeno);
+    const rRezBruto = per(c.rezBruto), rRezVraca = per(c.rezVraca);
+    const kapacitet = capacityHoursInMonth(k, c.inProgress ? today : null);
+    const nepotpun = !c.inProgress && kapacitet > 0 && satiUk < 0.5 * kapacitet && (c.rad + c.rezija) > 0.005;
+    const procjena = c.sluzbenoIzvor !== 'troskovi' || c.inProgress;
+    firma[k] = { ...c, satiOdradeni, godH, satiUk, kapacitet, nepotpun, procjena };
+
+    const dodaj = (p, hh) => {
+      p.rad += hh * rRad; p.rez += hh * rRez; p.sati += hh;
+      p.radKes += hh * rKes; p.radSluzbeno += hh * rSl;
+      p.rezBruto += hh * rRezBruto; p.rezVraca += hh * rRezVraca;
+      const mm = mEnsure(p, k);
+      mm.rad += hh * rRad; mm.rez += hh * rRez; mm.sati += hh;
+      mm.udio = satiUk > 0 ? (hh / satiUk) * 100 : 0;
+      if (nepotpun) p.nepotpunSet.add(k);
+      if (c.inProgress) p.inProgressSet.add(k);
+      if (procjena) p.procjenaSet.add(k);
+    };
+    for (const name of Object.keys(projH)) {
+      const hh = projH[name];
+      const p = ensure(name);
+      dodaj(p, hh);
+      for (const wName of Object.keys(projW[name] || {})) {
+        const src = projW[name][wName];
+        if (!p.workers[wName]) p.workers[wName] = { sati: 0, rad: 0, rez: 0, dani: 0 };
+        p.workers[wName].sati += src.sati;
+        p.workers[wName].rad += src.sati * rRad;
+        p.workers[wName].rez += src.sati * rRez;
+        p.workers[wName].dani += src.dani.size;
+      }
+    }
+    if (godH > 0.005) {
+      const g = ensure(PROJ_GODISNJI);
+      dodaj(g, godH);
+      if (k > g.lastActivity) g.lastActivity = k;
+    }
+    if (satiUk <= 0 && (c.rad + c.rezija) > 0.005) {
+      const n = ensure(PROJ_NONE);
+      n.rad += c.rad; n.rez += c.rezija;
+      n.radKes += c.kes; n.radSluzbeno += c.sluzbeno;
+      n.rezBruto += c.rezBruto; n.rezVraca += c.rezVraca;
+      const nm = mEnsure(n, k);
+      nm.rad += c.rad; nm.rez += c.rezija; nm.udio = 100;
+      n.nepotpunSet.add(k);
+      if (k > n.lastActivity) n.lastActivity = k;
+    }
+  }
+
+  const trxProj = trxNaProjektima();
+  const list = Object.values(map);
+  const lastKey = months.length ? months[months.length - 1] : null;
+  const prevKey = lastKey ? addCalendarMonths(lastKey, -1) : null;
+  for (const p of list) {
+    p.ukupno = p.materijal + p.rad + p.rez;
+    p.isActive = !!lastKey && (p.lastActivity === lastKey || p.lastActivity === prevKey);
+    p.monthCount = Object.keys(p.months).length;
+    p.workerCount = Object.keys(p.workers).length;
+    p.dani = p.daysSet ? p.daysSet.size : 0;
+    const dates = p.daysSet ? Array.from(p.daysSet).sort() : [];
+    p.prviDan = dates.length ? dates[0] : null;
+    p.zadnjiDan = dates.length ? dates[dates.length - 1] : null;
+    p.kalDana = (p.prviDan && p.zadnjiDan) ? Math.round((new Date(p.zadnjiDan) - new Date(p.prviDan)) / 86400000) + 1 : 0;
+    delete p.daysSet;
+    p.nepotpunMonths = Array.from(p.nepotpunSet).sort(); delete p.nepotpunSet;
+    p.inProgressMonths = Array.from(p.inProgressSet).sort(); delete p.inProgressSet;
+    p.procjenaMonths = Array.from(p.procjenaSet).sort(); delete p.procjenaSet;
+    for (const f of ['rad', 'rez', 'radKes', 'radSluzbeno', 'rezBruto', 'rezVraca']) p[f] = round2(p[f]);
+
+    const ob = (state.obracun && typeof state.obracun === 'object') ? state.obracun[p.name] : null;
+    p.uplate = (ob && Array.isArray(ob.uplate)) ? ob.uplate : [];
+    p.naplaceno = round2(p.uplate.reduce((a, u) => a + (Number(u.amount) || 0), 0));
+    p.ponuda = (ob && Number(ob.ponuda) > 0) ? round2(Number(ob.ponuda)) : null;
+    p.ponudaStavke = (ob && Array.isArray(ob.ponudaStavke)) ? ob.ponudaStavke : [];
+    p.zakljucen = !!(ob && ob.zakljucen);
+    p.troskoviRucni = (ob && Array.isArray(ob.troskovi)) ? ob.troskovi : [];
+
+    /* PDV na uplatama */
+    p.pdvRezim = (ob && (ob.pdvRezim === 'pdv25' || ob.pdvRezim === 'ppo')) ? ob.pdvRezim : null;
+    p.uplateInfo = p.uplate.map((u, i) => ({ u, i, ...uplataInfo(u, p.pdvRezim) }));
+    p.pdvNijeOdabran = p.uplateInfo.some(x => !x.mode);
+    const prihodZa = (pret) => round2(p.uplateInfo.reduce((a, x) => a + (x.mode ? x.osn : (pret === 'pdv25' ? round2(x.amount / 1.25) : x.amount)), 0));
+    p.prihod = p.pdvNijeOdabran ? null : prihodZa(null);
+    p.pdvUplate = p.prihod === null ? null : round2(p.naplaceno - p.prihod);
+
+    /* Materijal (STO, PDV 25 % vraća se sav) */
+    p.materijalBezPdv = round2(p.materijal / 1.25);
+    p.materijalPdv = round2(p.materijal - p.materijalBezPdv);
+
+    /* Ostali troškovi: ručni unos na projektu + transakcije iz Troškova stavljene na projekt */
+    const rucni = p.troskoviRucni.map((r, i) => ({ tip: 'rucno', r, i, ...rucniTrosakInfo(r), pokrivene: [] }));
+    const izTrx = [];
+    for (const x of (trxProj[p.name] || [])) {
+      const rijec = srPrvaRijec(x.t.partner);
+      const pokriva = rijec ? rucni.find(rr => srNorm(rr.r.note).includes(rijec)) : null;
+      if (pokriva) { pokriva.pokrivene.push(x); continue; }
+      const s = pdvSplit(x.t.amount, trxPdvMode(x.t).mode);
+      izTrx.push({ tip: 'trx', ...x, racun: s.racun, vraca: s.vraca, trosak: s.trosak, mode: trxPdvMode(x.t).mode });
+    }
+    p.ostaloStavke = [...rucni, ...izTrx];
+    p.ostalo = round2(p.ostaloStavke.reduce((a, x) => a + x.trosak, 0));
+    p.ostaloRacun = round2(p.ostaloStavke.reduce((a, x) => a + x.racun, 0));
+    p.ostaloVraca = round2(p.ostaloStavke.reduce((a, x) => a + x.vraca, 0));
+    p.trosakRucni = p.ostalo;
+
+    p.trosak = round2(p.materijalBezPdv + p.ostalo + p.rad + p.rez);
+    p.zaradaBlocked = p.nepotpunMonths.length > 0 && p.name !== PROJ_NONE;
+    const zaPrihod = (prihod) => {
+      const nakonMR = round2(prihod - p.materijalBezPdv - p.ostalo - p.rad);
+      const zarada = round2(nakonMR - p.rez);
+      return { prihod, nakonMR, zarada, marza: prihod > 0 ? (zarada / prihod) * 100 : null };
+    };
+    p.scen = p.uplateInfo.length ? { pdv25: zaPrihod(prihodZa('pdv25')), ppo: zaPrihod(prihodZa('ppo')) } : null;
+    const real = p.prihod !== null ? zaPrihod(p.prihod) : null;
+    p.nakonMR = real ? real.nakonMR : null;
+    p.zarada = (p.naplaceno > 0 && !p.zaradaBlocked && real) ? real.zarada : null;
+    p.marza = (p.zarada !== null && p.prihod > 0) ? (p.zarada / p.prihod) * 100 : null;
+    p.pretporez = round2(p.materijalPdv + p.ostaloVraca + p.rezVraca);
+    p.pdvNeto = p.pdvUplate !== null ? round2(p.pdvUplate - p.pretporez) : null;
+    p.warnEvidencija = p.naplaceno > 0 && !p.zaradaBlocked && (p.rad + p.rez) < 0.10 * p.naplaceno;
+    p.mjeseciRada = Object.keys(p.months).filter(k => p.months[k].sati > 0).sort();
+  }
+  list.firma = firma;
+  return list;
+}
+
+/* ---------- Uplate kupaca u Troškovima koje nisu ni na jednom projektu ---------- */
+function prihodiBezProjekta() {
+  const ob = state.obracun || {};
+  const upl = [];
+  for (const [name, rec] of Object.entries(ob)) for (const u of ((rec && rec.uplate) || [])) upl.push({ name, u });
+  const used = new Set();
+  const out = [];
+  for (const mk of Object.keys(state.trx || {}).sort()) {
+    (state.trx[mk] || []).forEach((t, i) => {
+      if (!t || t.type !== 'Prihod' || t.group !== 'Prihodi') return;
+      if (t.proj) return;
+      const a = Number(t.amount) || 0;
+      const hit = upl.find(x => !used.has(x) && Math.abs((Number(x.u.amount) || 0) - a) < 0.011 && x.u.date && t.date && Math.abs(dayDiff(x.u.date, t.date)) <= 10);
+      if (hit) { used.add(hit); return; }
+      out.push({ t, mk, i });
+    });
+  }
+  return out;
+}
+/* Troškovi koji idu na projekt (npr. podizvođač), a projekt još nije odabran */
+function troskoviBezProjekta() {
+  const out = [];
+  for (const mk of Object.keys(state.trx || {}).sort()) {
+    (state.trx[mk] || []).forEach((t, i) => { if (trxDestInfo(t).dest === 'projekt-bez') out.push({ t, mk, i }); });
+  }
+  return out;
+}
+/* Imena projekata za odabir (evidencija sati, STO, obračun) */
+function projektImena() {
+  const set = new Set();
+  for (const k of Object.keys(state.hours || {})) for (const d of ((state.hours[k] || {}).days || [])) for (const e of Object.values(d.workers || {})) { const n = (e && e.project || '').trim(); if (n) set.add(n); }
+  for (const k of Object.keys(state.sto || {})) for (const t of (state.sto[k] || [])) { const n = (t.project || '').trim(); if (n && n !== 'Ostalo') set.add(n); }
+  for (const n of Object.keys(state.obracun || {})) set.add(n);
+  const hidden = new Set(state.hiddenProjects || []);
+  return Array.from(set).filter(n => !hidden.has(n)).sort((a, b) => a.localeCompare(b, 'hr'));
+}
+
+/* ============================================================
+   v4 · DETALJ PROJEKTA: PDV na uplatama, od prihoda do zarade
+   ============================================================ */
+const v4SignEur = (n, dec = 2) => (n >= 0 ? '+' : '−') + eur(Math.abs(n), dec);
+const v4Minus = (n, dec = 2) => (Math.abs(n) < 0.005 ? eur(0, dec) : '−' + eur(Math.abs(n), dec));
+const v4SignPct = (x) => (x >= 0 ? '+' : '−') + pct1(Math.abs(x));
+const v4PdvPill = (mode, vlastiti) => {
+  if (mode === 'pdv25') return `<span class="pill pdv25"${vlastiti ? ' title="PDV postavljen na ovoj uplati"' : ''}>PDV 25 %${vlastiti ? ' ·' : ''}</span>`;
+  if (mode === 'ppo') return `<span class="pill ppo"${vlastiti ? ' title="PDV postavljen na ovoj uplati"' : ''}>Prijenos${vlastiti ? ' ·' : ''}</span>`;
+  return '<span class="pill red">nije odabrano</span>';
+};
+const v4NaziviMjeseci = (keys) => {
+  const k = keys.slice().sort();
+  if (!k.length) return '';
+  if (k.length === 1) return monthGenHr(k[0]);
+  return k.map(x => monthLabelShort(x).toLowerCase()).join(', ');
+};
+
+function v4PdvSectionHtml(p) {
+  const odabrano = p.pdvRezim;
+  const treba = p.pdvNijeOdabran && p.uplateInfo.length > 0;
+  const btn = (val, lbl) => `<button type="button" class="${odabrano === val ? 'active' : ''}" data-pdv-rezim="${val}" aria-pressed="${odabrano === val ? 'true' : 'false'}"${isAdmin ? '' : ' disabled'}>${lbl}</button>`;
+  return `
+    <div class="v4-pdv${treba ? ' treba' : ''}">
+      <div class="v4-pdv-txt">
+        <div class="v4-eyebrow">${treba ? 'PDV na uplatama · nije odabrano' : 'PDV na uplatama'}</div>
+        <div class="v4-pdv-sub">${treba
+          ? 'Što piše na računima investitoru: PDV 25 % kao zaseban iznos ili „prijenos porezne obveze"? Dok se ne odabere, zarada se ne prikazuje.'
+          : 'Kako su izdani računi investitoru. Iznimku za jednu uplatu postaviš na samoj uplati.'}</div>
+      </div>
+      <div class="toggle v4-toggle" role="group" aria-label="PDV na uplatama">${btn('pdv25', 'PDV 25 %')}${btn('ppo', 'Prijenos porezne obveze')}</div>
+    </div>`;
+}
+
+function v4KpiHtml(p) {
+  const hasNapl = p.naplaceno > 0;
+  const nepotpunLbl = (p.nepotpunMonths || []).map(monthLabelShort).join(', ');
+  let prihodCell;
+  if (p.pdvNijeOdabran && p.uplateInfo.length) {
+    prihodCell = `<div class="kpi-cell"><div class="stat-label">Uplaćeno</div><div class="stat-value">${eur(p.naplaceno, 0)}</div><div class="stat-sub">${p.uplateInfo.length} ${hrPlural(p.uplateInfo.length, 'uplata', 'uplate', 'uplata')} · s PDV-om ili bez?</div></div>`;
+  } else if (hasNapl) {
+    const sub = p.pdvUplate > 0.005 ? `uplaćeno ${eur(p.naplaceno, 0)} − PDV ${eur(p.pdvUplate, 0)}` : `uplaćeno ${eur(p.naplaceno, 0)} · računi bez PDV-a`;
+    prihodCell = `<div class="kpi-cell"><div class="stat-label">Prihod bez PDV-a</div><div class="stat-value">${eur(p.prihod, 0)}</div><div class="stat-sub">${sub}</div></div>`;
+  } else {
+    prihodCell = `<div class="kpi-cell"><div class="stat-label">Prihod bez PDV-a</div><div class="stat-value" style="color: var(--muted-2);">0 €</div><div class="stat-sub">još nema uplata</div></div>`;
+  }
+  let zaradaCell;
+  if (p.pdvNijeOdabran && p.uplateInfo.length) {
+    zaradaCell = `<div class="kpi-cell v4-amber"><div class="stat-label">Zarada</div><div class="stat-value">?</div><div class="stat-sub">čeka PDV na uplatama</div></div>`;
+  } else if (p.zaradaBlocked && hasNapl) {
+    zaradaCell = `<div class="kpi-cell v4-amber"><div class="stat-label">Zarada</div><div class="stat-value">?</div><div class="stat-sub">čeka evidenciju: ${escapeHtml(nepotpunLbl)}</div></div>`;
+  } else if (!hasNapl) {
+    zaradaCell = `<div class="kpi-cell"><div class="stat-label">Zarada</div><div class="stat-value" style="color: var(--muted-2);">?</div><div class="stat-sub">čeka prvu uplatu</div></div>`;
+  } else {
+    const gub = p.zarada < 0;
+    const proc = (p.procjenaMonths || []).length ? ` · <span class="pill amber" title="Plaće za ${escapeHtml(v4NaziviMjeseci(p.procjenaMonths))} još nisu upisane u Troškovima, uzeta je procjena">dio je procjena</span>` : '';
+    zaradaCell = `<div class="kpi-cell" style="background: var(${gub ? '--negative-soft' : '--positive-soft'});"><div class="stat-label" style="color: var(${gub ? '--negative' : '--positive'});">Zarada</div><div class="stat-value" style="color: var(${gub ? '--negative' : '--positive'});">${v4SignEur(p.zarada, 0)}</div><div class="stat-sub" style="color: var(${gub ? '--negative' : '--positive'});">marža ${p.marza !== null ? v4SignPct(p.marza) : '?'} prihoda${proc}</div></div>`;
+  }
+  return `
+    <div class="kpi-row" style="margin-bottom: 24px;">
+      ${prihodCell}
+      <div class="kpi-cell"><div class="stat-label">Trošak ukupno</div><div class="stat-value">${eur(p.trosak, 0)}</div><div class="stat-sub">sve bez PDV-a koji se vraća</div></div>
+      ${zaradaCell}
+      <div class="kpi-cell"><div class="stat-label">Rad i režija</div><div class="stat-value">${eur(p.rad + p.rez, 0)}</div><div class="stat-sub">rad ${eur(p.rad, 0)} + režija ${eur(p.rez, 0)}</div></div>
+    </div>`;
+}
+
+function v4RezijaSub(p) {
+  const mj = (p.mjeseciRada || []);
+  const parts = [`fiksni troškovi ${mj.length ? v4NaziviMjeseci(mj) : ''} ${eur(p.rezBruto, 2)}`.replace(/\s+/g, ' ')];
+  if (p.rezVraca > 0.005) parts.push(`PDV koji se vraća ${v4Minus(p.rezVraca)}`);
+  if (mj.length === 1 && p.months[mj[0]]) parts.push(`udio ${monthGenHr(mj[0])} ${pct1(p.months[mj[0]].udio)}`);
+  return parts.join(' · ');
+}
+function v4OstaloNaziv(p) {
+  const n = p.ostaloStavke.map(x => x.tip === 'rucno' ? (x.r.note || 'ručni unos') : (x.t.partner || 'iz Troškova'));
+  if (!n.length) return 'nema';
+  return n.length <= 2 ? n.join(', ') : n.slice(0, 2).join(', ') + ` i još ${n.length - 2}`;
+}
+
+function v4KaskadaHtml(p) {
+  const blokZarada = p.zaradaBlocked;
+  const row = (lbl, sub, val, cls = '') => `<div class="v4-casc-row${cls}"><span>${lbl}${sub ? `<span class="v4-casc-sub">${sub}</span>` : ''}</span><span class="v">${val}</span></div>`;
+  return `
+    <div class="card" style="margin-bottom: 24px;">
+      <div class="card-head"><div><div class="card-title">Od prihoda do zarade</div><div class="card-sub">Prvo troškovi samog projekta, zatim udio fiksnih troškova firme</div></div></div>
+      ${row('Prihod bez PDV-a', '', eur(p.prihod, 2))}
+      ${row('− Materijal', 'STO, bez PDV-a', v4Minus(p.materijalBezPdv))}
+      ${row('− Podizvođači i ostali troškovi', escapeHtml(v4OstaloNaziv(p)), v4Minus(p.ostalo))}
+      ${row('− Rad · sve plaće', `keš isplate ${eur(p.radKes, 2)} · službene plaće, neto i davanja ${eur(p.radSluzbeno, 2)}`, v4Minus(p.rad))}
+      ${row('Zarada nakon materijala i rada', '', v4SignEur(p.nakonMR), ' hl')}
+      ${row('− Režija · fiksni troškovi bez plaća', escapeHtml(v4RezijaSub(p)), v4Minus(p.rez))}
+      ${blokZarada
+        ? row('Zarada', 'čeka evidenciju: ' + escapeHtml((p.nepotpunMonths || []).map(monthLabelShort).join(', ')), '?', ' hl amber')
+        : row('Zarada', '', v4SignEur(p.zarada), p.zarada < 0 ? ' hl neg' : ' hl pos')}
+    </div>`;
+}
+
+function v4TrakaHtml(p) {
+  if (p.zaradaBlocked) return '';
+  const pdv = Math.max(0, p.pdvUplate || 0);
+  const gub = p.zarada < 0;
+  const base = gub ? (pdv + p.trosak) : p.naplaceno;
+  if (!(base > 0)) return '';
+  const seg = [
+    { k: 'pdv', lbl: 'PDV', sub: 'ide državi, nije ni trošak ni zarada', v: pdv, bg: 'repeating-linear-gradient(135deg, #bdbab1 0 6px, #d6d3ca 6px 12px)', fg: '#2c2c2a', sw: 'repeating-linear-gradient(135deg, #bdbab1 0 3px, #d6d3ca 3px 6px)' },
+    { k: 'mat', lbl: 'Materijal', sub: 'bez PDV-a', v: p.materijalBezPdv, bg: 'var(--acc-projects)' },
+    { k: 'ost', lbl: 'Podizvođači i ostali troškovi', sub: 'bez PDV-a koji se vraća', v: p.ostalo, bg: '#5f5e5a' },
+    { k: 'rad', lbl: 'Rad', sub: 'sve plaće i davanja', v: p.rad, bg: 'var(--acc-cashflow)' },
+    { k: 'rez', lbl: 'Režija', sub: 'fiksni troškovi bez plaća', v: p.rez, bg: '#6f8196' },
+  ];
+  if (!gub) seg.push({ k: 'zar', lbl: 'Zarada', sub: '', v: Math.max(0, p.zarada), bg: 'var(--positive)' });
+  const w = (v) => (v / base) * 100;
+  const pctOf = (v) => pct1((v / p.naplaceno) * 100);
+  return `
+    <div class="card" style="margin-bottom: 24px;">
+      <div class="card-head"><div><div class="card-title">Kamo je otišao uplaćeni novac</div><div class="card-sub">Uplaćeno ${eur(p.naplaceno, 2)} · udio svakog dijela u uplaćenom${gub ? ` · <span style="color: var(--negative);">trošak je veći od prihoda za ${eur(Math.abs(p.zarada), 2)}</span>` : ''}</div></div></div>
+      <div class="ob-bar">${seg.filter(s => w(s.v) > 0.05).map(s => `<span style="width: ${w(s.v).toFixed(3)}%; background: ${s.bg};${s.fg ? ' color: ' + s.fg + ';' : ''}" title="${s.lbl} ${pct1(w(s.v))}">${w(s.v) >= 9 ? pct1(w(s.v)) : ''}</span>`).join('')}</div>
+      ${seg.map(s => `
+      <div class="ob-legend-row">
+        <span class="sw" style="background: ${s.sw || s.bg};"></span>
+        <span>${s.k === 'zar' ? '<strong>Zarada</strong>' : s.lbl}${s.sub ? ` <span style="color: var(--muted); font-size: 12.5px;">· ${s.sub}</span>` : ''}</span>
+        <span class="amt"${s.k === 'zar' ? ' style="color: var(--positive);"' : ''}>${eur(s.v, 2)}</span>
+        <span class="pct">${pctOf(s.v)}</span>
+      </div>`).join('')}
+      ${gub ? `
+      <div class="ob-legend-row">
+        <span class="sw" style="background: var(--negative);"></span>
+        <span><strong>Gubitak</strong> <span style="color: var(--muted); font-size: 12.5px;">· prihod − trošak</span></span>
+        <span class="amt" style="color: var(--negative);">${v4Minus(p.zarada)}</span>
+        <span class="pct"></span>
+      </div>` : ''}
+    </div>`;
+}
+
+function v4ScenarijiHtml(p) {
+  const s = p.scen;
+  if (!s) return '';
+  const card = (key, naslov, pdvLbl) => {
+    const x = s[key];
+    const pdvIznos = round2(p.naplaceno - x.prihod);
+    let note = '';
+    if (p.ponuda) {
+      const razl = round2(x.prihod - p.ponuda);
+      if (razl < -0.005) note = `<div class="v4-scen-note neg">Do ponude nedostaje ${eur(Math.abs(razl), 2)} bez PDV-a${key === 'pdv25' ? `, odnosno ${eur(Math.abs(razl) * 1.25, 2)} uplate` : ''}.</div>`;
+      else if (razl > 0.005) note = `<div class="v4-scen-note pos">Naplaćeno ${eur(razl, 2)} više od ponude (dodatni radovi?).</div>`;
+      else note = `<div class="v4-scen-note pos">Naplaćeno točno koliko je ponuda.</div>`;
+    }
+    return `
+      <div class="card v4-scen">
+        <div class="card-title" style="margin-bottom: 8px;">${naslov}</div>
+        <div class="v4-scen-row"><span>Prihod bez PDV-a</span><span class="v">${eur(x.prihod, 2)}</span></div>
+        <div class="v4-scen-row"><span>PDV na uplatama · ${pdvLbl}</span><span class="v">${eur(pdvIznos, 2)}</span></div>
+        <div class="v4-scen-row"><span>Zarada nakon materijala i rada</span><span class="v">${v4SignEur(x.nakonMR)}</span></div>
+        <div class="v4-scen-row"><span>Zarada · marža ${x.marza !== null ? v4SignPct(x.marza) : '?'}</span><span class="v" style="color: var(${x.zarada < 0 ? '--negative' : '--positive'});">${p.zaradaBlocked ? '?' : v4SignEur(x.zarada)}</span></div>
+        ${p.ponuda ? `<div class="v4-scen-row"><span>Ponuda bez PDV-a</span><span class="v">${eur(p.ponuda, 2)}</span></div>` : ''}
+        ${note}
+        ${isAdmin ? `<button type="button" class="btn" data-pdv-rezim="${key}" style="align-self: flex-start; margin-top: 12px;">Odaberi ${key === 'pdv25' ? 'PDV 25 %' : 'prijenos porezne obveze'}</button>` : ''}
+      </div>`;
+  };
+  const hint3 = p.ponuda
+    ? `<div class="v4-hint"><span class="no">3</span><span>Ako je ugovoreno ${eur(p.ponuda, 2)} bez PDV-a, uz PDV 25 % investitor ukupno plaća ${eur(round2(p.ponuda * 1.25), 2)}, a uz prijenos ${eur(p.ponuda, 2)}. Do sada je uplaćeno ${eur(p.naplaceno, 2)}.</span></div>`
+    : '';
+  return `
+    <div class="grid grid-2" style="margin-bottom: 16px;">
+      ${card('pdv25', 'Ako su računi s PDV-om 25 %', 'ide državi')}
+      ${card('ppo', 'Ako je prijenos porezne obveze', 'obračunava investitor')}
+    </div>
+    <div class="card" style="margin-bottom: 24px;">
+      <div class="card-title" style="margin-bottom: 4px;">Kako provjeriti</div>
+      <div class="v4-hint"><span class="no">1</span><span>Na računu: ako je prijenos, piše „prijenos porezne obveze" i PDV nije izračunat; ako je PDV, ispod osnovice stoji PDV 25 % kao zaseban iznos.</span></div>
+      <div class="v4-hint"><span class="no">2</span><span>Za građevinske radove između dviju firmi u sustavu PDV-a zakon propisuje prijenos porezne obveze. Građanima, zgradama i firmama izvan sustava PDV-a račun ide s PDV-om 25 %.</span></div>
+      ${hint3}
+    </div>`;
+}
+
+function v4UplateCardHtml(p) {
+  const rows = p.uplateInfo.slice().sort((a, b) => (a.u.date || '').localeCompare(b.u.date || ''));
+  const osnT = round2(rows.reduce((a, x) => a + (x.osn || 0), 0));
+  const pdvT = round2(rows.reduce((a, x) => a + (x.pdv || 0), 0));
+  return `
+    <div class="card">
+      <div class="card-head">
+        <div><div class="card-title">Uplate</div><div class="card-sub">Upisuje se iznos koji je stigao na račun. Osnovica i PDV računaju se sami.</div></div>
+        ${isAdmin ? '<button class="btn btn-primary btn-sm" id="ob-uplata-add">+ Dodaj uplatu</button>' : ''}
+      </div>
+      ${rows.length === 0 ? '<div class="empty">Još nema evidentiranih uplata za ovaj projekt.</div>' : `
+      <div class="table-scroll">
+        <table class="table v4-tbl">
+          <thead><tr><th>Datum</th><th class="text-right">Uplaćeno</th><th>PDV</th><th class="text-right">Osnovica</th><th class="text-right">PDV iznos</th>${isAdmin ? '<th></th>' : ''}</tr></thead>
+          <tbody>
+            ${rows.map(x => `
+            <tr${isAdmin ? ` data-ob-up-edit="${x.i}" style="cursor: pointer;" title="${escapeHtml(x.u.note || 'Klik za uređivanje')}"` : (x.u.note ? ` title="${escapeHtml(x.u.note)}"` : '')}>
+              <td class="col-date num">${isoToEU(x.u.date)}</td>
+              <td class="num text-right" style="font-weight: 600;">${eur(x.amount, 2)}</td>
+              <td>${v4PdvPill(x.mode, x.vlastiti)}</td>
+              <td class="num text-right">${x.osn === null ? '?' : eur(x.osn, 2)}</td>
+              <td class="num text-right" style="color: var(--muted);">${x.pdv === null ? '?' : eur(x.pdv, 2)}</td>
+              ${isAdmin ? `<td class="text-right"><span class="v4-x" data-ob-up-del="${x.i}" title="Obriši uplatu">×</span></td>` : ''}
+            </tr>`).join('')}
+          </tbody>
+          <tfoot><tr><td>UKUPNO</td><td class="num text-right">${eur(p.naplaceno, 2)}</td><td></td><td class="num text-right">${p.pdvNijeOdabran ? '?' : eur(osnT, 2)}</td><td class="num text-right">${p.pdvNijeOdabran ? '?' : eur(pdvT, 2)}</td>${isAdmin ? '<td></td>' : ''}</tr></tfoot>
+        </table>
+      </div>`}
+    </div>`;
+}
+
+function v4TrosakCardHtml(p, isNone) {
+  const modeLbl = (m) => m ? (PDV_PRESETS[m] ? PDV_PRESETS[m].kratko : '') : 'bez PDV-a';
+  const ost = p.ostaloStavke.map(x => {
+    if (x.tip === 'rucno') {
+      const pok = x.pokrivene.length ? `<div class="v4-sub">iz Troškova: ${x.pokrivene.map(y => `${dmEU(y.t.date)} ${eur(Number(y.t.amount) || 0, 2)}`).join(' · ')}</div>` : '';
+      return `
+        <tr${isAdmin ? ` data-ob-tr-edit="${x.i}" style="cursor: pointer;" title="Klik za uređivanje"` : ''}>
+          <td>${escapeHtml(x.r.note || 'Trošak')}<div class="v4-sub">${isoToEU(x.r.date)} · ${escapeHtml(modeLbl(x.mode))}</div>${pok}</td>
+          <td class="num text-right">${eur(x.racun, 2)}</td>
+          <td class="num text-right" style="color: var(--muted);">${v4Minus(x.vraca)}</td>
+          <td class="num text-right" style="font-weight: 600; white-space: nowrap;">${eur(x.trosak, 2)}${isAdmin ? ` <span class="v4-x" data-ob-tr-del="${x.i}" title="Obriši trošak">×</span>` : ''}</td>
+        </tr>`;
+    }
+    return `
+        <tr data-trx-open="${x.mk}|${x.i}" style="cursor: pointer;" title="Otvori u Troškovima">
+          <td>${escapeHtml(x.t.partner || 'Trošak')}<div class="v4-sub">${isoToEU(x.t.date)} · iz Troškova · ${escapeHtml(modeLbl(x.mode))}</div></td>
+          <td class="num text-right">${eur(x.racun, 2)}</td>
+          <td class="num text-right" style="color: var(--muted);">${v4Minus(x.vraca)}</td>
+          <td class="num text-right" style="font-weight: 600;">${eur(x.trosak, 2)}</td>
+        </tr>`;
+  }).join('');
+  const mj = p.mjeseciRada || [];
+  return `
+    <div class="card">
+      <div class="card-head">
+        <div><div class="card-title">Trošak</div><div class="card-sub">Iznos računa, PDV koji firma vraća i stvarni trošak</div></div>
+        ${isAdmin && !isNone ? '<button class="btn btn-sm" id="ob-trosak-add">+ Dodaj trošak</button>' : ''}
+      </div>
+      <div class="table-scroll">
+        <table class="table v4-tbl v4-tight">
+          <thead><tr><th>Stavka</th><th class="text-right">Račun</th><th class="text-right">Vraća se</th><th class="text-right">Trošak</th></tr></thead>
+          <tbody>
+            <tr><td>Materijal · STO<div class="v4-sub">${p.stoCount} ${hrPlural(p.stoCount, 'račun', 'računa', 'računa')} · PDV 25 %</div></td><td class="num text-right">${eur(p.materijal, 2)}</td><td class="num text-right" style="color: var(--muted);">${v4Minus(p.materijalPdv)}</td><td class="num text-right" style="font-weight: 600;">${eur(p.materijalBezPdv, 2)}</td></tr>
+            ${ost}
+            <tr><td>Rad · sve plaće<div class="v4-sub">${FMT_INT.format(p.sati)} h · keš isplate i službene plaće</div></td><td></td><td></td><td class="num text-right" style="font-weight: 600;">${eur(p.rad, 2)}</td></tr>
+            <tr><td>Režija<div class="v4-sub">${mj.length === 1 && p.months[mj[0]] ? `${pct1(p.months[mj[0]].udio)} ${monthGenHr(mj[0])}` : (mj.length ? escapeHtml(v4NaziviMjeseci(mj)) : 'mjeseci bez evidencije')} · iz Troškova</div></td><td class="num text-right">${eur(p.rezBruto, 2)}</td><td class="num text-right" style="color: var(--muted);">${v4Minus(p.rezVraca)}</td><td class="num text-right" style="font-weight: 600;">${eur(p.rez, 2)}</td></tr>
+          </tbody>
+          <tfoot><tr><td>TROŠAK UKUPNO</td><td></td><td></td><td class="num text-right">${eur(p.trosak, 2)}</td></tr></tfoot>
+        </table>
+      </div>
+    </div>`;
+}
+
+function v4PdvCardHtml(p) {
+  const row = (lbl, sub, val, strong) => `<div class="v4-casc-row${strong ? ' tot' : ''}"><span>${lbl}${sub ? ` <span style="color: var(--muted); font-size: 12.5px;">· ${sub}</span>` : ''}</span><span class="v">${val}</span></div>`;
+  const svi = p.uplateInfo.every(x => x.mode === 'pdv25');
+  const nijedan = p.uplateInfo.every(x => x.mode === 'ppo');
+  const subUpl = svi ? '25 % sadržan u svakoj uplati' : (nijedan ? 'prijenos porezne obveze: PDV obračunava investitor' : 'dio uplata s PDV-om, dio s prijenosom');
+  const neto = p.pdvNeto;
+  return `
+    <div class="card" style="margin-bottom: 24px;">
+      <div class="card-head"><div><div class="card-title">PDV na projektu</div><div class="card-sub">Prolazi kroz firmu prema Poreznoj. Nije ni prihod ni trošak, zato ne mijenja zaradu.</div></div></div>
+      ${row('PDV na uplatama', subUpl, eur(p.pdvUplate, 2))}
+      ${row('PDV na materijalu', 'vraća se firmi', v4Minus(p.materijalPdv))}
+      ${p.ostaloVraca > 0.005 ? row('PDV na ostalim troškovima', 'vraća se firmi', v4Minus(p.ostaloVraca)) : ''}
+      ${row('PDV u režiji', 'vraća se firmi, udio projekta', v4Minus(p.rezVraca))}
+      ${row(neto >= 0 ? 'PDV za platiti zbog ovog projekta' : 'Pretplata · firma ima više PDV-a za odbiti', '', eur(Math.abs(neto), 2), true)}
+      <div style="font-size: 12.5px; color: var(--muted); margin-top: 14px;">Poreznoj se PDV plaća jednom mjesečno, za sve projekte zajedno. U Troškovima je to zasebna stavka „PDV" i ne ulazi u režiju.</div>
+    </div>`;
+}
+
+/* Detalj otvoren s prvog ekrana Projekata (usporedba, upozorenja) vraća se na taj ekran */
+let v4Detalj = { proj: null, pregled: false };
+function renderProjectDetail(p) {
+  if (v4Detalj.proj !== p.name) v4Detalj = { proj: p.name, pregled: projectsGroup === null };
+  const panel = document.getElementById('panel-projects');
+  const isNone = p.name === PROJ_NONE;
+  const displayName = isNone ? 'Bez projekta' : p.name;
+  const mKeys = Object.keys(p.months).sort();
+  const workers = Object.entries(p.workers).map(([name, w]) => ({ name, ...w })).sort((a, b) => (b.rad + b.rez) - (a.rad + a.rez));
+
+  const matMap = {};
+  let itemizedTotal = 0;
+  for (const k of allMonths()) {
+    for (const t of (state.sto[k] || [])) {
+      const nm = (t.project || '').trim() || PROJ_NONE;
+      if (nm !== p.name || !t.items || !t.items.length) continue;
+      itemizedTotal += t.amount;
+      for (const it of t.items) {
+        const key = (it.name || 'Stavka') + '¦' + (it.unit || '');
+        if (!matMap[key]) matMap[key] = { name: it.name || 'Stavka', unit: it.unit || '', qty: 0, amount: 0 };
+        matMap[key].qty += Number(it.qty) || 0;
+        matMap[key].amount += Number(it.amount) || 0;
+      }
+    }
+  }
+  const matRows = Object.values(matMap).sort((a, b) => b.amount - a.amount);
+  const matTotal = round2(matRows.reduce((a, r) => a + r.amount, 0));
+  const nonItemized = Math.max(0, round2(p.materijal - itemizedTotal));
+
+  projectsGroup = isNone ? null : (p.zakljucen ? 'zavrseni' : 'tekuci');
+  const hasNapl = p.naplaceno > 0;
+  const hasPonuda = p.ponuda !== null && p.ponuda !== undefined;
+  const periodStr = mKeys.length === 0 ? 'bez mjeseci' : (mKeys.length === 1 ? monthLabel(mKeys[0]) : monthLabelShort(mKeys[0]) + ' – ' + monthLabel(mKeys[mKeys.length - 1]));
+  const statusPill = isNone ? '' : (p.zakljucen ? '<span class="pill gray" style="vertical-align: middle;">✓ završen</span>' : '<span class="pill brown" style="vertical-align: middle;">tekući</span>');
+  const subline = isNone
+    ? 'STO stavke bez naziva projekta, sati bez upisanog projekta i mjeseci bez evidencije'
+    : (p.prviDan && p.zadnjiDan
+      ? `${isoToEU(p.prviDan)} – ${isoToEU(p.zadnjiDan)} · ${p.kalDana} ${hrPlural(p.kalDana, 'kalendarski dan', 'kalendarska dana', 'kalendarskih dana')} · ${p.dani} ${hrPlural(p.dani, 'dan s evidencijom', 'dana s evidencijom', 'dana s evidencijom')} · ${FMT_INT.format(p.sati)} h`
+      : `${periodStr} · ${FMT_INT.format(p.sati)} h`);
+
+  let srednjiHtml = '';
+  if (!isNone && p.uplateInfo.length) {
+    srednjiHtml = p.pdvNijeOdabran ? v4ScenarijiHtml(p) : (v4KaskadaHtml(p) + v4TrakaHtml(p));
+  }
+
+  const noneKpi = `
+    <div class="kpi-row" style="margin-bottom: 24px;">
+      <div class="kpi-cell"><div class="stat-label">Trošak ukupno</div><div class="stat-value">${eur(p.trosak, 0)}</div><div class="stat-sub">materijal bez PDV-a + rad + režija</div></div>
+      <div class="kpi-cell"><div class="stat-label">Rad i režija</div><div class="stat-value">${eur(p.rad + p.rez, 0)}</div><div class="stat-sub">rad ${eur(p.rad, 0)} + režija ${eur(p.rez, 0)}</div></div>
+    </div>`;
+
+  /* Ponuda · referenca (uspoređuje se s prihodom bez PDV-a) */
+  let ponudaHtml = '';
+  if (!isNone) {
+    const usp = p.prihod !== null ? p.prihod : null;
+    const razlika = (hasPonuda && usp !== null && hasNapl) ? round2(usp - p.ponuda) : null;
+    const razlikaPct = (razlika !== null && p.ponuda > 0) ? (razlika / p.ponuda) * 100 : null;
+    const planMarza = hasPonuda ? round2(p.ponuda - p.trosak) : null;
+    const planMarzaPct = (planMarza !== null && p.ponuda > 0) ? (planMarza / p.ponuda) * 100 : null;
+    const ponudaInner = hasPonuda ? `
+        <div class="ob-cmp-row"><span>Ponuda (bez PDV-a)</span><span class="v">${eur(p.ponuda, 2)}</span></div>
+        <div class="ob-cmp-row"><span>Prihod bez PDV-a</span><span class="v">${usp !== null ? eur(usp, 2) : '<span style="color: var(--muted-2);">čeka PDV na uplatama</span>'}</span></div>
+        ${razlika !== null ? `
+        <div class="ob-cmp-row">
+          <span><strong>Razlika</strong> <span style="color: var(--muted); font-size: 12.5px;">(dodatni radovi / gratis)</span></span>
+          <span class="v" style="color: var(${razlika >= 0 ? '--positive' : '--negative'});">${v4SignEur(razlika, 2)}${Math.abs(razlika) >= 0.005 && razlikaPct !== null ? ` <span class="delta-chip ${razlika >= 0 ? 'up' : 'down'}">${v4SignPct(razlikaPct)}</span>` : ''}</span>
+        </div>` : ''}
+        ${planMarza !== null ? `
+        <div class="ob-cmp-row">
+          <span>Planirana marža po ponudi <span style="color: var(--muted); font-size: 12.5px;">(ponuda − trošak)</span></span>
+          <span class="v">${v4SignEur(planMarza, 2)}${planMarzaPct !== null ? ' · ' + v4SignPct(planMarzaPct) : ''}</span>
+        </div>` : ''}
+        ${p.ponudaStavke.length ? `
+        <div style="margin-top: 12px;">
+          <button class="pill blue" type="button" id="ob-stavke-toggle" style="border: none; cursor: pointer; font-family: inherit;">${p.ponudaStavke.length} ${hrPlural(p.ponudaStavke.length, 'stavka', 'stavke', 'stavki')} ponude ▾</button>
+          <div id="ob-stavke-box" style="display: none; margin-top: 10px;">
+            <div class="table-scroll"><table class="table" style="font-size: 13px;"><tbody>
+              ${p.ponudaStavke.map(it => `<tr><td>${escapeHtml(it.name || 'Stavka')}</td><td class="num text-right" style="color: var(--muted); white-space: nowrap;">${it.qty ? fmtQty(it.qty) + (it.unit ? ' ' + escapeHtml(it.unit) : '') : ''}</td><td class="num text-right" style="font-weight: 600;">${eur(Number(it.amount) || 0, 2)}</td></tr>`).join('')}
+            </tbody></table></div>
+          </div>
+        </div>` : ''}`
+      : (isAdmin ? `
+        <div class="ob-drop" id="ob-ponuda-drop">
+          <strong>Ubaci ponudu · PDF, XLSX ili CSV</strong>
+          <span>Stavke se iščitaju, pregledaš i potvrdiš ukupni iznos.<br>Sprema se iznos i stavke, ne datoteka.</span>
+        </div>
+        <input type="file" id="ob-ponuda-file" accept=".pdf,.xlsx,.xls,.csv" style="display: none;">
+        <div style="text-align: center; margin-top: 10px;"><button class="btn btn-sm" id="ob-ponuda-manual">ili unesi iznos ručno</button></div>`
+        : '<div class="empty">Ponuda još nije unesena.</div>');
+    ponudaHtml = `
+    <div class="card" style="margin-top: 24px;">
+      <div class="card-head">
+        <div>
+          <div class="card-title" style="font-size: 17px; color: var(--muted);">Ponuda <span style="font-weight: 400;">· referenca</span></div>
+          <div class="card-sub">${hasPonuda ? 'Ne ulazi u obračun zarade, služi samo za usporedbu s prihodom' : 'Ručni unos ili upload: PDF, Excel ili CSV'}</div>
+        </div>
+        ${hasPonuda && isAdmin ? '<button class="btn btn-sm" id="ob-ponuda-edit">Uredi</button>' : ''}
+      </div>
+      ${ponudaInner}
+    </div>`;
+  }
+
+  panel.innerHTML = `
+    <div class="page-head">
+      <div class="page-title-block">
+        <button class="proj-back" id="proj-back">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          Svi projekti
+        </button>
+        <h1 class="page-title">${escapeHtml(displayName)} ${statusPill}</h1>
+        <div class="card-sub" style="margin-top: 4px;">${subline}</div>
+      </div>
+      ${isAdmin && !isNone ? `
+      <div class="page-actions">
+        <button class="btn" id="ob-status">${p.zakljucen ? '↺ Ponovno otvori' : '✓ Zaključi projekt'}</button>
+        <button class="btn btn-danger" id="proj-remove">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;"><path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+          Ukloni s pregleda
+        </button>
+      </div>` : ''}
+    </div>
+
+    ${isNone ? '' : v4PdvSectionHtml(p)}
+    ${isNone ? noneKpi : v4KpiHtml(p)}
+    ${srednjiHtml}
+    ${isNone ? `<div style="margin-bottom: 24px;">${v4TrosakCardHtml(p, true)}</div>` : `
+    <div class="v4-two">
+      ${v4UplateCardHtml(p)}
+      ${v4TrosakCardHtml(p, false)}
+    </div>`}
+    ${(!isNone && hasNapl && !p.pdvNijeOdabran) ? v4PdvCardHtml(p) : ''}
+    ${isNone ? '' : `<p class="proj-formula" style="margin: 0 0 24px;">Prihod = uplaćeno − PDV na uplatama (PDV 25 %: uplata ÷ 1,25; prijenos porezne obveze: cijela uplata). Rad = sve plaće za mjesec rada: keš isplate iz Evidencije sati i službene plaće (neto i davanja) iz Troškova, u udjelu mjeseca prema satima projekta. Režija = fiksni troškovi bez plaća iz Troškova (tekući i nepredviđeni koji nisu na projektu), bez PDV-a koji se vraća, u istom udjelu. Zarada nakon materijala i rada = prihod − materijal − ostali troškovi − rad. Zarada = zarada nakon materijala i rada − režija. Marža = zarada ÷ prihod.</p>`}
+
+    <div class="card" style="margin-bottom: 24px;">
+      <div class="card-head"><div><div class="card-title">Trošak po mjesecima</div><div class="card-sub">Materijal bez PDV-a, rad i režija kroz vrijeme</div></div></div>
+      <div class="chart-box"><canvas id="proj-chart-months"></canvas></div>
+    </div>
+
+    <div class="grid grid-cf" style="margin-bottom: 24px;">
+      <div class="card">
+        <div class="card-head"><div><div class="card-title">Po mjesecima</div><div class="card-sub">Udio mjeseca = sati projekta ÷ svi sati firme u mjesecu (uklj. godišnji)</div></div></div>
+        <div class="table-scroll">
+          <table class="table">
+            <thead><tr><th>Mjesec</th><th class="text-right">Sati</th><th class="text-right">Udio mj.</th><th class="text-right">Materijal</th><th class="text-right">Rad</th><th class="text-right">Režija</th><th class="text-right">Ukupno</th></tr></thead>
+            <tbody>
+              ${mKeys.map(k => {
+                const m = p.months[k];
+                const mat = round2(m.materijal / 1.25);
+                return `
+                <tr>
+                  <td><strong>${monthLabel(k)}</strong>${(p.procjenaMonths || []).includes(k) ? ' <span class="pill amber" title="Plaće za taj mjesec još nisu upisane u Troškovima">procjena</span>' : ''}</td>
+                  <td class="num text-right">${m.sati ? FMT_INT.format(m.sati) : '0'}</td>
+                  <td class="num text-right" style="color: var(--muted);">${m.udio ? pct1(m.udio) : '0 %'}</td>
+                  <td class="num text-right">${eur(mat, 0)}</td>
+                  <td class="num text-right">${eur(m.rad, 0)}</td>
+                  <td class="num text-right">${eur(m.rez, 0)}</td>
+                  <td class="num text-right" style="font-weight: 600;">${eur(mat + m.rad + m.rez, 0)}</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+            <tfoot><tr><td>UKUPNO</td><td class="num text-right"><strong>${FMT_INT.format(p.sati)}</strong></td><td></td><td class="num text-right"><strong>${eur(p.materijalBezPdv, 0)}</strong></td><td class="num text-right"><strong>${eur(p.rad, 0)}</strong></td><td class="num text-right"><strong>${eur(p.rez, 0)}</strong></td><td class="num text-right"><strong>${eur(p.materijalBezPdv + p.rad + p.rez, 0)}</strong></td></tr></tfoot>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><div><div class="card-title">Rad po radniku</div><div class="card-sub">Svaki sat nosi trošak mjeseca u kojem je odrađen</div></div></div>
+        ${workers.length === 0 ? `<div class="empty">Nema evidentiranih sati za ovaj projekt.</div>` : `
+        <div class="table-scroll">
+          <table class="table">
+            <thead><tr><th>Radnik</th><th class="text-right">Sati</th><th class="text-right">Dana</th><th class="text-right">Rad</th><th class="text-right">Režija</th><th class="text-right">Ukupno</th></tr></thead>
+            <tbody>
+              ${workers.map(w => `<tr><td><strong>${escapeHtml(w.name)}</strong></td><td class="num text-right">${FMT_INT.format(w.sati)}</td><td class="num text-right">${w.dani || 0}</td><td class="num text-right">${eur(w.rad, 0)}</td><td class="num text-right">${eur(w.rez, 0)}</td><td class="num text-right" style="font-weight: 600;">${eur(w.rad + w.rez, 0)}</td></tr>`).join('')}
+            </tbody>
+            <tfoot><tr><td>UKUPNO</td><td class="num text-right"><strong>${FMT_INT.format(p.sati)}</strong></td><td></td><td class="num text-right"><strong>${eur(p.rad, 0)}</strong></td><td class="num text-right"><strong>${eur(p.rez, 0)}</strong></td><td class="num text-right"><strong>${eur(p.rad + p.rez, 0)}</strong></td></tr></tfoot>
+          </table>
+        </div>`}
+        <div class="proj-formula">Rad = udio × sve plaće tog mjeseca (keš isplate i službene plaće). Režija = udio × fiksni troškovi bez plaća tog mjeseca, bez PDV-a koji se vraća. Ništa nije prosjek: svaki mjesec nosi svoj stvarni trošak, pa kišni i prazni dani poskupljuju sat mjeseca u kojem su se dogodili. Isplaćeno radnicima po satnici za ove sate: ${eur(p.radIsplata, 0)}.</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top: 24px;">
+      <div class="card-head"><div><div class="card-title">Materijal po stavkama</div><div class="card-sub">Što je točno potrošeno na projekt · iz uvezenih STO računa · iznosi s PDV-om</div></div></div>
+      ${matRows.length === 0 ? `<div class="empty">Još nema razrade po stavkama za ovaj projekt.<br>Nove račune ubacuj kroz „Uvoz računa" u STO tabu i stavke će se ovdje same zbrajati.</div>` : `
+      <div class="table-scroll">
+        <table class="table mat-stavke-table">
+          <thead><tr><th>Artikl</th><th class="text-right">Ukupna količina</th><th class="text-right">Iznos (s PDV)</th><th class="text-right">Udio u materijalu</th></tr></thead>
+          <tbody>
+            ${matRows.map(r => `<tr><td><strong>${escapeHtml(r.name)}</strong></td><td class="num text-right">${r.qty ? fmtQty(r.qty) + (r.unit ? ' ' + escapeHtml(r.unit) : '') : ''}</td><td class="num text-right" style="font-weight: 600;">${eur(r.amount, 2)}</td><td class="num text-right" style="color: var(--muted);">${p.materijal > 0 ? ((r.amount / p.materijal) * 100).toFixed(1).replace('.', ',') + ' %' : ''}</td></tr>`).join('')}
+          </tbody>
+          <tfoot>
+            <tr><td>Σ razrađeno po stavkama</td><td></td><td class="num text-right"><strong>${eur(matTotal, 2)}</strong></td><td></td></tr>
+            ${nonItemized > 0.005 ? `<tr><td style="color: var(--muted);">Materijal bez razrade (unosi bez stavki)</td><td></td><td class="num text-right" style="color: var(--muted);">${eur(nonItemized, 2)}</td><td></td></tr>` : ''}
+          </tfoot>
+        </table>
+      </div>`}
+    </div>
+
+    ${ponudaHtml}
+  `;
+
+  panel.querySelector('#proj-back').addEventListener('click', () => {
+    activeProject = null;
+    if (v4Detalj.pregled) projectsGroup = null;
+    v4Detalj = { proj: null, pregled: false };
+    renderProjects();
+  });
+  panel.querySelector('#proj-remove')?.addEventListener('click', () => removeProjectModal(p.name));
+  bindObracunDetail(panel, p);
+  panel.querySelectorAll('[data-pdv-rezim]').forEach(b => b.addEventListener('click', async () => {
+    if (!isAdmin) return;
+    const val = b.dataset.pdvRezim;
+    if (val !== 'pdv25' && val !== 'ppo') return;
+    const rec = ensureObracunRec(p.name);
+    const had = Object.prototype.hasOwnProperty.call(rec, 'pdvRezim');
+    const prev = rec.pdvRezim;
+    if (prev === val) return;
+    rec.pdvRezim = val;
+    if (await saveData()) {
+      toast(val === 'pdv25' ? 'Uplate projekta: PDV 25 %' : 'Uplate projekta: prijenos porezne obveze', 'success');
+      renderProjects();
+    } else if (had) rec.pdvRezim = prev; else delete rec.pdvRezim;
+  }));
+  panel.querySelectorAll('[data-trx-open]').forEach(el => el.addEventListener('click', () => {
+    const [mk, i] = el.dataset.trxOpen.split('|');
+    activeMonth = mk;
+    setTab('trx');
+    if (isAdmin) trxModal(parseInt(i, 10));
+  }));
+
+  charts.projMonths?.destroy?.();
+  const ctx = document.getElementById('proj-chart-months');
+  if (ctx && typeof Chart !== 'undefined') {
+    charts.projMonths = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: mKeys.map(monthLabelShort),
+        datasets: [
+          { label: 'Materijal', data: mKeys.map(k => round2(p.months[k].materijal / 1.25)), backgroundColor: cssVar('--acc-sto'), borderRadius: 6, stack: 's' },
+          { label: 'Rad', data: mKeys.map(k => p.months[k].rad), backgroundColor: cssVar('--acc-hours'), borderRadius: 6, stack: 's' },
+          { label: 'Režija', data: mKeys.map(k => p.months[k].rez), backgroundColor: '#6f8196', borderRadius: 6, stack: 's' },
+        ],
+      },
+      options: {
+        ...chartOpts({ legend: true, money: true }),
+        scales: {
+          x: { stacked: true, grid: { display: false }, ticks: { font: { family: cssVar('--font-body'), size: 11 }, color: cssVar('--muted') } },
+          y: { stacked: true, grid: { color: cssVar('--line'), drawBorder: false }, ticks: { font: { family: cssVar('--font-mono'), size: 11 }, color: cssVar('--muted'), callback: v => eurShort(v) } },
+        },
+      },
+    });
+  }
+}
+
+/* ---------- Modali: radio-kartice ---------- */
+function v4OptsHtml(opts, cur) {
+  return opts.map(([id, t, s]) => `
+    <button type="button" class="v4-opt${cur === id ? ' on' : ''}" data-opt="${id}" aria-pressed="${cur === id ? 'true' : 'false'}">
+      <span class="v4-radio"></span>
+      <span class="v4-opt-txt"><span class="t">${t}</span>${s ? `<span class="s">${escapeHtml(s)}</span>` : ''}</span>
+    </button>`).join('');
+}
+
+/* Nova / uredi uplata za projekt · s PDV-om na uplati */
+function obUplataModal(projName, idx = null) {
+  const rec = ensureObracunRec(projName);
+  const list = rec.uplate;
+  const u = idx !== null ? list[idx] : { date: todayISO(), amount: 0, note: '' };
+  if (!u) return;
+  const rezim = (rec.pdvRezim === 'pdv25' || rec.pdvRezim === 'ppo') ? rec.pdvRezim : null;
+  let mode = (u.pdv === 'pdv25' || u.pdv === 'ppo') ? u.pdv : 'projekt';
+  const opts = [
+    ['projekt', 'Kao projekt', rezim ? `${rezim === 'pdv25' ? 'PDV 25 %' : 'Prijenos porezne obveze'} · postavka projekta ${projName}` : 'Projekt još nema odabran PDV na uplatama'],
+    ['pdv25', 'PDV 25 %', 'Građanin, zgrada ili firma izvan sustava PDV-a'],
+    ['ppo', 'Prijenos porezne obveze', 'Firma u sustavu PDV-a, građevinski radovi'],
+  ];
+  const html = `
+    <div class="modal-title">${idx !== null ? 'Uredi uplatu' : 'Nova uplata'} · ${escapeHtml(projName)}</div>
+    <div class="modal-sub">Upiši iznos koji je stigao na račun. Osnovicu i PDV aplikacija računa sama.</div>
+    <div class="grid grid-2" style="gap: 14px;">
+      <div class="field"><label class="field-label" for="ou-date">Datum</label><input class="input" id="ou-date" type="text" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" value="${isoToEU(u.date)}"></div>
+      <div class="field"><label class="field-label" for="ou-amount">Uplaćeno na račun (€)</label><input class="input num" id="ou-amount" type="text" inputmode="decimal" placeholder="0,00" value="${u.amount ? formatEUAmount(u.amount) : ''}"></div>
+    </div>
+    <div class="field" style="margin-top: 16px;"><span class="field-label">PDV na ovoj uplati</span><div class="v4-opts" id="ou-opts"></div></div>
+    <div class="v4-sum" id="ou-sum"></div>
+    <div class="field" style="margin-top: 14px;"><label class="field-label" for="ou-note">Opis (opcionalno)</label><input class="input" id="ou-note" value="${escapeHtml(u.note || '')}" placeholder="Npr. avans, 1. situacija, dodatni radovi"></div>
+    <div class="modal-actions">
+      <button class="btn" data-act="cancel">Odustani</button>
+      ${idx !== null ? '<button class="btn btn-danger" data-act="del">Obriši</button>' : ''}
+      <button class="btn btn-primary" data-act="save">${idx !== null ? 'Spremi' : 'Dodaj'}</button>
+    </div>`;
+  const m = modal(html, { wide: true });
+  const dateInp = m.root.querySelector('#ou-date');
+  const amountInp = m.root.querySelector('#ou-amount');
+  const optsBox = m.root.querySelector('#ou-opts');
+  const sumBox = m.root.querySelector('#ou-sum');
+  attachEUDateMask(dateInp);
+  attachEUAmountMask(amountInp);
+  const renderOpts = () => { optsBox.innerHTML = v4OptsHtml(opts, mode); };
+  const renderSum = () => {
+    const a = round2(parseEUAmount(amountInp.value));
+    const eff = mode === 'projekt' ? rezim : mode;
+    if (!(a > 0)) { sumBox.innerHTML = '<div class="v4-sum-note" style="border: none; padding: 0;">Upiši iznos uplate, npr. 36.486,25</div>'; return; }
+    if (!eff) { sumBox.innerHTML = '<div class="v4-sum-row"><span>Osnovica <em>· prihod projekta</em></span><span>?</span></div><div class="v4-sum-note">Odaberi PDV na ovoj uplati ili na projektu.</div>'; return; }
+    const osn = eff === 'pdv25' ? round2(a / 1.25) : a;
+    sumBox.innerHTML = `
+      <div class="v4-sum-row"><span>Osnovica <em>· prihod projekta</em></span><span>${eur(osn, 2)}</span></div>
+      <div class="v4-sum-row"><span>PDV <em>· ide državi</em></span><span>${eur(round2(a - osn), 2)}</span></div>
+      <div class="v4-sum-note">${eff === 'pdv25' ? 'Osnovica = uplata ÷ 1,25 · PDV = uplata − osnovica' : 'Cijela uplata je prihod · PDV obračunava investitor kod sebe'}</div>`;
+  };
+  renderOpts(); renderSum();
+  if (idx === null) setTimeout(() => amountInp.focus(), 50);
+  amountInp.addEventListener('input', renderSum);
+  amountInp.addEventListener('blur', renderSum);
+  optsBox.addEventListener('click', e => {
+    const b = e.target.closest('[data-opt]');
+    if (!b) return;
+    mode = b.dataset.opt; renderOpts(); renderSum();
+  });
+  m.root.addEventListener('click', async e => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    if (btn.dataset.act === 'cancel') { m.close(); return; }
+    if (btn.dataset.act === 'del') {
+      if (!confirm('Obrisati ovu uplatu?')) return;
+      const snapshot = JSON.stringify(list);
+      list.splice(idx, 1);
+      if (await saveData()) { m.close(); renderProjects(); } else rec.uplate = JSON.parse(snapshot);
+      return;
+    }
+    if (btn.dataset.act === 'save') {
+      const date = euToISO(dateInp.value.trim());
+      if (!date) { toast('Datum mora biti u formatu DD/MM/YYYY', 'error'); dateInp.classList.add('invalid'); dateInp.focus(); return; }
+      const amount = round2(parseEUAmount(amountInp.value));
+      if (!(amount > 0)) { toast('Unesi iznos uplate', 'error'); amountInp.focus(); return; }
+      const newU = { ...u, date, amount, note: m.root.querySelector('#ou-note').value.trim() };
+      if (mode === 'projekt') delete newU.pdv; else newU.pdv = mode;
+      if (!newU.created) newU.created = nowISO();
+      const snapshot = JSON.stringify(list);
+      if (idx !== null) list[idx] = newU; else list.push(newU);
+      if (await saveData()) { m.close(); renderProjects(); } else rec.uplate = JSON.parse(snapshot);
+    }
+  });
+}
+
+/* Novi / uredi ručni trošak projekta · iznos računa i PDV na računu */
+function obTrosakModal(projName, idx = null) {
+  const rec = ensureObracunRec(projName);
+  const list = rec.troskovi;
+  const t = idx !== null ? list[idx] : { date: todayISO(), amount: 0, note: '' };
+  if (!t) return;
+  let mode = PDV_PRESETS[t.pdv] ? t.pdv : (idx !== null ? 'bez' : 'p25');
+  const racun0 = PDV_PRESETS[t.pdv] ? (Number(t.iznosRacuna) || 0) : (Number(t.amount) || 0);
+  const html = `
+    <div class="modal-title">${idx !== null ? 'Uredi trošak' : 'Novi trošak'} · ${escapeHtml(projName)}</div>
+    <div class="modal-sub">Upiši ukupan iznos s računa i odaberi kakav je PDV na njemu. Trošak projekta aplikacija računa sama.</div>
+    <div class="grid grid-2" style="gap: 14px;">
+      <div class="field"><label class="field-label" for="ot-date">Datum računa</label><input class="input" id="ot-date" type="text" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" value="${isoToEU(t.date)}"></div>
+      <div class="field"><label class="field-label" for="ot-amount">Iznos računa · ukupno za platiti (€)</label><input class="input num" id="ot-amount" type="text" inputmode="decimal" placeholder="0,00" value="${racun0 ? formatEUAmount(racun0) : ''}"></div>
+      <div class="field" style="grid-column: 1 / -1;"><label class="field-label" for="ot-note">Dobavljač i opis</label><input class="input" id="ot-note" value="${escapeHtml(t.note || '')}" placeholder="Npr. podizvođač za knauf, najam skele, kontejner"></div>
+    </div>
+    <div class="field" style="margin-top: 16px;"><span class="field-label">PDV na računu</span><div class="v4-opts" id="ot-opts"></div></div>
+    <div class="v4-sum" id="ot-sum"></div>
+    <div style="font-size: 12.5px; color: var(--muted); margin-top: 10px;">PDV se vraća samo s računa koji glasi na Staru Rijeku (naziv i OIB firme). Na računu bez PDV-a nema se što vratiti.</div>
+    <div class="modal-actions">
+      <button class="btn" data-act="cancel">Odustani</button>
+      ${idx !== null ? '<button class="btn btn-danger" data-act="del">Obriši</button>' : ''}
+      <button class="btn btn-primary" data-act="save">${idx !== null ? 'Spremi' : 'Dodaj'}</button>
+    </div>`;
+  const m = modal(html, { wide: true });
+  const dateInp = m.root.querySelector('#ot-date');
+  const amountInp = m.root.querySelector('#ot-amount');
+  const optsBox = m.root.querySelector('#ot-opts');
+  const sumBox = m.root.querySelector('#ot-sum');
+  attachEUDateMask(dateInp);
+  attachEUAmountMask(amountInp);
+  const opts = PDV_ORDER.map(id => [id, PDV_PRESETS[id].naziv, PDV_PRESETS[id].sub]);
+  const renderOpts = () => { optsBox.innerHTML = v4OptsHtml(opts, mode); };
+  const renderSum = () => {
+    const a = round2(parseEUAmount(amountInp.value));
+    if (!(a > 0)) { sumBox.innerHTML = '<div class="v4-sum-note" style="border: none; padding: 0;">Upiši iznos s računa, npr. 1.250,00</div>'; return; }
+    const s = pdvSplit(a, mode);
+    sumBox.innerHTML = `
+      <div class="v4-sum-row"><span>PDV na računu</span><span>${eur(s.pdvRac, 2)}</span></div>
+      <div class="v4-sum-row"><span>Vraća se firmi <em>· pretporez</em></span><span>${eur(s.vraca, 2)}</span></div>
+      <div class="v4-sum-row tot"><span>Trošak projekta</span><span>${eur(s.trosak, 2)}</span></div>
+      <div class="v4-sum-note">${PDV_PRESETS[mode].note}</div>`;
+  };
+  renderOpts(); renderSum();
+  if (idx === null) setTimeout(() => amountInp.focus(), 50);
+  amountInp.addEventListener('input', renderSum);
+  amountInp.addEventListener('blur', renderSum);
+  optsBox.addEventListener('click', e => {
+    const b = e.target.closest('[data-opt]');
+    if (!b) return;
+    mode = b.dataset.opt; renderOpts(); renderSum();
+  });
+  m.root.addEventListener('click', async e => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    if (btn.dataset.act === 'cancel') { m.close(); return; }
+    if (btn.dataset.act === 'del') {
+      if (!confirm('Obrisati ovaj trošak?')) return;
+      const snapshot = JSON.stringify(list);
+      list.splice(idx, 1);
+      if (await saveData()) { m.close(); renderProjects(); } else rec.troskovi = JSON.parse(snapshot);
+      return;
+    }
+    if (btn.dataset.act === 'save') {
+      const date = euToISO(dateInp.value.trim());
+      if (!date) { toast('Datum mora biti u formatu DD/MM/YYYY', 'error'); dateInp.classList.add('invalid'); dateInp.focus(); return; }
+      const racun = round2(parseEUAmount(amountInp.value));
+      if (!(racun > 0)) { toast('Unesi iznos računa', 'error'); amountInp.focus(); return; }
+      const s = pdvSplit(racun, mode);
+      const newT = { ...t, date, iznosRacuna: racun, pdv: mode, amount: s.trosak, note: m.root.querySelector('#ot-note').value.trim() };
+      if (!newT.created) newT.created = nowISO();
+      const snapshot = JSON.stringify(list);
+      if (idx !== null) list[idx] = newT; else list.push(newT);
+      if (await saveData()) { m.close(); renderProjects(); } else rec.troskovi = JSON.parse(snapshot);
+    }
+  });
+}
+
+/* ============================================================
+   v4 · TROŠKOVI: transakcija (PDV na računu, kamo ide trošak),
+   oznake u tablici, ponavljajući troškovi iz Prognoze
+   ============================================================ */
+const KAMO_OPCIJE = [
+  ['projekt', 'Na projekt', 'Materijal, podizvođač ili najam za jedno gradilište'],
+  ['rezija', 'Režija', 'Dijeli se na projekte mjeseca prema satima'],
+  ['ulaganje', 'Ulaganje', 'Vozilo, stroj ili alat: raspodijeli se na mjesece'],
+  ['ne', 'Ne ide u projekte', 'Uplata PDV-a, pozajmica, kredit, plaće koje su već u radu'],
+];
+
+function trxChipsHtml(t) {
+  const out = [];
+  if (t.type === 'Trošak') {
+    const d = trxDestInfo(t);
+    if (d.dest === 'projekt') out.push(`<span class="pill brown">→ ${escapeHtml(t.proj)}</span>`);
+    else if (d.dest === 'projekt-bez') out.push('<span class="pill red" title="Trošak ide na projekt, a projekt nije odabran">projekt?</span>');
+    else if (d.dest === 'ulaganje') out.push(`<span class="pill purple">ulaganje · ${Math.max(1, Math.round(Number(t.ulaganjeMj) || 60))} mj.</span>`);
+    else if (t.dest === 'ne') out.push('<span class="pill gray">ne ide u projekte</span>');
+    if (PDV_PRESETS[t.pdv]) out.push(`<span class="pill gray" title="PDV odabran za ovaj račun">${PDV_PRESETS[t.pdv].kratko}</span>`);
+  } else if (t.type === 'Prihod' && t.proj) {
+    out.push(t.proj === '__ne__' ? '<span class="pill gray">nije za projekt</span>' : `<span class="pill brown">→ ${escapeHtml(t.proj)}</span>`);
+  }
+  return out.length ? `<div class="v4-chips">${out.join('')}</div>` : '';
+}
+
+/* Ponavljajući troškovi iz Prognoze za mjesec (kartica u Troškovima) */
+function v4PonavljajuciHtml(key) {
+  const st = prognozaStatusZaMjesec(key);
+  if (!st.stavke.length) return '';
+  const zbroj = (s) => round2(st.stavke.filter(x => x.status === s).reduce((a, x) => a + (s === 'placeno' ? x.placeno : x.iznos), 0));
+  const PILL = {
+    placeno: '<span class="pill green">Plaćeno</span>',
+    ocekivano: '<span class="pill purple">Očekivano</span>',
+    procjena: '<span class="pill amber">Procjena</span>',
+    nema: '<span class="pill red">Nema u Troškovima</span>',
+  };
+  const sum = [['placeno', 'plaćeno'], ['ocekivano', 'očekivano'], ['procjena', 'procjena'], ['nema', 'nema u Troškovima']]
+    .filter(([s]) => st.stavke.some(x => x.status === s))
+    .map(([s, l]) => `${l} <strong>${eur(zbroj(s), 2)}</strong>`).join(' · ');
+  const rows = st.stavke.map(x => {
+    const partneri = Array.from(new Set(x.matched.map(t => t.partner))).join(', ');
+    const datumi = x.matched.map(t => dmEU(t.date)).join(', ');
+    return `
+      <tr>
+        <td><strong>${escapeHtml(x.it.label || '')}</strong>${x.placa && x.items ? `<div class="v4-sub">${x.items.map(i => escapeHtml(i.label)).join(' · ')}</div>` : ''}</td>
+        <td>${partneri ? escapeHtml(partneri) : '<span style="color: var(--muted-2);">nema</span>'}</td>
+        <td class="num text-right" style="font-weight: 600;">${eur(x.status === 'placeno' ? x.placeno : x.iznos, 2)}${x.status === 'placeno' && Math.abs(x.placeno - x.iznos) > 0.5 ? `<div class="v4-sub">u Prognozi ${eur(x.iznos, 2)}</div>` : ''}</td>
+        <td>${PILL[x.status] || ''}</td>
+        <td class="col-date num">${datumi}</td>
+      </tr>`;
+  }).join('');
+  return `
+    <div class="card" style="margin-bottom: 24px;">
+      <div class="card-head">
+        <div>
+          <div class="card-title">Ponavljajući troškovi · ${monthLabel(key)}</div>
+          <div class="card-sub">Iz Prognoze. Stavka je plaćena kad u Troškovima tog mjeseca postoji transakcija istog partnera · ${sum}</div>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table class="table v4-tbl">
+          <thead><tr><th>Stavka</th><th>Partner u Troškovima</th><th class="text-right">Iznos</th><th>Status</th><th>Datum</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+/* Učinak odluke "kamo ide trošak" za transakciju (tekst u modalu) */
+function v4KamoUcinak(t, destEff, proj, ulMj, mode) {
+  const s = pdvSplit(t.amount, mode);
+  const mk = String(t.date || activeMonth).slice(0, 7);
+  if (!(s.racun > 0)) return { cls: 'neutral', title: 'Upiši iznos', text: 'Učinak se računa iz iznosa računa i PDV-a.' };
+  if (destEff === 'projekt') {
+    if (!proj) return { cls: 'warn', title: 'Odaberi projekt', text: 'Dok se ne odabere projekt, trošak ne ulazi ni u jedan projekt ni u režiju, a na Pregledu projekata stoji upozorenje.' };
+    const ob = state.obracun && state.obracun[proj];
+    const rijec = srPrvaRijec(t.partner);
+    const pok = (ob && Array.isArray(ob.troskovi) && rijec) ? ob.troskovi.find(r => srNorm(r.note).includes(rijec)) : null;
+    if (pok) return { cls: 'ok', title: `Ide na projekt ${proj}`, text: `Projekt već ima ručni trošak „${pok.note}" ${eur(Number(pok.amount) || 0, 2)}. Ova transakcija se vodi kao njegov dio i ne broji se dvaput.` };
+    return { cls: 'ok', title: `Ide na projekt ${proj}`, text: `${proj} nosi cijeli trošak: ${eur(s.trosak, 2)} bez PDV-a. Režija ${monthGenHr(mk)} manja je za isti iznos, pa svim projektima tog mjeseca pada udio režije.` };
+  }
+  if (destEff === 'ulaganje') {
+    const n = Math.max(1, Math.round(Number(ulMj) || 60));
+    return { cls: 'neutral', title: `Raspodijeljeno na ${n} mjeseci`, text: `${eur(round2(s.trosak / n), 2)} mjesečno ide u režiju, od ${monthGenHr(mk)} ${mk.slice(0, 4)}.` };
+  }
+  if (destEff === 'ne') return { cls: 'neutral', title: 'Ne ide u projekte', text: 'Vidi se samo u Cashflowu. Na zaradu projekata ne utječe.' };
+  if (destEff === 'rezija') {
+    let detalj = '';
+    try {
+      const all = computeProjectsData();
+      const f = all.firma[mk];
+      if (f && f.satiUk > 0) {
+        const dijelovi = all.filter(p => p.months[mk] && p.months[mk].sati > 0 && p.name !== PROJ_GODISNJI)
+          .map(p => ({ n: p.name === PROJ_NONE ? 'sati bez projekta' : p.name, h: p.months[mk].sati }))
+          .sort((a, b) => b.h - a.h);
+        const top = dijelovi.slice(0, 2).map(d => `${d.n} ${eur(round2(s.trosak * d.h / f.satiUk), 2)} (${pct1(d.h / f.satiUk * 100)})`);
+        const ostH = dijelovi.slice(2).reduce((a, d) => a + d.h, 0) + (f.godH || 0);
+        if (ostH > 0) top.push(`ostali ${eur(round2(s.trosak * ostH / f.satiUk), 2)}`);
+        detalj = ` dijeli se prema satima ${monthGenHr(mk)} (${FMT_INT.format(f.satiUk)} h): ${top.join(', ')}.`;
+      } else detalj = ` dijeli se na projekte ${monthGenHr(mk)} prema satima.`;
+    } catch (e) { detalj = ` dijeli se na projekte ${monthGenHr(mk)} prema satima.`; }
+    return { cls: 'neutral', title: `Ide u režiju ${monthGenHr(mk)}`, text: `${eur(s.trosak, 2)} bez PDV-a${detalj}` };
+  }
+  return { cls: 'neutral', title: 'Nije trošak', text: 'Prihodi i isključene stavke ne ulaze u režiju ni u projekte.' };
+}
+
+function trxModal(idx = null) {
+  ensureMonth(activeMonth);
+  const t0 = idx !== null ? state.trx[activeMonth][idx] : { date: localTodayISO(), type: 'Trošak', partner: '', amount: 0, category: '', group: 'Tekući' };
+  if (!t0) return;
+  const partners = Array.from(new Set(allMonths().flatMap(k => (state.trx[k] || []).map(x => x.partner)).filter(Boolean))).sort();
+  const cats = Array.from(new Set([...TRX_CATEGORIES, ...allMonths().flatMap(k => (state.trx[k] || []).map(x => x.category)).filter(Boolean)])).sort();
+  const projekti = projektImena();
+  let pdvOverride = PDV_PRESETS[t0.pdv] ? t0.pdv : '';
+  let dest = t0.dest || '';
+  let destTouched = false;
+  let proj = (t0.proj && t0.proj !== '__ne__') ? t0.proj : '';
+  let ulMj = Math.max(1, Math.round(Number(t0.ulaganjeMj) || 60));
+  let pdvOpen = !!pdvOverride;
+  const html = `
+    <div class="modal-title">${idx !== null ? 'Uredi' : 'Nova'} transakciju</div>
+    <div class="modal-sub">${monthLabel(activeMonth)}</div>
+    <div class="grid grid-2" style="gap: 14px;">
+      <div class="field"><label class="field-label">Datum</label><input class="input" id="t-date" type="text" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" value="${isoToEU(t0.date)}"></div>
+      <div class="field"><label class="field-label">Tip</label>
+        <select class="select" id="t-type">${TRX_TYPES.map(x => `<option ${x === t0.type ? 'selected' : ''}>${x}</option>`).join('')}</select>
+      </div>
+      <div class="field" style="grid-column: 1 / -1;">
+        <label class="field-label">Partner</label>
+        <input class="input" id="t-partner" list="t-partners" value="${escapeHtml(t0.partner)}" placeholder="Npr. Hrvatski Telekom">
+        <datalist id="t-partners">${partners.map(p => `<option value="${escapeHtml(p)}"></option>`).join('')}</datalist>
+      </div>
+      <div class="field"><label class="field-label">Iznos (€)</label><input class="input num" id="t-amount" type="text" inputmode="decimal" placeholder="0,00" value="${formatEUAmount(t0.amount)}"></div>
+      <div class="field"><label class="field-label">Grupa</label>
+        <select class="select" id="t-group">${TRX_GROUPS.map(x => `<option ${x === t0.group ? 'selected' : ''}>${x}</option>`).join('')}</select>
+      </div>
+      <div class="field" style="grid-column: 1 / -1;">
+        <label class="field-label">Kategorija</label>
+        <input class="input" id="t-category" list="t-cats" value="${escapeHtml(t0.category)}" placeholder="Npr. Knjigovodstvo">
+        <datalist id="t-cats">${cats.map(c => `<option value="${escapeHtml(c)}"></option>`).join('')}</datalist>
+      </div>
+    </div>
+    <div id="t-v4"></div>
+    <div class="modal-actions">
+      <button class="btn" data-act="cancel">Odustani</button>
+      ${idx !== null ? '<button class="btn btn-danger" data-act="del">Obriši</button>' : ''}
+      <button class="btn btn-primary" data-act="save">${idx !== null ? 'Spremi' : 'Dodaj'}</button>
+    </div>
+  `;
+  const m = modal(html, { wide: true });
+  attachEUDateMask(m.root.querySelector('#t-date'));
+  attachEUAmountMask(m.root.querySelector('#t-amount'));
+  const typeSel = m.root.querySelector('#t-type');
+  const groupSel = m.root.querySelector('#t-group');
+  const box = m.root.querySelector('#t-v4');
+  const cur = () => ({
+    ...t0,
+    type: typeSel.value,
+    group: groupSel.value,
+    partner: m.root.querySelector('#t-partner').value.trim(),
+    amount: round2(parseEUAmount(m.root.querySelector('#t-amount').value)),
+    category: m.root.querySelector('#t-category').value.trim(),
+    date: euToISO(m.root.querySelector('#t-date').value.trim()) || t0.date,
+    pdv: pdvOverride || undefined,
+    dest: dest || undefined,
+    proj: dest === 'projekt' ? proj : undefined,
+  });
+  let prihodProj = t0.proj || '';
+  let prihodPdv = '';
+  const renderV4 = () => {
+    const t = cur();
+    if (t.type === 'Trošak' && (t.group === 'Tekući' || t.group === 'Nepredviđeni')) {
+      const pm = trxPdvMode({ ...t, pdv: pdvOverride || undefined });
+      const P = PDV_PRESETS[pm.mode];
+      const izvorTxt = pm.izvor === 'racun' ? 'odabrano za ovaj račun' : (pm.izvor === 'pravilo' ? `pravilo partnera: ${pm.pravilo.naziv}` : 'nema pravila za partnera: ništa se ne vraća');
+      const tAuto = { ...t, dest: undefined, proj: undefined };
+      const auto = trxDestInfo(tAuto);
+      const destEff = dest || (auto.dest === 'projekt-bez' ? 'projekt' : auto.dest);
+      const autoTxt = !dest ? (auto.izvor === 'pravilo' ? `prema pravilu partnera (${auto.pravilo.naziv})` : (auto.izvor === 'kategorija' ? `prema kategoriji ${t.category}` : 'tekući i nepredviđeni troškovi idu u režiju')) : 'odabrano za ovu transakciju';
+      const uc = v4KamoUcinak(t, destEff, proj, ulMj, pm.mode);
+      box.innerHTML = `
+        <div class="v4-pdvrow">
+          <div style="min-width: 0;">
+            <div class="field-label">PDV na računu</div>
+            <div style="margin-top: 3px;"><span class="pill pdv25">${P.naziv}</span> <span style="font-size: 12.5px; color: var(--muted);">${escapeHtml(izvorTxt)}</span></div>
+            <div class="mono" style="font-size: 12.5px; color: var(--ink-2); margin-top: 4px;">${t.amount > 0 ? `PDV na računu ${eur(pdvSplit(t.amount, pm.mode).pdvRac, 2)} · vraća se ${eur(pdvSplit(t.amount, pm.mode).vraca, 2)} · trošak ${eur(pdvSplit(t.amount, pm.mode).trosak, 2)}` : ''}</div>
+          </div>
+          <button type="button" class="btn btn-sm" data-v4="pdv-open">${pdvOpen ? 'Sakrij' : 'Promijeni za ovaj račun'}</button>
+        </div>
+        ${pdvOpen ? `<div class="field" style="margin-top: 8px;"><select class="select" id="t-pdv"><option value="">Prema pravilu partnera</option>${PDV_ORDER.map(id => `<option value="${id}" ${pdvOverride === id ? 'selected' : ''}>${PDV_PRESETS[id].naziv}</option>`).join('')}</select></div>` : ''}
+        <div class="field" style="margin-top: 16px;">
+          <span class="field-label">Kamo ide trošak <span style="font-weight: 400;">· ${escapeHtml(autoTxt)}</span></span>
+          <div class="v4-opts">${v4OptsHtml(KAMO_OPCIJE.slice(0, 1), destEff)}
+            <div class="field" style="padding: 0 0 4px 44px;"><select class="select" id="t-proj"><option value="">Odaberi projekt</option>${projekti.map(n => `<option value="${escapeHtml(n)}" ${proj === n ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}</select></div>
+            ${v4OptsHtml(KAMO_OPCIJE.slice(1, 3), destEff)}
+            ${destEff === 'ulaganje' ? `<div class="field" style="padding: 0 0 4px 44px; max-width: 280px;"><label class="field-label">Broj mjeseci</label><input class="input num" id="t-ulmj" type="number" min="1" max="240" step="1" value="${ulMj}"></div>` : ''}
+            ${v4OptsHtml(KAMO_OPCIJE.slice(3), destEff)}
+          </div>
+        </div>
+        <div class="v4-effect ${uc.cls}"><div class="t">${escapeHtml(uc.title)}</div><div>${escapeHtml(uc.text)}</div></div>`;
+    } else if (t.type === 'Prihod') {
+      const ime = prihodProj && prihodProj !== '__ne__' ? prihodProj : '';
+      const ob = ime && state.obracun ? state.obracun[ime] : null;
+      const postoji = ob && Array.isArray(ob.uplate) ? ob.uplate.find(u => Math.abs((Number(u.amount) || 0) - t.amount) < 0.011 && u.date && Math.abs(dayDiff(u.date, t.date)) <= 10) : null;
+      box.innerHTML = `
+        <div class="grid grid-2" style="gap: 14px; margin-top: 16px;">
+          <div class="field"><label class="field-label">Uplata za projekt</label>
+            <select class="select" id="t-pproj"><option value="">Nije raspoređeno</option>${projekti.map(n => `<option value="${escapeHtml(n)}" ${prihodProj === n ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}<option value="__ne__" ${prihodProj === '__ne__' ? 'selected' : ''}>Nije za projekt</option></select>
+          </div>
+          ${ime && !postoji && ime !== (t0.proj || '') ? `<div class="field"><label class="field-label">PDV na uplati</label><select class="select" id="t-ppdv"><option value="">Kao projekt</option><option value="pdv25" ${prihodPdv === 'pdv25' ? 'selected' : ''}>PDV 25 %</option><option value="ppo" ${prihodPdv === 'ppo' ? 'selected' : ''}>Prijenos porezne obveze</option></select></div>` : ''}
+        </div>
+        <div class="v4-effect neutral"><div>${ime
+          ? (postoji ? `Uplata je već upisana na projektu ${escapeHtml(ime)} (${isoToEU(postoji.date)}).` : (ime === (t0.proj || '') ? `Uplata je raspoređena na projekt ${escapeHtml(ime)}.` : `Spremanjem se uplata dodaje na projekt ${escapeHtml(ime)}.`))
+          : (prihodProj === '__ne__' ? 'Nije prihod projekta (npr. povrat, odšteta, prodaja vozila).' : 'Uplata još nije ni na jednom projektu. Prihod projekta računa se iz uplata na projektu.')}</div></div>`;
+    } else {
+      box.innerHTML = '';
+    }
+  };
+  renderV4();
+  typeSel.addEventListener('change', () => {
+    if (typeSel.value === 'Prihod') groupSel.value = 'Prihodi';
+    else if (groupSel.value === 'Prihodi') groupSel.value = 'Tekući';
+    renderV4();
+  });
+  groupSel.addEventListener('change', renderV4);
+  m.root.querySelector('#t-partner').addEventListener('change', renderV4);
+  m.root.querySelector('#t-amount').addEventListener('blur', renderV4);
+  m.root.querySelector('#t-category').addEventListener('change', renderV4);
+  m.root.querySelector('#t-date').addEventListener('blur', renderV4);
+  box.addEventListener('change', e => {
+    const el = e.target;
+    if (el.id === 't-pdv') { pdvOverride = el.value; renderV4(); }
+    else if (el.id === 't-proj') { proj = el.value; dest = 'projekt'; destTouched = true; renderV4(); }
+    else if (el.id === 't-ulmj') { ulMj = Math.max(1, Math.round(Number(el.value) || 60)); renderV4(); }
+    else if (el.id === 't-pproj') { prihodProj = el.value; renderV4(); }
+    else if (el.id === 't-ppdv') { prihodPdv = el.value; }
+  });
+  box.addEventListener('click', e => {
+    const b = e.target.closest('[data-opt]');
+    if (b) { dest = b.dataset.opt; destTouched = true; renderV4(); return; }
+    const p = e.target.closest('[data-v4="pdv-open"]');
+    if (p) { pdvOpen = !pdvOpen; renderV4(); }
+  });
+
+  m.root.addEventListener('click', async e => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    if (btn.dataset.act === 'cancel') m.close();
+    else if (btn.dataset.act === 'del') {
+      if (confirm('Obrisati ovu transakciju?')) {
+        const snapDel = JSON.stringify(state);
+        state.trx[activeMonth].splice(idx, 1);
+        if (await saveData()) { m.close(); renderTrx(); }
+        else state = JSON.parse(snapDel);
+      }
+    } else if (btn.dataset.act === 'save') {
+      const dateEU = m.root.querySelector('#t-date').value.trim();
+      const date = euToISO(dateEU);
+      if (!date) {
+        toast('Datum mora biti u formatu DD/MM/YYYY', 'error');
+        m.root.querySelector('#t-date').classList.add('invalid');
+        m.root.querySelector('#t-date').focus();
+        return;
+      }
+      const newT = {
+        ...t0,
+        date,
+        type: typeSel.value,
+        partner: m.root.querySelector('#t-partner').value.trim(),
+        amount: parseEUAmount(m.root.querySelector('#t-amount').value),
+        category: m.root.querySelector('#t-category').value.trim(),
+        group: groupSel.value,
+      };
+      if (!newT.partner) { toast('Unesi partnera', 'error'); return; }
+      if (!newT.amount) { toast('Unesi iznos', 'error'); return; }
+      const snap = JSON.stringify(state);
+      if (newT.type === 'Trošak') {
+        if (pdvOverride) newT.pdv = pdvOverride; else delete newT.pdv;
+        if (destTouched) {
+          if (dest === 'projekt' && !proj) { toast('Odaberi projekt ili drugo odredište', 'error'); return; }
+          newT.dest = dest;
+          if (dest === 'projekt') newT.proj = proj; else delete newT.proj;
+          if (dest === 'ulaganje') newT.ulaganjeMj = ulMj; else delete newT.ulaganjeMj;
+        }
+      } else if (newT.type === 'Prihod') {
+        const prev = t0.proj || '';
+        if (prihodProj !== prev) {
+          if (!prihodProj) delete newT.proj;
+          else if (prihodProj === '__ne__') newT.proj = '__ne__';
+          else {
+            newT.proj = prihodProj;
+            const rec = ensureObracunRec(prihodProj);
+            const postoji = rec.uplate.find(u => Math.abs((Number(u.amount) || 0) - newT.amount) < 0.011 && u.date && Math.abs(dayDiff(u.date, date)) <= 10);
+            if (!postoji) {
+              const u = { date, amount: round2(newT.amount), note: newT.partner, created: nowISO(), izTroskova: true };
+              if (prihodPdv) u.pdv = prihodPdv;
+              rec.uplate.push(u);
+            }
+          }
+        }
+      }
+      const targetMonth = date.slice(0, 7);
+      ensureMonth(targetMonth);
+      if (idx !== null) {
+        if (targetMonth !== activeMonth) {
+          state.trx[activeMonth].splice(idx, 1);
+          state.trx[targetMonth].push(newT);
+        } else {
+          state.trx[activeMonth][idx] = newT;
+        }
+      } else {
+        state.trx[targetMonth].push(newT);
+      }
+      if (await saveData()) {
+        m.close();
+        if (targetMonth !== activeMonth) {
+          activeMonth = targetMonth;
+          toast(`Transakcija u ${monthLabel(targetMonth)}`, 'success');
+        }
+        rerenderActive();
+      } else {
+        state = JSON.parse(snap);
+      }
+    }
+  });
+}
+
+/* ============================================================
+   v4 · PROJEKTI · PREGLED (upozorenja, firma mjesečno, usporedba)
+   ============================================================ */
+function v4Upozorenja(all) {
+  const out = [];
+  const pb = prihodiBezProjekta();
+  if (pb.length) {
+    const sum = round2(pb.reduce((a, x) => a + (Number(x.t.amount) || 0), 0));
+    const top = pb.slice().sort((a, b) => (Number(b.t.amount) || 0) - (Number(a.t.amount) || 0)).slice(0, 2).map(x => `${escapeHtml(x.t.partner)} ${eur(Number(x.t.amount) || 0, 2)} (${isoToEU(x.t.date)})`);
+    out.push({ k: 'uplate', html: `<strong>Uplate bez projekta:</strong> ${pb.length} ${hrPlural(pb.length, 'uplata', 'uplate', 'uplata')} · ${eur(sum, 2)}${top.length ? ' · najveće: ' + top.join(', ') : ''}`, btn: 'Rasporedi' });
+  }
+  const tb = troskoviBezProjekta();
+  if (tb.length) {
+    const lst = tb.slice(0, 3).map(x => `${escapeHtml(x.t.partner)} ${eur(Number(x.t.amount) || 0, 2)} (${isoToEU(x.t.date)})`).join(', ');
+    out.push({ k: 'troskovi', html: `<strong>Trošak za projekt, a projekt nije odabran:</strong> ${lst}${tb.length > 3 ? ` i još ${tb.length - 3}` : ''}`, btn: 'Rasporedi' });
+  }
+  const hidden = new Set(state.hiddenProjects || []);
+  const bezPdv = all.filter(p => p.name !== PROJ_NONE && p.name !== PROJ_GODISNJI && !hidden.has(p.name) && p.pdvNijeOdabran && p.uplateInfo.length);
+  if (bezPdv.length) out.push({ k: 'pdv', html: `<strong>PDV na uplatama nije odabran:</strong> ${bezPdv.map(p => escapeHtml(p.name)).join(', ')}. Zarada se ne prikazuje dok se ne odabere je li račun s PDV-om ili s prijenosom porezne obveze.`, btn: 'Odaberi', proj: bezPdv[0].name });
+  const nep = Object.keys(all.firma || {}).filter(k => all.firma[k].nepotpun && all.firma[k].satiOdradeni > 0).sort();
+  if (nep.length) out.push({ k: 'nepotpun', html: `<strong>${nep.map(monthLabel).join(', ')}:</strong> u evidenciji je manje od pola mogućih sati, pa zarada projekata iz ${nep.length === 1 ? 'tog mjeseca' : 'tih mjeseci'} čeka. Ako je bio godišnji, upiši datume u Registar.`, btn: 'Otvori Registar' });
+  const velike = [];
+  for (const mk of Object.keys(state.trx || {}).sort()) (state.trx[mk] || []).forEach((t, i) => { if (!t.dest && Number(t.amount) >= 10000 && trxDestInfo(t).dest === 'rezija') velike.push({ t, mk, i }); });
+  if (velike.length) {
+    const v = velike[0];
+    out.push({ k: 'velika', html: `<strong>Velika stavka u režiji:</strong> ${escapeHtml(v.t.partner)} ${eur(Number(v.t.amount) || 0, 2)} (${isoToEU(v.t.date)})${velike.length > 1 ? ` i još ${velike.length - 1}` : ''}. Diže trošak firme za ${monthAccHr(v.mk)}; ako je to vozilo ili stroj, označi je kao ulaganje, a ako nije plaćeno s računa firme, isključi je.`, btn: 'Uredi', ref: { mk: v.mk, i: v.i } });
+  }
+  return out;
+}
+
+function v4FirmaHtml(all) {
+  const f = all.firma || {};
+  const keys = Object.keys(f).filter(k => f[k].satiUk > 0 && !f[k].inProgress).sort();
+  if (!keys.length) return '';
+  const n = keys.length;
+  const avg = (fn) => keys.reduce((a, k) => a + fn(f[k]), 0) / n;
+  const place = avg(x => x.rad), fiksni = avg(x => x.rezija), uk = place + fiksni;
+  const totC = keys.reduce((a, k) => a + f[k].rad + f[k].rezija, 0);
+  const totH = keys.reduce((a, k) => a + f[k].satiUk, 0);
+  const poSatu = totH > 0 ? totC / totH : 0;
+  // Fiksni troškovi po vrsti (bruto) za podnaslov
+  const grupe = { najam: 0, leasing: 0, gorivo: 0, ostalo: 0 };
+  let vracaUk = 0;
+  for (const k of keys) {
+    const rz = f[k].rez;
+    for (const s of rz.stavke) {
+      const r = praviloZaNaziv(s.t.partner);
+      const g = r && r.id === 'stan' ? 'najam' : r && r.id === 'porsche' ? 'leasing' : r && r.id === 'adria' ? 'gorivo' : 'ostalo';
+      grupe[g] += s.racun;
+    }
+    grupe.ostalo += rz.ulaganja + rz.ocekivanoBruto;
+    vracaUk += rz.ukVraca;
+  }
+  const sub2 = [['najam', grupe.najam], ['leasing', grupe.leasing], ['gorivo', grupe.gorivo], ['ostalo', grupe.ostalo]]
+    .filter(x => x[1] > 0.5).map(([l, v]) => `${l} ${FMT_INT.format(v / n)}`).concat(vracaUk > 0.5 ? [`PDV −${FMT_INT.format(vracaUk / n)}`] : []).join(' · ');
+  const raspon = keys.length === 1 ? monthLabel(keys[0]) : `${monthLabelShort(keys[0]).toLowerCase()} – ${monthLabel(keys[keys.length - 1]).toLowerCase()}`;
+  const imaProcjenu = keys.some(k => f[k].procjena);
+  const rows = keys.map(k => {
+    const x = f[k];
+    const chips = [x.nepotpun ? '<span class="pill amber" title="Manje od pola mogućih sati">manje od pola sati</span>' : '', x.procjena ? '<span class="pill amber" title="Plaće za taj mjesec još nisu upisane u Troškovima">procjena</span>' : ''].filter(Boolean).join(' ');
+    return `<tr><td>${monthLabelShort(k)} ${chips}</td><td class="num text-right">${eur(x.rad, 2)}</td><td class="num text-right">${eur(x.rezija, 2)}</td><td class="num text-right" style="font-weight: 600;">${eur(x.rad + x.rezija, 2)}</td><td class="num text-right">${fmtQty(x.satiUk)}</td></tr>`;
+  }).join('');
+  return `
+    <div class="card" style="margin-bottom: 24px;">
+      <div class="card-head"><div><div class="card-title">Firma mjesečno</div><div class="card-sub">Prosjek ${raspon} · bez materijala i podizvođača · fiksni troškovi iz Troškova</div></div></div>
+      <div class="kpi-row" style="margin-bottom: 16px;">
+        <div class="kpi-cell"><div class="stat-label">Plaće</div><div class="stat-value">${eur(place, 0)}</div><div class="stat-sub">keš isplate ${FMT_INT.format(avg(x => x.kes))} · službene plaće ${FMT_INT.format(avg(x => x.sluzbeno))}</div></div>
+        <div class="kpi-cell"><div class="stat-label">Fiksni troškovi bez plaća</div><div class="stat-value">${eur(fiksni, 0)}</div><div class="stat-sub">${sub2}</div></div>
+        <div class="kpi-cell" style="background: var(--acc-projects-soft);"><div class="stat-label" style="color: var(--acc-projects);">Ukupno mjesečno</div><div class="stat-value" style="color: #5e3019;">${eur(uk, 0)}</div><div class="stat-sub" style="color: #5e3019;">prag koji projekti moraju pokriti</div></div>
+      </div>
+      <div class="v4-note">Da firma ne bude u minusu, projekti mjesečno trebaju donijeti <strong>${eur(uk, 0)}</strong> nakon materijala i podizvođača, odnosno <strong>${eur(poSatu, 2)}</strong> za svaki sat rada.</div>
+      <div class="table-scroll">
+        <table class="table v4-tbl" style="min-width: 560px;">
+          <thead><tr><th>Mjesec</th><th class="text-right">Plaće</th><th class="text-right">Fiksni bez plaća</th><th class="text-right">Ukupno</th><th class="text-right">Sati</th></tr></thead>
+          <tbody>${rows}</tbody>
+          <tfoot><tr><td>PROSJEK</td><td class="num text-right">${eur(place, 2)}</td><td class="num text-right">${eur(fiksni, 2)}</td><td class="num text-right">${eur(uk, 2)}</td><td class="num text-right">${fmtQty(totH / n)}</td></tr></tfoot>
+        </table>
+      </div>
+      <div style="font-size: 12px; color: var(--muted); margin-top: 10px;">Plaće po mjesecu rada: keš isplate iz Evidencije sati i službene plaće (neto i davanja) iz Troškova, upisane sljedeći mjesec kad se isplaćuju. Fiksni troškovi: Troškovi po mjesecu plaćanja, bez PDV-a koji se vraća, bez kredita, uplata PDV-a, pozajmica i troškova projekata; ulaganja raspoređena po mjesecima.${imaProcjenu ? ' „Procjena": plaće za taj mjesec još nisu upisane u Troškovima, uzet je iznos iz Prognoze.' : ''}</div>
+    </div>`;
+}
+
+function v4UsporedbaHtml(all) {
+  const hidden = new Set(state.hiddenProjects || []);
+  const real = all.filter(p => p.name !== PROJ_NONE && p.name !== PROJ_GODISNJI && !hidden.has(p.name));
+  const byAct = (a, b) => (b.lastActivity || '').localeCompare(a.lastActivity || '') || a.name.localeCompare(b.name, 'hr');
+  const s = real.filter(p => p.uplateInfo.length || p.pdvRezim).sort(byAct);
+  const bez = real.filter(p => !(p.uplateInfo.length || p.pdvRezim)).sort((a, b) => b.sati - a.sati);
+  if (!s.length && !bez.length) return '';
+  const pill = (p) => p.pdvRezim === 'pdv25' ? '<span class="pill pdv25">PDV 25 %</span>' : p.pdvRezim === 'ppo' ? '<span class="pill ppo">Prijenos</span>' : '<span class="pill red">nije odabrano</span>';
+  const rows = s.map(p => {
+    let prihod, nakon = '', zarada = '';
+    if (!p.uplateInfo.length) prihod = '<span style="color: var(--muted);">nema uplata</span>';
+    else if (p.pdvNijeOdabran) { prihod = `<span style="color: var(--muted);">${FMT_INT.format(p.naplaceno)} uplaćeno</span>`; nakon = '<span style="color: #7a5c10;">čeka PDV</span>'; zarada = nakon; }
+    else {
+      prihod = FMT_INT.format(p.prihod);
+      nakon = FMT_INT.format(p.nakonMR);
+      zarada = p.zaradaBlocked ? '<span style="color: #7a5c10;">čeka evidenciju</span>' : `<span style="font-weight: 600; color: var(${p.zarada < 0 ? '--negative' : '--positive'});">${p.zarada >= 0 ? '+' : '−'}${FMT_INT.format(Math.abs(p.zarada))}</span>`;
+      if (p.zaradaBlocked) nakon = '<span style="color: #7a5c10;">čeka evidenciju</span>';
+    }
+    return `<tr data-proj="${escapeHtml(p.name)}" style="cursor: pointer;"><td style="font-weight: 600;">${escapeHtml(p.name)}</td><td>${p.zakljucen ? '<span class="pill gray">završen</span>' : '<span class="pill brown">tekući</span>'}</td><td>${pill(p)}</td><td class="num text-right">${prihod}</td><td class="num text-right">${nakon}</td><td class="num text-right">${zarada}</td><td class="num text-right">${fmtQty(p.sati)}</td></tr>`;
+  }).join('');
+  const top = bez.filter(p => p.sati > 0).slice(0, 3).map(p => `${escapeHtml(p.name)} ${fmtQty(p.sati)} h`);
+  return `
+    <div class="card" style="margin-bottom: 24px;">
+      <div class="card-head"><div><div class="card-title">Usporedba projekata</div><div class="card-sub">Sve bez PDV-a · zarada nakon materijala i rada, pa nakon režije · klik na projekt otvara detalj</div></div></div>
+      ${s.length ? `
+      <div class="table-scroll">
+        <table class="table v4-tbl" style="min-width: 820px;">
+          <thead><tr><th>Projekt</th><th>Status</th><th>PDV na uplatama</th><th class="text-right">Prihod</th><th class="text-right">Nakon materijala i rada</th><th class="text-right">Zarada</th><th class="text-right">Sati</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>` : ''}
+      ${bez.length ? `<div style="font-size: 13px; color: var(--ink-2); margin-top: 12px;">Još ${bez.length} ${hrPlural(bez.length, 'projekt', 'projekta', 'projekata')} bez uplata${top.length ? ', među njima ' + top.join(', ').replace(/, ([^,]*)$/, ' i $1') : ''}.</div>` : ''}
+    </div>`;
+}
+
+function renderProjektiPregledHtml(all) {
+  const upoz = v4Upozorenja(all);
+  const warnHtml = upoz.length ? `
+    <div class="v4-warn">
+      ${upoz.map((w, i) => `<div class="v4-warn-row"><span>${w.html}</span>${w.btn ? `<button type="button" class="btn btn-sm" data-upoz="${i}">${w.btn}</button>` : ''}</div>`).join('')}
+    </div>` : '';
+  return warnHtml + v4FirmaHtml(all) + v4UsporedbaHtml(all);
+}
+
+function bindProjektiPregled(panel, all) {
+  const upoz = v4Upozorenja(all);
+  panel.querySelectorAll('[data-upoz]').forEach(b => b.addEventListener('click', () => {
+    const w = upoz[parseInt(b.dataset.upoz, 10)];
+    if (!w) return;
+    if (w.k === 'uplate') rasporediUplateModal();
+    else if (w.k === 'troskovi') rasporediTroskoveModal();
+    else if (w.k === 'pdv') { activeProject = w.proj; renderProjects(); window.scrollTo(0, 0); }
+    else if (w.k === 'nepotpun') setTab('registar');
+    else if (w.k === 'velika' && w.ref) { activeMonth = w.ref.mk; setTab('trx'); if (isAdmin) trxModal(w.ref.i); }
+  }));
+  panel.querySelectorAll('tr[data-proj]').forEach(tr => tr.addEventListener('click', () => {
+    activeProject = tr.dataset.proj;
+    renderProjects();
+    window.scrollTo(0, 0);
+  }));
+}
+
+/* ---------- Rasporedi uplate kupaca na projekte ---------- */
+function rasporediUplateModal() {
+  if (!isAdmin) { toast('Za raspoređivanje aktiviraj admin mod', 'error'); return; }
+  const list = prihodiBezProjekta();
+  if (!list.length) { toast('Sve uplate su raspoređene', 'success'); return; }
+  const imena = projektImena();
+  const html = `
+    <div class="modal-title">Uplate bez projekta</div>
+    <div class="modal-sub">Uplate kupaca iz Troškova koje nisu ni na jednom projektu. Odabrani projekt dobiva uplatu, a „Nije za projekt" je za povrate, odštete i prodaju imovine. Što ne odabereš, ostaje kako je.</div>
+    <div class="table-scroll">
+      <table class="table v4-tbl" style="min-width: 760px;">
+        <thead><tr><th>Datum</th><th>Partner</th><th class="text-right">Iznos</th><th>Projekt</th><th>PDV na uplati</th></tr></thead>
+        <tbody>
+          ${list.map((x, n) => `
+          <tr>
+            <td class="col-date num">${isoToEU(x.t.date)}</td>
+            <td><strong>${escapeHtml(x.t.partner)}</strong>${x.t.category ? `<div class="v4-sub">${escapeHtml(x.t.category)}</div>` : ''}</td>
+            <td class="num text-right" style="font-weight: 600;">${eur(Number(x.t.amount) || 0, 2)}</td>
+            <td><select class="select" data-r-proj="${n}" style="min-width: 180px;"><option value="">Ostavi</option>${imena.map(nm => `<option value="${escapeHtml(nm)}">${escapeHtml(nm)}</option>`).join('')}<option value="__ne__">Nije za projekt</option></select></td>
+            <td><select class="select" data-r-pdv="${n}"><option value="">Kao projekt</option><option value="pdv25">PDV 25 %</option><option value="ppo">Prijenos porezne obveze</option></select></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-act="cancel">Odustani</button>
+      <button class="btn btn-primary" data-act="save">Spremi raspored</button>
+    </div>`;
+  const m = modal(html, { xl: true });
+  m.root.addEventListener('click', async e => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    if (btn.dataset.act === 'cancel') { m.close(); return; }
+    const snap = JSON.stringify(state);
+    let n = 0;
+    list.forEach((x, k) => {
+      const v = m.root.querySelector(`[data-r-proj="${k}"]`).value;
+      if (!v) return;
+      n++;
+      if (v === '__ne__') { x.t.proj = '__ne__'; return; }
+      const pdv = m.root.querySelector(`[data-r-pdv="${k}"]`).value;
+      const rec = ensureObracunRec(v);
+      const u = { date: x.t.date, amount: round2(Number(x.t.amount) || 0), note: x.t.partner, created: nowISO(), izTroskova: true };
+      if (pdv) u.pdv = pdv;
+      rec.uplate.push(u);
+      x.t.proj = v;
+    });
+    if (!n) { m.close(); return; }
+    if (await saveData()) { m.close(); toast(`Raspoređeno: ${n} ${hrPlural(n, 'uplata', 'uplate', 'uplata')}`, 'success'); rerenderActive(); }
+    else state = JSON.parse(snap);
+  });
+}
+
+/* ---------- Rasporedi troškove koji idu na projekt ---------- */
+function rasporediTroskoveModal() {
+  if (!isAdmin) { toast('Za raspoređivanje aktiviraj admin mod', 'error'); return; }
+  const list = troskoviBezProjekta();
+  if (!list.length) { toast('Svi troškovi su raspoređeni', 'success'); return; }
+  const imena = projektImena();
+  const html = `
+    <div class="modal-title">Troškovi za projekt</div>
+    <div class="modal-sub">Podizvođači i slični troškovi idu na projekt na kojem su radili. Ako projekt već ima ručno upisan isti trošak, ne broji se dvaput.</div>
+    <div class="table-scroll">
+      <table class="table v4-tbl" style="min-width: 640px;">
+        <thead><tr><th>Datum</th><th>Partner</th><th class="text-right">Iznos</th><th>Kamo ide</th></tr></thead>
+        <tbody>
+          ${list.map((x, n) => `
+          <tr>
+            <td class="col-date num">${isoToEU(x.t.date)}</td>
+            <td><strong>${escapeHtml(x.t.partner)}</strong></td>
+            <td class="num text-right" style="font-weight: 600;">${eur(Number(x.t.amount) || 0, 2)}</td>
+            <td><select class="select" data-r-dest="${n}" style="min-width: 200px;"><option value="">Ostavi</option>${imena.map(nm => `<option value="p:${escapeHtml(nm)}">${escapeHtml(nm)}</option>`).join('')}<option value="rezija">Režija</option><option value="ne">Ne ide u projekte</option></select></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-act="cancel">Odustani</button>
+      <button class="btn btn-primary" data-act="save">Spremi raspored</button>
+    </div>`;
+  const m = modal(html, { xl: true });
+  m.root.addEventListener('click', async e => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    if (btn.dataset.act === 'cancel') { m.close(); return; }
+    const snap = JSON.stringify(state);
+    let n = 0;
+    list.forEach((x, k) => {
+      const v = m.root.querySelector(`[data-r-dest="${k}"]`).value;
+      if (!v) return;
+      n++;
+      if (v.startsWith('p:')) { x.t.dest = 'projekt'; x.t.proj = v.slice(2); }
+      else { x.t.dest = v; delete x.t.proj; }
+    });
+    if (!n) { m.close(); return; }
+    if (await saveData()) { m.close(); toast(`Raspoređeno: ${n} ${hrPlural(n, 'trošak', 'troška', 'troškova')}`, 'success'); rerenderActive(); }
+    else state = JSON.parse(snap);
+  });
+}
+
+/* ---------- Prognoza: stavka s partnerom po kojem se prepoznaje u Troškovima ---------- */
+function forecastModal(idx = null) {
+  ensureForecast();
+  const it = idx !== null ? state.forecast[idx] : { label: '', category: 'Ostalo', amount: 0, validFrom: activeMonth, validTo: '', note: '', active: true };
+  if (!it) return;
+  const allCats = Array.from(new Set([...FORECAST_CATEGORIES, ...(state.forecast || []).map(x => x.category).filter(Boolean)])).sort();
+  const allLabels = Array.from(new Set((state.forecast || []).map(x => x.label).filter(Boolean))).sort();
+  const autoTok = prognozaTokens({ ...it, partner: '' }).filter(x => x[0] !== '=').join(', ');
+  const html = `
+    <div class="modal-title">${idx !== null ? 'Uredi' : 'Nova'} prognozu</div>
+    <div class="modal-sub">Tekući trošak koji se ponavlja</div>
+    <div class="grid grid-2" style="gap: 14px;">
+      <div class="field" style="grid-column: 1 / -1;">
+        <label class="field-label">Naziv stavke</label>
+        <input class="input" id="fc-label" list="fc-labels" value="${escapeHtml(it.label || '')}" placeholder="Npr. Porsche Leasing">
+        <datalist id="fc-labels">${allLabels.map(l => `<option value="${escapeHtml(l)}"></option>`).join('')}</datalist>
+      </div>
+      <div class="field">
+        <label class="field-label">Kategorija</label>
+        <input class="input" id="fc-category" list="fc-cats" value="${escapeHtml(it.category || '')}" placeholder="Npr. Leasing">
+        <datalist id="fc-cats">${allCats.map(c => `<option value="${escapeHtml(c)}"></option>`).join('')}</datalist>
+      </div>
+      <div class="field">
+        <label class="field-label">Iznos mjesečno (€)</label>
+        <input class="input num" id="fc-amount" type="text" inputmode="decimal" placeholder="0,00" value="${formatEUAmount(it.amount)}">
+      </div>
+      <div class="field">
+        <label class="field-label">Vrijedi od (mjesec)</label>
+        <input class="input" id="fc-from" type="month" value="${it.validFrom || ''}">
+        <div class="field-hint">YYYY-MM. Prazno = oduvijek.</div>
+      </div>
+      <div class="field">
+        <label class="field-label">Vrijedi do (mjesec)</label>
+        <input class="input" id="fc-to" type="month" value="${it.validTo || ''}">
+        <div class="field-hint">YYYY-MM. Prazno = otvoreno (neograničeno).</div>
+      </div>
+      <div class="field" style="grid-column: 1 / -1;">
+        <label class="field-label">Prepoznaj u Troškovima po partneru (opcionalno)</label>
+        <input class="input" id="fc-partner" value="${escapeHtml(it.partner || '')}" placeholder="${escapeHtml(autoTok || 'Npr. Rozic, Zmaric')}">
+        <div class="field-hint">Dijelovi naziva partnera, odvojeni zarezom. Prazno: aplikacija prepozna sama po nazivu stavke${autoTok ? ' (' + escapeHtml(autoTok) + ')' : ''}.</div>
+      </div>
+      <div class="field" style="grid-column: 1 / -1;">
+        <label class="field-label">Napomena (opcionalno)</label>
+        <input class="input" id="fc-note" value="${escapeHtml(it.note || '')}" placeholder="Npr. Aneks ugovora od 1.10.2026.">
+      </div>
+      <div class="field" style="grid-column: 1 / -1;">
+        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+          <input type="checkbox" id="fc-active" ${it.active !== false ? 'checked' : ''} style="width: 18px; height: 18px;">
+          <span>Stavka je aktivna (uključi u izračune)</span>
+        </label>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-act="cancel">Odustani</button>
+      ${idx !== null ? '<button class="btn btn-danger" data-act="del">Obriši</button>' : ''}
+      <button class="btn btn-primary" data-act="save">${idx !== null ? 'Spremi' : 'Dodaj'}</button>
+    </div>
+  `;
+  const m = modal(html);
+  attachEUAmountMask(m.root.querySelector('#fc-amount'));
+  m.root.addEventListener('click', async e => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    if (btn.dataset.act === 'cancel') m.close();
+    else if (btn.dataset.act === 'del') {
+      if (confirm('Obrisati ovu prognoznu stavku?')) {
+        state.forecast.splice(idx, 1);
+        if (await saveData()) { m.close(); renderForecast(); }
+      }
+    } else if (btn.dataset.act === 'save') {
+      const label = m.root.querySelector('#fc-label').value.trim();
+      const amount = parseEUAmount(m.root.querySelector('#fc-amount').value);
+      if (!label) { toast('Unesi naziv stavke', 'error'); return; }
+      if (!amount) { toast('Unesi iznos', 'error'); return; }
+      const validFrom = m.root.querySelector('#fc-from').value || '';
+      const validTo = m.root.querySelector('#fc-to').value || '';
+      if (validFrom && validTo && validFrom > validTo) { toast('„Vrijedi od" mora biti prije „Vrijedi do"', 'error'); return; }
+      const newIt = {
+        ...it,
+        label,
+        category: m.root.querySelector('#fc-category').value.trim() || 'Ostalo',
+        amount,
+        validFrom,
+        validTo,
+        note: m.root.querySelector('#fc-note').value.trim(),
+        active: m.root.querySelector('#fc-active').checked,
+      };
+      const partner = m.root.querySelector('#fc-partner').value.trim();
+      if (partner) newIt.partner = partner; else delete newIt.partner;
+      if (idx !== null) state.forecast[idx] = newIt; else state.forecast.push(newIt);
+      if (await saveData()) {
+        m.close();
+        renderForecast();
+        toast(idx !== null ? 'Stavka ažurirana' : 'Stavka dodana', 'success');
+      }
+    }
+  });
+}
+
+/* ============================================================
+   v4 · POSTAVKE · PDV PRAVILA ZA TROŠKOVE
+   ============================================================ */
+function v4PravilaCardHtml() {
+  const cur = todayISO().slice(0, 7);
+  const months = allMonths().filter(k => k < cur && (state.trx[k] || []).length);
+  let bruto = 0, vraca = 0, ulag = 0;
+  const grupe = {};
+  for (const k of months) {
+    const rz = rezijaZaMjesec(k);
+    bruto += rz.bruto; vraca += rz.vraca; ulag += rz.ulaganja;
+    for (const s of rz.stavke) {
+      const r = praviloZaNaziv(s.t.partner);
+      const key = r ? 'r:' + r.id : 'k:' + (s.t.category || 'Ostalo');
+      if (!grupe[key]) grupe[key] = { naziv: r ? r.naziv : (s.t.category || 'Ostalo') + ' · bez pravila', bruto: 0, vraca: 0, pdv: r ? r.pdv : 'bez', r };
+      grupe[key].bruto += s.racun; grupe[key].vraca += s.vraca;
+    }
+  }
+  if (ulag > 0.005) grupe['ulag'] = { naziv: 'Ulaganja · raspoređeno po mjesecima', bruto: ulag, vraca: 0, pdv: null };
+  const n = Math.max(1, months.length);
+  const raspon = months.length ? (months.length === 1 ? monthLabel(months[0]) : `${monthLabelShort(months[0]).toLowerCase()} – ${monthLabel(months[months.length - 1]).toLowerCase()}`) : '';
+  const ukBruto = round2(bruto + ulag);
+  const vrsteRows = Object.values(grupe).sort((a, b) => b.bruto - a.bruto).map(g => `
+    <tr><td><strong>${escapeHtml(g.naziv)}</strong></td><td class="num text-right">${eur(g.bruto, 2)}</td><td class="num text-right">${eur(g.bruto / n, 0)}</td><td>${g.pdv === null ? '' : (g.vraca > 0.005 ? `${PDV_PRESETS[g.pdv] ? PDV_PRESETS[g.pdv].vraca : ''} · ${v4Minus(g.vraca)}` : 'ništa')}</td></tr>`).join('');
+  const sekcija = (vrsta, naslov, sub) => {
+    const rules = pdvPravila().map((r, i) => ({ r, i })).filter(x => (x.r.vrsta || 'tekuci') === vrsta);
+    if (!rules.length) return '';
+    return `
+      <div class="pick-h" style="margin-top: 22px;">${naslov} <span style="text-transform: none; letter-spacing: 0;">· ${sub}</span></div>
+      <div class="table-scroll">
+        <table class="table v4-tbl" style="min-width: 900px;">
+          <thead><tr><th>Partner</th><th>Što je</th><th>PDV na računu</th><th>Vraća se</th><th>Kamo ide</th><th>Napomena</th><th>Status</th></tr></thead>
+          <tbody>
+            ${rules.map(({ r, i }) => {
+              const P = PDV_PRESETS[r.pdv] || PDV_PRESETS.bez;
+              const st = PRAVILO_STATUS[r.status] || PRAVILO_STATUS.provjeriti;
+              return `<tr${isAdmin ? ` data-pravilo="${i}" style="cursor: pointer;${r.active === false ? ' opacity: .5;' : ''}" title="Klik za uređivanje"` : (r.active === false ? ' style="opacity: .5;"' : '')}><td style="font-weight: 600;">${escapeHtml(r.naziv)}</td><td>${escapeHtml(r.sto || '')}</td><td>${P.stopa ? P.stopa + ' %' : 'bez PDV-a'}</td><td>${P.vraca}</td><td>${KAMO_NAZIV[r.kamo] || 'režija'}</td><td style="color: var(--ink-2);">${escapeHtml(r.napomena || '')}</td><td><span class="pill ${st.cls}">${st.naziv}</span></td></tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  };
+  return `
+    <div class="card" style="margin-bottom: 24px;" id="v4-pravila">
+      <div class="card-head">
+        <div>
+          <div class="card-title">PDV pravila za troškove</div>
+          <div class="card-sub">Za svakog partnera jednom se zapiše kakav je PDV na njegovim računima i kamo ide trošak. Iz toga aplikacija računa koliko PDV-a firma vraća i za toliko umanjuje režiju.</div>
+        </div>
+        ${isAdmin ? '<button class="btn btn-primary btn-sm" id="pravilo-add">+ Novo pravilo</button>' : ''}
+      </div>
+      ${months.length ? `
+      <div class="kpi-row" style="margin-bottom: 10px;">
+        <div class="kpi-cell"><div class="stat-label">Fiksni troškovi bez plaća · ${escapeHtml(raspon)}</div><div class="stat-value">${eur(ukBruto, 2)}</div><div class="stat-sub">iz Troškova · ${months.length} ${hrPlural(months.length, 'mjesec', 'mjeseca', 'mjeseci')}</div></div>
+        <div class="kpi-cell"><div class="stat-label">PDV koji se vraća</div><div class="stat-value">${v4Minus(vraca)}</div><div class="stat-sub">prema pravilima partnera</div></div>
+        <div class="kpi-cell"><div class="stat-label">U režiju</div><div class="stat-value">${eur(round2(ukBruto - vraca), 2)}</div><div class="stat-sub">mjesečno ${eur((ukBruto - vraca) / n, 0)}</div></div>
+      </div>
+      <div style="font-size: 12.5px; color: var(--muted); margin-bottom: 8px;">Bez plaća, kredita, uplata PDV-a, poreza na dobit, pozajmica i troškova stavljenih na projekt. Partneri bez pravila računaju se s PDV-om koji se ne vraća.</div>
+      <div class="table-scroll">
+        <table class="table v4-tbl" style="min-width: 700px;">
+          <thead><tr><th>Vrsta</th><th class="text-right">${escapeHtml(raspon)}</th><th class="text-right">Mjesečno</th><th>PDV se vraća</th></tr></thead>
+          <tbody>${vrsteRows}</tbody>
+          <tfoot>
+            <tr><td>Ukupno s PDV-om</td><td class="num text-right">${eur(ukBruto, 2)}</td><td class="num text-right">${eur(ukBruto / n, 0)}</td><td></td></tr>
+            <tr><td>PDV koji se vraća</td><td class="num text-right">${v4Minus(vraca)}</td><td class="num text-right">${v4Minus(vraca / n, 0)}</td><td></td></tr>
+            <tr><td>U režiju</td><td class="num text-right">${eur(round2(ukBruto - vraca), 2)}</td><td class="num text-right">${eur((ukBruto - vraca) / n, 0)}</td><td></td></tr>
+          </tfoot>
+        </table>
+      </div>` : ''}
+      ${sekcija('tekuci', 'Tekući troškovi', 'pravilo vrijedi za svaki račun tog partnera')}
+      ${sekcija('nepredvideni', 'Nepredviđeni troškovi', 'idu u režiju, osim ako se stave na projekt ili u ulaganje')}
+      <div class="pick-h" style="margin-top: 22px;">Ne ulazi u režiju</div>
+      <div class="v4-ne">
+        <div><strong>Uplata PDV-a i akontacija poreza na dobit</strong><span>PDV je već oduzet od uplata investitora, a porez na dobit plaća se iz zarade.</span></div>
+        <div><strong>Plaće i davanja</strong><span>U rad idu iz Evidencije sati i plaća upisanih u Troškovima (kategorija Plaće), za mjesec za koji je plaća.</span></div>
+        <div><strong>Kredit</strong><span>Glavnica nije trošak, nego vraćanje posuđenog novca. Kamate na prekoračenje i naknade banke jesu režija.</span></div>
+        <div><strong>Pozajmice</strong><span>Posuđeni i vraćeni novac. U Cashflowu da, u projektima ne.</span></div>
+        <div><strong>Podizvođači i troškovi na projektu</strong><span>Idu na projekt na kojem su radili, ne u režiju.</span></div>
+        <div><strong>Ulaganja · vozilo, stroj</strong><span>Ne idu odjednom, nego se raspodijele na mjesece korištenja.</span></div>
+        <div><strong>Uplate STO-u</strong><span>Materijal ide na projekte iz STO računa. Uplata samo smanjuje dug u STO stanju.</span></div>
+      </div>
+    </div>`;
+}
+
+function bindPravilaCard(panel) {
+  if (!isAdmin) return;
+  panel.querySelector('#pravilo-add')?.addEventListener('click', () => praviloModal(null));
+  panel.querySelectorAll('[data-pravilo]').forEach(tr => tr.addEventListener('click', () => praviloModal(parseInt(tr.dataset.pravilo, 10))));
+}
+
+function praviloModal(idx) {
+  const lista = pdvPravila();
+  const r = idx !== null ? lista[idx] : { id: 'p' + Date.now().toString(36), naziv: '', sto: '', match: [], pdv: 'p25', kamo: 'rezija', kat: '', grupa: 'Nepredviđeni', status: 'provjeriti', napomena: '', vrsta: 'nepredvideni' };
+  if (!r) return;
+  const sel = (id, opts, cur) => `<select class="select" id="${id}">${opts.map(([v, l]) => `<option value="${v}" ${cur === v ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
+  const html = `
+    <div class="modal-title">${idx !== null ? 'Uredi pravilo' : 'Novo pravilo'}</div>
+    <div class="modal-sub">Vrijedi za svaku transakciju partnera čiji naziv sadrži neki od upisanih tekstova.</div>
+    <div class="grid grid-2" style="gap: 14px;">
+      <div class="field" style="grid-column: 1 / -1;"><label class="field-label">Partner (naziv za prikaz)</label><input class="input" id="pr-naziv" value="${escapeHtml(r.naziv || '')}" placeholder="Npr. Adria Oil"></div>
+      <div class="field" style="grid-column: 1 / -1;"><label class="field-label">Prepoznaj po (dijelovi naziva, odvojeni zarezom)</label><input class="input" id="pr-match" value="${escapeHtml((r.match || []).join(', '))}" placeholder="Npr. adria oil"><div class="field-hint">Mala i velika slova i kvačice nisu važne. Kratki tekst (do 3 slova) ili tekst s „=" na početku traži se kao cijela riječ.</div></div>
+      <div class="field"><label class="field-label">Što je</label><input class="input" id="pr-sto" value="${escapeHtml(r.sto || '')}" placeholder="Npr. Gorivo"></div>
+      <div class="field"><label class="field-label">Kategorija u Troškovima</label><input class="input" id="pr-kat" value="${escapeHtml(r.kat || '')}" placeholder="Npr. Gorivo"></div>
+      <div class="field"><label class="field-label">PDV na računu</label>${sel('pr-pdv', PDV_ORDER.map(id => [id, PDV_PRESETS[id].naziv]), r.pdv)}</div>
+      <div class="field"><label class="field-label">Kamo ide trošak</label>${sel('pr-kamo', [['rezija', 'Režija'], ['projekt', 'Na projekt'], ['ulaganje', 'Ulaganje'], ['ne', 'Ne ide u projekte']], r.kamo)}</div>
+      <div class="field"><label class="field-label">Vrsta troška</label>${sel('pr-grupa', [['Tekući', 'Tekući'], ['Nepredviđeni', 'Nepredviđeni']], r.grupa)}</div>
+      <div class="field"><label class="field-label">Status</label>${sel('pr-status', Object.entries(PRAVILO_STATUS).map(([k, v]) => [k, v.naziv]), r.status)}</div>
+      <div class="field" style="grid-column: 1 / -1;"><label class="field-label">Napomena</label><input class="input" id="pr-napomena" value="${escapeHtml(r.napomena || '')}"></div>
+      <div class="field" style="grid-column: 1 / -1;"><label style="display: flex; align-items: center; gap: 10px; cursor: pointer;"><input type="checkbox" id="pr-active" ${r.active !== false ? 'checked' : ''} style="width: 18px; height: 18px;"><span>Pravilo je aktivno</span></label></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-act="cancel">Odustani</button>
+      <button class="btn btn-primary" data-act="save">Spremi</button>
+    </div>`;
+  const m = modal(html, { wide: true });
+  m.root.addEventListener('click', async e => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    if (btn.dataset.act === 'cancel') { m.close(); return; }
+    const naziv = m.root.querySelector('#pr-naziv').value.trim();
+    const match = m.root.querySelector('#pr-match').value.split(',').map(s => s.trim()).filter(Boolean);
+    if (!naziv) { toast('Upiši naziv partnera', 'error'); return; }
+    if (!match.length) { toast('Upiši barem jedan tekst za prepoznavanje', 'error'); return; }
+    const snap = JSON.stringify(state.pdvPravila === undefined ? null : state.pdvPravila);
+    if (!Array.isArray(state.pdvPravila) || !state.pdvPravila.length) state.pdvPravila = DEFAULT_PDV_PRAVILA.map(x => ({ ...x, match: (x.match || []).slice() }));
+    const novo = {
+      ...r,
+      naziv, match,
+      sto: m.root.querySelector('#pr-sto').value.trim(),
+      kat: m.root.querySelector('#pr-kat').value.trim(),
+      pdv: m.root.querySelector('#pr-pdv').value,
+      kamo: m.root.querySelector('#pr-kamo').value,
+      grupa: m.root.querySelector('#pr-grupa').value,
+      status: m.root.querySelector('#pr-status').value,
+      napomena: m.root.querySelector('#pr-napomena').value.trim(),
+      active: m.root.querySelector('#pr-active').checked,
+    };
+    novo.vrsta = novo.grupa === 'Tekući' ? 'tekuci' : 'nepredvideni';
+    if (idx !== null) state.pdvPravila[idx] = novo; else state.pdvPravila.push(novo);
+    if (await saveData()) { m.close(); toast('Pravilo spremljeno', 'success'); renderSettings(); }
+    else state.pdvPravila = JSON.parse(snap) || undefined;
+  });
+}
+
 async function boot() {
   injectExtraCss();
   injectObracunCss();
   injectWorkerPeriodCss();
+  injectV4Css();
   // Restore admin from localStorage if exists
   if (API.pin) {
     try {
