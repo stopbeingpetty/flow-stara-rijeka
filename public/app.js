@@ -904,7 +904,7 @@ function computeWorkerStats(monthKey) {
     }
     // Fiksna isplata (npr. Dragan): ako je postavljena (> 0) u Postavke → Radnici,
     // radnik SVAKI mjesec ima točno taj iznos za isplatu. Sati, marenda i prijevoz
-    // tada ne ulaze u obračun keš isplate (sve je uključeno u fiksni iznos).
+    // tada ne ulaze u obračun isplate (sve je uključeno u fiksni iznos).
     const isFixedPayout = (Number(w.fiksnaIsplata) || 0) > 0;
     const fiksnaIsplata = pr(w.fiksnaIsplata);
     // Za isplatu = Dodatno + Prijevoz (Marenda je već u Dodatno; Stan ide preko firme, NE ovdje).
@@ -1303,7 +1303,7 @@ function renderHours() {
       <div class="card-head">
         <div>
           <div class="card-title">Sažetak isplate · ${monthLabelShort(activeMonth)}</div>
-          <div class="card-sub">Po radniku · fiksne osobe (Postavke → Fiksni rad) ulaze u Mj. trošak, bez sati i bez keš isplate</div>
+          <div class="card-sub">Po radniku · fiksne osobe (Postavke → Fiksni rad) ulaze u Mj. trošak, bez sati i bez iznosa za isplatu</div>
         </div>
         <div class="page-actions">
           <span class="pill green">Σ Za isplatu: <strong style="margin-left: 4px;">${eur(stats.reduce((a, s) => a + s.zaIsplatu, 0), 0)}</strong></span>
@@ -4426,7 +4426,6 @@ function renderProjects() {
         <h1 class="page-title">Projekti</h1>
       </div>
     </div>
-    ${renderProjektiPregledHtml(all)}
     <div style="font-size: 13.5px; color: var(--muted); margin: -12px 0 14px;">Odaberi grupu, zatim projekt</div>
 
     <div class="pick-list">
@@ -4475,6 +4474,7 @@ function renderProjects() {
       </div>
     </div>
     ` : ''}
+    ${renderProjektiPregledHtml(all)}
   `;
 
   panel.querySelectorAll('.pick-row[data-group]').forEach(row => row.addEventListener('click', () => {
@@ -7744,6 +7744,7 @@ function injectV4Css() {
     .v4-effect.warn .t { color: #7a5c10; }
 
     /* Projekti · pregled */
+    .v4-pregled { margin-top: 28px; }
     .v4-warn { background: #fbf6e8; border: 1px solid #e3d3a4; border-radius: var(--radius-lg); padding: 4px 18px; margin-bottom: 24px; }
     .v4-warn-row { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 12px 0; border-bottom: 1px solid #ecdfb8; font-size: 14px; color: var(--ink-2); }
     .v4-warn-row:last-child { border-bottom: none; }
@@ -7939,8 +7940,8 @@ function prognozaStatusZaMjesec(key) {
 }
 
 /* ---------- Plaće za mjesec rada ----------
-   Keš dio: „Za isplatu" iz Evidencije sati i stan, po radniku.
-   Službeni dio (neto i davanja): Plaće iz Troškova (kategorija Plaće) upisane sljedeći mjesec,
+   Iz Evidencije sati: „Za isplatu" i stan, po radniku.
+   Plaće (neto i davanja): iz Troškova (kategorija Plaće) upisane sljedeći mjesec,
    kad se isplaćuju; npr. isplata 11/08 je plaća za srpanj. Dok nisu upisane, uzimaju se stavke
    plaća iz Prognoze, a bez njih fiksno radnika i fiksni rad iz Postavki. */
 const trxJePlaca = (t) => !!t && t.type === 'Trošak' && /^(place|placa|davanja|doprinosi)$/.test(srNorm(t.category));
@@ -7960,28 +7961,28 @@ function placeZaMjesec(key, razmjerno = false) {
     const done = workdaysInMonth(key, today);
     frac = total > 0 ? Math.max(done, 1) / total : 1;
   }
-  let kes = 0, fiksno = 0;
+  let evid = 0, fiksno = 0;
   for (const st of stats) {
     const w = workers.find(x => x.name === st.name);
     const f = (inProgress && razmjerno) ? workerElapsedShare(w, key, today) : 1;
-    kes += ((Number(st.zaIsplatu) || 0) + (Number(st.stan) || 0)) * f;
+    evid += ((Number(st.zaIsplatu) || 0) + (Number(st.stan) || 0)) * f;
     fiksno += (Number(st.fiksno) || 0) * f;
   }
-  let sluzbeno = inProgress ? null : placeIzTroskova(key);
+  let place = inProgress ? null : placeIzTroskova(key);
   let izvor = 'troskovi';
-  if (sluzbeno === null) {
+  if (place === null) {
     const fc = forecastItemsForMonth(key).filter(prognozaJePlaca);
     if (fc.length) {
-      sluzbeno = fc.reduce((a, it) => a + (Number(it.amount) || 0), 0) * frac;
+      place = fc.reduce((a, it) => a + (Number(it.amount) || 0), 0) * frac;
       izvor = 'prognoza';
     } else {
       const wNames = new Set(workers.map(w => srNorm(w.name)));
       const fiksniRad = getFixedLabor().filter(f => !wNames.has(srNorm(f.name))).reduce((a, f) => a + (Number(f.amount) || 0), 0);
-      sluzbeno = fiksno + fiksniRad * frac;
+      place = fiksno + fiksniRad * frac;
       izvor = 'postavke';
     }
   }
-  return { kes, sluzbeno, izvor, rad: kes + sluzbeno, frac, inProgress };
+  return { evid, place, izvor, rad: evid + place, frac, inProgress };
 }
 
 /* ---------- Režija mjeseca: fiksni troškovi bez plaća, bez PDV-a koji se vraća ---------- */
@@ -8025,7 +8026,7 @@ function rezijaZaMjesec(key) {
 }
 
 /* Stvarni trošak mjeseca (v4):
-   rad    = plaće za mjesec rada: keš isplate iz Evidencije i službene plaće (neto i davanja)
+   rad    = plaće i davanja za mjesec rada (Evidencija sati i plaće iz Troškova)
    režija = Tekući i Nepredviđeni troškovi koji nisu plaće, PDV, porez, kredit, pozajmica,
             ulaganje ni trošak projekta, umanjeni za PDV koji se vraća; ulaganja po mjesecima.
    Tekući kalendarski mjesec ide razmjerno proteklim radnim danima. */
@@ -8034,15 +8035,15 @@ function computeMonthCosts(key) {
   const rz = rezijaZaMjesec(key);
   const frac = pl.frac;
   return {
-    kes: pl.kes, sluzbeno: pl.sluzbeno, sluzbenoIzvor: pl.izvor, rad: pl.rad,
+    evid: pl.evid, place: pl.place, placeIzvor: pl.izvor, rad: pl.rad,
     rezBruto: rz.ukBruto * frac, rezVraca: rz.ukVraca * frac, rezija: rz.neto * frac,
     rez: rz, frac, inProgress: pl.inProgress,
   };
 }
 
 /* ---------- Cashflow: plaće se broje jednom ----------
-   Stupac Radnici = plaće po mjesecu rada (keš isplate iz Evidencije i službene plaće).
-   Plaće upisane u Troškovima su službeni dio tih istih plaća, pa se ne zbrajaju još jednom u Tekuće. */
+   Stupac Radnici = plaće i davanja po mjesecu rada (Evidencija sati i plaće iz Troškova).
+   Plaće upisane u Troškovima već su u stupcu Radnici, pa se ne zbrajaju još jednom u Tekuće. */
 function computeCashflowSummary() {
   const months = allMonths();
   const summary = {};
@@ -8072,8 +8073,8 @@ function cashflowPlaceNapomenaHtml(summary, months) {
   const izv = (k) => (summary[k].radniciRazrada || {}).izvor;
   const prog = months.filter(k => izv(k) === 'prognoza');
   const post = months.filter(k => izv(k) === 'postavke');
-  const dio = ['Radnici = plaće po mjesecu rada: keš isplate iz Evidencije sati i službene plaće (neto i davanja).',
-    'Službene plaće uzimaju se iz Troškova (kategorija Plaće) upisanih sljedeći mjesec, kad se isplaćuju, pa se ne zbrajaju još jednom u Tekuće.'];
+  const dio = ['Radnici = plaće i davanja po mjesecu rada, prema Evidenciji sati i plaćama iz Troškova (kategorija Plaće).',
+    'Plaće se upisuju sljedeći mjesec, kad se isplate, a ovdje se broje u mjesec rada, pa se ne zbrajaju još jednom u Tekuće.'];
   if (prog.length) dio.push(`Za ${mj(prog)} plaće još nisu upisane, pa je uzet iznos plaća iz Prognoze.`);
   if (post.length) dio.push(`Za ${mj(post)} nema ni Prognoze, pa je uzeto fiksno radnika i fiksni rad iz Postavki.`);
   return `<div style="font-size: 12.5px; color: var(--muted); margin-top: 12px;">${escapeHtml(dio.join(' '))}</div>`;
@@ -8115,7 +8116,7 @@ function uplataInfo(u, rezimProjekta) {
 function computeProjectsData() {
   const map = {};
   const ensure = (name) => {
-    if (!map[name]) map[name] = { name, materijal: 0, rad: 0, rez: 0, radKes: 0, radSluzbeno: 0, rezBruto: 0, rezVraca: 0, radIsplata: 0, sati: 0, months: {}, workers: {}, stoCount: 0, lastActivity: '', daysSet: new Set(), nepotpunSet: new Set(), inProgressSet: new Set(), procjenaSet: new Set() };
+    if (!map[name]) map[name] = { name, materijal: 0, rad: 0, rez: 0, radEvid: 0, radPlace: 0, rezBruto: 0, rezVraca: 0, radIsplata: 0, sati: 0, months: {}, workers: {}, stoCount: 0, lastActivity: '', daysSet: new Set(), nepotpunSet: new Set(), inProgressSet: new Set(), procjenaSet: new Set() };
     return map[name];
   };
   const mEnsure = (p, k) => {
@@ -8169,16 +8170,16 @@ function computeProjectsData() {
     const satiUk = satiOdradeni + godH;
     const per = (v) => satiUk > 0 ? v / satiUk : 0;
     const rRad = per(c.rad), rRez = per(c.rezija);
-    const rKes = per(c.kes), rSl = per(c.sluzbeno);
+    const rEv = per(c.evid), rPl = per(c.place);
     const rRezBruto = per(c.rezBruto), rRezVraca = per(c.rezVraca);
     const kapacitet = capacityHoursInMonth(k, c.inProgress ? today : null);
     const nepotpun = !c.inProgress && kapacitet > 0 && satiUk < 0.5 * kapacitet && (c.rad + c.rezija) > 0.005;
-    const procjena = c.sluzbenoIzvor !== 'troskovi' || c.inProgress;
+    const procjena = c.placeIzvor !== 'troskovi' || c.inProgress;
     firma[k] = { ...c, satiOdradeni, godH, satiUk, kapacitet, nepotpun, procjena };
 
     const dodaj = (p, hh) => {
       p.rad += hh * rRad; p.rez += hh * rRez; p.sati += hh;
-      p.radKes += hh * rKes; p.radSluzbeno += hh * rSl;
+      p.radEvid += hh * rEv; p.radPlace += hh * rPl;
       p.rezBruto += hh * rRezBruto; p.rezVraca += hh * rRezVraca;
       const mm = mEnsure(p, k);
       mm.rad += hh * rRad; mm.rez += hh * rRez; mm.sati += hh;
@@ -8208,7 +8209,7 @@ function computeProjectsData() {
     if (satiUk <= 0 && (c.rad + c.rezija) > 0.005) {
       const n = ensure(PROJ_NONE);
       n.rad += c.rad; n.rez += c.rezija;
-      n.radKes += c.kes; n.radSluzbeno += c.sluzbeno;
+      n.radEvid += c.evid; n.radPlace += c.place;
       n.rezBruto += c.rezBruto; n.rezVraca += c.rezVraca;
       const nm = mEnsure(n, k);
       nm.rad += c.rad; nm.rez += c.rezija; nm.udio = 100;
@@ -8235,7 +8236,7 @@ function computeProjectsData() {
     p.nepotpunMonths = Array.from(p.nepotpunSet).sort(); delete p.nepotpunSet;
     p.inProgressMonths = Array.from(p.inProgressSet).sort(); delete p.inProgressSet;
     p.procjenaMonths = Array.from(p.procjenaSet).sort(); delete p.procjenaSet;
-    for (const f of ['rad', 'rez', 'radKes', 'radSluzbeno', 'rezBruto', 'rezVraca']) p[f] = round2(p[f]);
+    for (const f of ['rad', 'rez', 'radEvid', 'radPlace', 'rezBruto', 'rezVraca']) p[f] = round2(p[f]);
 
     const ob = (state.obracun && typeof state.obracun === 'object') ? state.obracun[p.name] : null;
     p.uplate = (ob && Array.isArray(ob.uplate)) ? ob.uplate : [];
@@ -8348,6 +8349,18 @@ const v4NaziviMjeseci = (keys) => {
   if (k.length === 1) return monthGenHr(k[0]);
   return k.map(x => monthLabelShort(x).toLowerCase()).join(', ');
 };
+const v4MjeseciGen = (keys) => {
+  const g = keys.slice().sort().map(monthGenHr);
+  return g.length > 1 ? g.slice(0, -1).join(', ') + ' i ' + g[g.length - 1] : (g[0] || '');
+};
+function v4RadSub(p) {
+  const mj = v4MjeseciGen(p.mjeseciRada || []);
+  return `${fmtQty(p.sati)} h · udio plaća i davanja${mj ? ' ' + mj : ''}`;
+}
+function v4RucniOpis(r) {
+  if (r.note) return r.note;
+  return 'ručni unos bez opisa' + (r.created ? `, upisan ${isoToEU(String(r.created).slice(0, 10))}` : '');
+}
 
 function v4PdvSectionHtml(p) {
   const odabrano = p.pdvRezim;
@@ -8400,13 +8413,13 @@ function v4KpiHtml(p) {
 
 function v4RezijaSub(p) {
   const mj = (p.mjeseciRada || []);
-  const parts = [`fiksni troškovi ${mj.length ? v4NaziviMjeseci(mj) : ''} ${eur(p.rezBruto, 2)}`.replace(/\s+/g, ' ')];
+  const parts = [`fiksni troškovi ${v4MjeseciGen(mj)} ${eur(p.rezBruto, 2)}`.replace(/\s+/g, ' ')];
   if (p.rezVraca > 0.005) parts.push(`PDV koji se vraća ${v4Minus(p.rezVraca)}`);
   if (mj.length === 1 && p.months[mj[0]]) parts.push(`udio ${monthGenHr(mj[0])} ${pct1(p.months[mj[0]].udio)}`);
   return parts.join(' · ');
 }
 function v4OstaloNaziv(p) {
-  const n = p.ostaloStavke.map(x => x.tip === 'rucno' ? (x.r.note || 'ručni unos') : (x.t.partner || 'iz Troškova'));
+  const n = p.ostaloStavke.map(x => x.tip === 'rucno' ? v4RucniOpis(x.r) : (x.t.partner || 'iz Troškova'));
   if (!n.length) return 'nema';
   return n.length <= 2 ? n.join(', ') : n.slice(0, 2).join(', ') + ` i još ${n.length - 2}`;
 }
@@ -8420,7 +8433,7 @@ function v4KaskadaHtml(p) {
       ${row('Prihod bez PDV-a', '', eur(p.prihod, 2))}
       ${row('− Materijal', 'STO, bez PDV-a', v4Minus(p.materijalBezPdv))}
       ${row('− Podizvođači i ostali troškovi', escapeHtml(v4OstaloNaziv(p)), v4Minus(p.ostalo))}
-      ${row('− Rad · sve plaće', `keš isplate ${eur(p.radKes, 2)} · službene plaće, neto i davanja ${eur(p.radSluzbeno, 2)}`, v4Minus(p.rad))}
+      ${row('− Rad · plaće i davanja', escapeHtml(v4RadSub(p)), v4Minus(p.rad))}
       ${row('Zarada nakon materijala i rada', '', v4SignEur(p.nakonMR), ' hl')}
       ${row('− Režija · fiksni troškovi bez plaća', escapeHtml(v4RezijaSub(p)), v4Minus(p.rez))}
       ${blokZarada
@@ -8543,9 +8556,12 @@ function v4TrosakCardHtml(p, isNone) {
   const ost = p.ostaloStavke.map(x => {
     if (x.tip === 'rucno') {
       const pok = x.pokrivene.length ? `<div class="v4-sub">iz Troškova: ${x.pokrivene.map(y => `${dmEU(y.t.date)} ${eur(Number(y.t.amount) || 0, 2)}`).join(' · ')}</div>` : '';
+      const sumPok = round2(x.pokrivene.reduce((a, y) => a + (Number(y.t.amount) || 0), 0));
+      const razlika = x.pokrivene.length > 0 && Math.abs(sumPok - x.racun) > 1
+        ? `<div class="v4-sub" style="color: #7a5c10;">U Troškovima je ${eur(sumPok, 2)}, a ovdje ${eur(x.racun, 2)}. Provjeri koji je iznos točan.</div>` : '';
       return `
         <tr${isAdmin ? ` data-ob-tr-edit="${x.i}" style="cursor: pointer;" title="Klik za uređivanje"` : ''}>
-          <td>${escapeHtml(x.r.note || 'Trošak')}<div class="v4-sub">${isoToEU(x.r.date)} · ${escapeHtml(modeLbl(x.mode))}</div>${pok}</td>
+          <td>${escapeHtml(v4RucniOpis(x.r))}<div class="v4-sub">${isoToEU(x.r.date)} · ${escapeHtml(modeLbl(x.mode))}</div>${pok}${razlika}</td>
           <td class="num text-right">${eur(x.racun, 2)}</td>
           <td class="num text-right" style="color: var(--muted);">${v4Minus(x.vraca)}</td>
           <td class="num text-right" style="font-weight: 600; white-space: nowrap;">${eur(x.trosak, 2)}${isAdmin ? ` <span class="v4-x" data-ob-tr-del="${x.i}" title="Obriši trošak">×</span>` : ''}</td>
@@ -8572,7 +8588,7 @@ function v4TrosakCardHtml(p, isNone) {
           <tbody>
             <tr><td>Materijal · STO<div class="v4-sub">${p.stoCount} ${hrPlural(p.stoCount, 'račun', 'računa', 'računa')} · PDV 25 %</div></td><td class="num text-right">${eur(p.materijal, 2)}</td><td class="num text-right" style="color: var(--muted);">${v4Minus(p.materijalPdv)}</td><td class="num text-right" style="font-weight: 600;">${eur(p.materijalBezPdv, 2)}</td></tr>
             ${ost}
-            <tr><td>Rad · sve plaće<div class="v4-sub">${FMT_INT.format(p.sati)} h · keš isplate i službene plaće</div></td><td></td><td></td><td class="num text-right" style="font-weight: 600;">${eur(p.rad, 2)}</td></tr>
+            <tr><td>Rad · plaće i davanja<div class="v4-sub">${escapeHtml(v4RadSub(p))}</div></td><td></td><td></td><td class="num text-right" style="font-weight: 600;">${eur(p.rad, 2)}</td></tr>
             <tr><td>Režija<div class="v4-sub">${mj.length === 1 && p.months[mj[0]] ? `${pct1(p.months[mj[0]].udio)} ${monthGenHr(mj[0])}` : (mj.length ? escapeHtml(v4NaziviMjeseci(mj)) : 'mjeseci bez evidencije')} · iz Troškova</div></td><td class="num text-right">${eur(p.rezBruto, 2)}</td><td class="num text-right" style="color: var(--muted);">${v4Minus(p.rezVraca)}</td><td class="num text-right" style="font-weight: 600;">${eur(p.rez, 2)}</td></tr>
           </tbody>
           <tfoot><tr><td>TROŠAK UKUPNO</td><td></td><td></td><td class="num text-right">${eur(p.trosak, 2)}</td></tr></tfoot>
@@ -8730,7 +8746,7 @@ function renderProjectDetail(p) {
       ${v4TrosakCardHtml(p, false)}
     </div>`}
     ${(!isNone && hasNapl && !p.pdvNijeOdabran) ? v4PdvCardHtml(p) : ''}
-    ${isNone ? '' : `<p class="proj-formula" style="margin: 0 0 24px;">Prihod = uplaćeno − PDV na uplatama (PDV 25 %: uplata ÷ 1,25; prijenos porezne obveze: cijela uplata). Rad = sve plaće za mjesec rada: keš isplate iz Evidencije sati i službene plaće (neto i davanja) iz Troškova, u udjelu mjeseca prema satima projekta. Režija = fiksni troškovi bez plaća iz Troškova (tekući i nepredviđeni koji nisu na projektu), bez PDV-a koji se vraća, u istom udjelu. Zarada nakon materijala i rada = prihod − materijal − ostali troškovi − rad. Zarada = zarada nakon materijala i rada − režija. Marža = zarada ÷ prihod.</p>`}
+    ${isNone ? '' : `<p class="proj-formula" style="margin: 0 0 24px;">Prihod = uplaćeno − PDV na uplatama (PDV 25 %: uplata ÷ 1,25; prijenos porezne obveze: cijela uplata). Rad = plaće i davanja za mjesec rada, u udjelu sati projekta u tom mjesecu. Režija = fiksni troškovi bez plaća iz Troškova (tekući i nepredviđeni koji nisu na projektu), bez PDV-a koji se vraća, u istom udjelu. Zarada nakon materijala i rada = prihod − materijal − ostali troškovi − rad. Zarada = zarada nakon materijala i rada − režija. Marža = zarada ÷ prihod.</p>`}
 
     <div class="card" style="margin-bottom: 24px;">
       <div class="card-head"><div><div class="card-title">Trošak po mjesecima</div><div class="card-sub">Materijal bez PDV-a, rad i režija kroz vrijeme</div></div></div>
@@ -8776,7 +8792,7 @@ function renderProjectDetail(p) {
             <tfoot><tr><td>UKUPNO</td><td class="num text-right"><strong>${FMT_INT.format(p.sati)}</strong></td><td></td><td class="num text-right"><strong>${eur(p.rad, 0)}</strong></td><td class="num text-right"><strong>${eur(p.rez, 0)}</strong></td><td class="num text-right"><strong>${eur(p.rad + p.rez, 0)}</strong></td></tr></tfoot>
           </table>
         </div>`}
-        <div class="proj-formula">Rad = udio × sve plaće tog mjeseca (keš isplate i službene plaće). Režija = udio × fiksni troškovi bez plaća tog mjeseca, bez PDV-a koji se vraća. Ništa nije prosjek: svaki mjesec nosi svoj stvarni trošak, pa kišni i prazni dani poskupljuju sat mjeseca u kojem su se dogodili. Isplaćeno radnicima po satnici za ove sate: ${eur(p.radIsplata, 0)}.</div>
+        <div class="proj-formula">Rad = udio × plaće i davanja tog mjeseca. Režija = udio × fiksni troškovi bez plaća tog mjeseca, bez PDV-a koji se vraća. Ništa nije prosjek: svaki mjesec nosi svoj stvarni trošak, pa kišni i prazni dani poskupljuju sat mjeseca u kojem su se dogodili. Isplaćeno radnicima po satnici za ove sate: ${eur(p.radIsplata, 0)}.</div>
       </div>
     </div>
 
@@ -9012,8 +9028,11 @@ function obTrosakModal(projName, idx = null) {
       if (!date) { toast('Datum mora biti u formatu DD/MM/YYYY', 'error'); dateInp.classList.add('invalid'); dateInp.focus(); return; }
       const racun = round2(parseEUAmount(amountInp.value));
       if (!(racun > 0)) { toast('Unesi iznos računa', 'error'); amountInp.focus(); return; }
+      const noteInp = m.root.querySelector('#ot-note');
+      const note = noteInp.value.trim();
+      if (!note) { toast('Upiši dobavljača i opis troška', 'error'); noteInp.classList.add('invalid'); noteInp.focus(); return; }
       const s = pdvSplit(racun, mode);
-      const newT = { ...t, date, iznosRacuna: racun, pdv: mode, amount: s.trosak, note: m.root.querySelector('#ot-note').value.trim() };
+      const newT = { ...t, date, iznosRacuna: racun, pdv: mode, amount: s.trosak, note };
       if (!newT.created) newT.created = nowISO();
       const snapshot = JSON.stringify(list);
       if (idx !== null) list[idx] = newT; else list.push(newT);
@@ -9351,7 +9370,7 @@ function trxModal(idx = null) {
 }
 
 /* ============================================================
-   v4 · PROJEKTI · PREGLED (upozorenja, firma mjesečno, usporedba)
+   v4 · PROJEKTI · PREGLED (firma mjesečno, usporedba, obavijesti)
    ============================================================ */
 function v4Upozorenja(all) {
   const out = [];
@@ -9371,11 +9390,20 @@ function v4Upozorenja(all) {
   if (bezPdv.length) out.push({ k: 'pdv', html: `<strong>PDV na uplatama nije odabran:</strong> ${bezPdv.map(p => escapeHtml(p.name)).join(', ')}. Zarada se ne prikazuje dok se ne odabere je li račun s PDV-om ili s prijenosom porezne obveze.`, btn: 'Odaberi', proj: bezPdv[0].name });
   const nep = Object.keys(all.firma || {}).filter(k => all.firma[k].nepotpun && all.firma[k].satiOdradeni > 0).sort();
   if (nep.length) out.push({ k: 'nepotpun', html: `<strong>${nep.map(monthLabel).join(', ')}:</strong> u evidenciji je manje od pola mogućih sati, pa zarada projekata iz ${nep.length === 1 ? 'tog mjeseca' : 'tih mjeseci'} čeka. Ako je bio godišnji, upiši datume u Registar.`, btn: 'Otvori Registar' });
+  const bezOpisa = [];
+  for (const p of all) {
+    if (p.name === PROJ_NONE || p.name === PROJ_GODISNJI || hidden.has(p.name)) continue;
+    for (const r of (p.troskoviRucni || [])) if (!String(r.note || '').trim()) bezOpisa.push({ p, r });
+  }
+  if (bezOpisa.length) {
+    const lst = bezOpisa.slice(0, 3).map(x => `${escapeHtml(x.p.name)} ${eur(Number(x.r.iznosRacuna) || Number(x.r.amount) || 0, 2)}${x.r.created ? ` (upisan ${isoToEU(String(x.r.created).slice(0, 10))})` : ''}`).join(', ');
+    out.push({ k: 'bezopisa', html: `<strong>Trošak na projektu bez opisa:</strong> ${lst}${bezOpisa.length > 3 ? ` i još ${bezOpisa.length - 3}` : ''}. Upiši što je to ili ga obriši.`, btn: 'Otvori', proj: bezOpisa[0].p.name });
+  }
   const velike = [];
   for (const mk of Object.keys(state.trx || {}).sort()) (state.trx[mk] || []).forEach((t, i) => { if (!t.dest && Number(t.amount) >= 10000 && trxDestInfo(t).dest === 'rezija') velike.push({ t, mk, i }); });
   if (velike.length) {
     const v = velike[0];
-    out.push({ k: 'velika', html: `<strong>Velika stavka u režiji:</strong> ${escapeHtml(v.t.partner)} ${eur(Number(v.t.amount) || 0, 2)} (${isoToEU(v.t.date)})${velike.length > 1 ? ` i još ${velike.length - 1}` : ''}. Diže trošak firme za ${monthAccHr(v.mk)}; ako je to vozilo ili stroj, označi je kao ulaganje, a ako nije plaćeno s računa firme, isključi je.`, btn: 'Uredi', ref: { mk: v.mk, i: v.i } });
+    out.push({ k: 'velika', html: `<strong>Velika stavka u režiji:</strong> ${escapeHtml(v.t.partner)} ${eur(Number(v.t.amount) || 0, 2)} (${isoToEU(v.t.date)})${velike.length > 1 ? ` i još ${velike.length - 1}` : ''}. Diže trošak firme za ${monthAccHr(v.mk)}; ako je to vozilo ili stroj, označi je kao ulaganje, a ako nije trošak firme, isključi je.`, btn: 'Uredi', ref: { mk: v.mk, i: v.i } });
   }
   return out;
 }
@@ -9416,7 +9444,7 @@ function v4FirmaHtml(all) {
     <div class="card" style="margin-bottom: 24px;">
       <div class="card-head"><div><div class="card-title">Firma mjesečno</div><div class="card-sub">Prosjek ${raspon} · bez materijala i podizvođača · fiksni troškovi iz Troškova</div></div></div>
       <div class="kpi-row" style="margin-bottom: 16px;">
-        <div class="kpi-cell"><div class="stat-label">Plaće</div><div class="stat-value">${eur(place, 0)}</div><div class="stat-sub">keš isplate ${FMT_INT.format(avg(x => x.kes))} · službene plaće ${FMT_INT.format(avg(x => x.sluzbeno))}</div></div>
+        <div class="kpi-cell"><div class="stat-label">Plaće i davanja</div><div class="stat-value">${eur(place, 0)}</div><div class="stat-sub">prosjek po mjesecu rada</div></div>
         <div class="kpi-cell"><div class="stat-label">Fiksni troškovi bez plaća</div><div class="stat-value">${eur(fiksni, 0)}</div><div class="stat-sub">${sub2}</div></div>
         <div class="kpi-cell" style="background: var(--acc-projects-soft);"><div class="stat-label" style="color: var(--acc-projects);">Ukupno mjesečno</div><div class="stat-value" style="color: #5e3019;">${eur(uk, 0)}</div><div class="stat-sub" style="color: #5e3019;">prag koji projekti moraju pokriti</div></div>
       </div>
@@ -9428,7 +9456,7 @@ function v4FirmaHtml(all) {
           <tfoot><tr><td>PROSJEK</td><td class="num text-right">${eur(place, 2)}</td><td class="num text-right">${eur(fiksni, 2)}</td><td class="num text-right">${eur(uk, 2)}</td><td class="num text-right">${fmtQty(totH / n)}</td></tr></tfoot>
         </table>
       </div>
-      <div style="font-size: 12px; color: var(--muted); margin-top: 10px;">Plaće po mjesecu rada: keš isplate iz Evidencije sati i službene plaće (neto i davanja) iz Troškova, upisane sljedeći mjesec kad se isplaćuju. Fiksni troškovi: Troškovi po mjesecu plaćanja, bez PDV-a koji se vraća, bez kredita, uplata PDV-a, pozajmica i troškova projekata; ulaganja raspoređena po mjesecima.${imaProcjenu ? ' „Procjena": plaće za taj mjesec još nisu upisane u Troškovima, uzet je iznos iz Prognoze.' : ''}</div>
+      <div style="font-size: 12px; color: var(--muted); margin-top: 10px;">Plaće i davanja po mjesecu rada: plaće upisane u Troškovima sljedeći mjesec, kad se isplate, broje se u mjesec rada. Fiksni troškovi: Troškovi po mjesecu plaćanja, bez PDV-a koji se vraća, bez kredita, uplata PDV-a, pozajmica i troškova projekata; ulaganja raspoređena po mjesecima.${imaProcjenu ? ' „Procjena": plaće za taj mjesec još nisu upisane u Troškovima, uzet je iznos iz Prognoze.' : ''}</div>
     </div>`;
 }
 
@@ -9470,10 +9498,11 @@ function v4UsporedbaHtml(all) {
 function renderProjektiPregledHtml(all) {
   const upoz = v4Upozorenja(all);
   const warnHtml = upoz.length ? `
+    <div class="pick-h">Obavijesti</div>
     <div class="v4-warn">
       ${upoz.map((w, i) => `<div class="v4-warn-row"><span>${w.html}</span>${w.btn ? `<button type="button" class="btn btn-sm" data-upoz="${i}">${w.btn}</button>` : ''}</div>`).join('')}
     </div>` : '';
-  return warnHtml + v4FirmaHtml(all) + v4UsporedbaHtml(all);
+  return `<div class="v4-pregled">${v4FirmaHtml(all)}${v4UsporedbaHtml(all)}${warnHtml}</div>`;
 }
 
 function bindProjektiPregled(panel, all) {
@@ -9483,7 +9512,7 @@ function bindProjektiPregled(panel, all) {
     if (!w) return;
     if (w.k === 'uplate') rasporediUplateModal();
     else if (w.k === 'troskovi') rasporediTroskoveModal();
-    else if (w.k === 'pdv') { activeProject = w.proj; renderProjects(); window.scrollTo(0, 0); }
+    else if (w.k === 'pdv' || w.k === 'bezopisa') { activeProject = w.proj; renderProjects(); window.scrollTo(0, 0); }
     else if (w.k === 'nepotpun') setTab('registar');
     else if (w.k === 'velika' && w.ref) { activeMonth = w.ref.mk; setTab('trx'); if (isAdmin) trxModal(w.ref.i); }
   }));
@@ -9896,7 +9925,7 @@ async function boot() {
   }
 
   // Fiksna isplata po radniku: ako je > 0, radnik SVAKI mjesec ima točno taj iznos
-  // za isplatu (keš), bez obzira na sate i marendu. Jednokratni seed za Dragana
+  // za isplatu, bez obzira na sate i marendu. Jednokratni seed za Dragana
   // (900 €, njegov dogovor); kasnije se uređuje u Postavke → Radnici.
   // Kao i ostali seedovi: u Blob se sprema tek pri prvoj admin izmjeni.
   for (const w of (state.settings.workers || [])) {
