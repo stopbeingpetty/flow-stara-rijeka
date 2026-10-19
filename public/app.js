@@ -499,7 +499,7 @@ function attachEUDateMask(input) {
 function parseEUAmount(str) {
   if (str === null || str === undefined) return 0;
   if (typeof str === 'number') return str;
-  let s = String(str).trim().replace(/[\s€]/g, '');
+  let s = String(str).trim().replace(/[\s€]/g, '').replace(/[\u2212\u2012\u2013]/g, '-');
   if (!s) return 0;
   const hasComma = s.includes(',');
   const hasDot = s.includes('.');
@@ -548,7 +548,7 @@ function attachEUAmountMask(input, opts = {}) {
   input.addEventListener('input', e => {
     // Dopusti samo brojke, jednu zarezu, jednu točku, minus na početku
     let v = e.target.value;
-    v = v.replace(/[^\d,\.\-]/g, '');
+    v = v.replace(/[\u2212\u2012\u2013]/g, '-').replace(/[^\d,\.\-]/g, '');
     // Minus samo na poziciji 0
     v = v.replace(/(?!^)-/g, '');
     // Maks jedan zarez
@@ -3007,7 +3007,11 @@ async function extractPdfRows(file) {
    od 5 znamenki prelomi se u dva retka ("12729-01-" pa "91").
    Redak se čita s desna (iznosi su najpouzdaniji) i provjerava se:
    količina × cijena × (1 − rabat) ≈ iznos. Ništa se ne preskače potiho: redak koji
-   počinje šifrom artikla, a ne da se pročitati, ide u pregled označen za provjeru. */
+   počinje šifrom artikla, a ne da se pročitati, ide u pregled označen za provjeru.
+   Knjižno odobrenje (povrat paleta i sl.) nema stupac PDV-a:
+   "08017-001 Euro-Paletten 2 -2.00 kom 21,50 -43,00" · šifra · naziv · broj pakiranja ·
+   količina + jedinica · cijena · iznos bez PDV-a. Količina i iznosi su negativni, a stopa
+   PDV-a čita se iz retka "Osnovica za PDV 25%". Ukupno s PDV-om: "UKUPAN IZNOS ODOBRENJA". */
 const INV_UNIT_RE = /^(m2|m3|mm|cm|m|kom|kg|g|t|l|lit|pal|kpl|set|par|h)$/i;
 const INV_MONEY_RE = /^-?\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?$/;
 const INV_SKIP_RE = /^(Broj\b|Naziv artikla|pakir\.|Račun\b|OIB kupca|Sto Ges|STARA RIJEKA|Mavrinci|Ulica |Telefon|www\.|info\.|HR - |Oznaka operatera|Sjedište|Trgovack|Trgovačk|MBS|IBAN|Poziv na broj|Po otpremnici|Sredstvo|Valuta|Obrada dokumenta|Mjesto i datum|Voditelj|Temeljni|Molimo|Poštovani|godine|U slučaju|Hvala|Stranica|Zagreb|\d{5} )/;
@@ -3062,10 +3066,15 @@ function tryParseInvoiceItemRow(line) {
   const netStrict = INV_NET_RE.test(toks[n - 1]);
   if (!netStrict && !INV_EU_NUM_RE.test(toks[n - 1])) return null;
   const net = invNum(toks[n - 1], 'eu');
-  const vatPct = invNum(toks[n - 2], 'eu');
-  if (vatPct === null || vatPct < 0 || vatPct > 30) return null;
-  const variants = [{ priceAt: n - 3, rabatAt: -1 }];
-  if (n >= 6 && INV_EU_NUM_RE.test(toks[n - 4]) && INV_EU_NUM_RE.test(toks[n - 3])) variants.push({ priceAt: n - 4, rabatAt: n - 3 });
+  const vatCand = invNum(toks[n - 2], 'eu');
+  const vatOk = vatCand !== null && vatCand >= 0 && vatCand <= 30;
+  const variants = [];
+  if (vatOk) {
+    variants.push({ priceAt: n - 3, rabatAt: -1, vat: vatCand });
+    if (n >= 6 && INV_EU_NUM_RE.test(toks[n - 4]) && INV_EU_NUM_RE.test(toks[n - 3])) variants.push({ priceAt: n - 4, rabatAt: n - 3, vat: vatCand });
+  }
+  // Redak bez stupca PDV-a (knjižno odobrenje): ... cijena · iznos. Vrijedi samo kad količina × cijena daje iznos.
+  variants.push({ priceAt: n - 2, rabatAt: -1, vat: null, bezPdv: true });
   let best = null;
   for (const v of variants) {
     const price = invNum(toks[v.priceAt], 'eu');
@@ -3087,6 +3096,7 @@ function tryParseInvoiceItemRow(line) {
     let qty = cands.find(q => invCheck(q, price, rabatPct, net, toks[v.priceAt]));
     const ok = qty !== undefined;
     if (!ok) qty = cands[0];
+    if (v.bezPdv && !ok) continue;
     i--;
     if (i >= 1 && INV_PACK_RE.test(toks[i])) i--;   // broj pakiranja
     const prefix = toks.slice(0, i + 1).join(' ').trim();
@@ -3096,7 +3106,7 @@ function tryParseInvoiceItemRow(line) {
     if (!code && !name) continue;
     if (!code && !unit && !ok) continue;
     if (!netStrict && !ok) continue;
-    const cand = { code, name: name || code || 'Stavka', qty, unit, unitPrice: price, rabatPct, vatPct, net, ok };
+    const cand = { code, name: name || code || 'Stavka', qty, unit, unitPrice: price, rabatPct, vatPct: v.vat, net, ok };
     if (!best || (ok && !best.ok)) best = cand;
     if (ok) break;
   }
@@ -3185,7 +3195,8 @@ function invParseHeader(lines, out) {
 }
 
 function parseStoInvoiceRows(rows) {
-  const out = { invoiceNo: '', date: '', items: [], totalNet: null, totalGross: null, unparsed: [] };
+  const out = { invoiceNo: '', date: '', items: [], totalNet: null, totalGross: null, unparsed: [], docType: 'racun' };
+  const pdvStope = new Set();
   const pages = rows && Array.isArray(rows.pages) ? rows.pages : null;
   const lines = [], linePage = [];
   Array.from(rows || []).forEach((raw, i) => {
@@ -3195,6 +3206,7 @@ function parseStoInvoiceRows(rows) {
     linePage.push(pages ? pages[i] : 1);
   });
   invParseHeader(lines, out);
+  if (lines.some(l => /Knji[žz]no odobrenje/i.test(l))) out.docType = 'odobrenje';
   const hasTableHead = lines.some(l => /^Broj artikla\b/.test(l));
 
   let current = null, contCount = 0, inItems = !hasTableHead, pendingHead = null;
@@ -3203,7 +3215,7 @@ function parseStoInvoiceRows(rows) {
     const line = lines[li];
     if (li > 0 && linePage[li] !== linePage[li - 1]) current = null;   // nastavak naziva ne prelazi na drugu stranicu
     if (/^Broj artikla\b/.test(line)) { inItems = true; current = null; continue; }
-    if (/UKUPNO ZA PLATITI/i.test(line)) {
+    if (/UKUPNO ZA PLATITI|UKUPAN IZNOS ODOBRENJA/i.test(line)) {
       const nums = line.match(INV_MONEY_G_RE);
       if (nums) out.totalGross = parseEUAmount(nums[nums.length - 1]);
       flushHead(); current = null; inItems = !hasTableHead; continue;
@@ -3213,7 +3225,11 @@ function parseStoInvoiceRows(rows) {
       if (nums) out.totalNet = parseEUAmount(nums[nums.length - 1]);
       flushHead(); current = null; continue;
     }
-    if (/^(Osnovica za PDV|PDV \d)/.test(line)) { current = null; continue; }
+    if (/^(Osnovica za PDV|PDV \d)/.test(line)) {
+      const om = line.match(/^Osnovica za PDV\s*(\d{1,2}(?:[.,]\d{1,2})?)\s*%/);
+      if (om) pdvStope.add(parseFloat(om[1].replace(',', '.')));
+      current = null; continue;
+    }
     const item = inItems ? tryParseInvoiceItemRow(line) : null;
     if (item) {
       if (pendingHead && invWeakIdentity(item)) { invApplyHead(item, pendingHead); pendingHead = null; }
@@ -3247,6 +3263,13 @@ function parseStoInvoiceRows(rows) {
     current = null;
   }
   flushHead();
+  // Stavke bez stupca PDV-a dobivaju stopu iz retka "Osnovica za PDV"
+  for (const it of out.items) {
+    if (it.vatPct !== null && it.vatPct !== undefined) continue;
+    if (pdvStope.size === 1) it.vatPct = Array.from(pdvStope)[0];
+    else { it.vatPct = 25; if (!it.warn) it.warn = 'Stopa PDV-a nije na retku stavke. Provjeri PDV %.'; }
+  }
+  if (out.docType === 'racun' && ((out.totalGross !== null && out.totalGross < 0) || (out.totalNet !== null && out.totalNet < 0))) out.docType = 'odobrenje';
   if (out.items.length) {
     const sumNet = round2(out.items.reduce((a, it) => a + (Number(it.net) || 0), 0));
     const netOk = out.totalNet !== null && Math.abs(sumNet - out.totalNet) < 0.005;
@@ -3345,24 +3368,26 @@ function stoImportTotalsCheck(parsed, totNet, totGross) {
   const hasNet = !!parsed && parsed.totalNet !== null && parsed.totalNet !== undefined;
   const hasGross = !!parsed && parsed.totalGross !== null && parsed.totalGross !== undefined;
   if (!hasNet && !hasGross) return { ok: null, html: '', text: '' };
+  const odob = parsed.docType === 'odobrenje';
+  const dok = odob ? 'odobrenje' : 'račun', Dok = odob ? 'Odobrenje' : 'Račun', dokDat = odob ? 'odobrenju' : 'računu';
   if (hasNet && Math.abs(totNet - parsed.totalNet) >= 0.005) {
     return {
       ok: false,
-      text: `Račun kaže ${eur(parsed.totalNet, 2)} bez PDV-a, a stavke daju ${eur(totNet, 2)}.`,
-      html: `<span style="color: var(--negative);">⚠ račun kaže ${eur(parsed.totalNet, 2)} bez PDV-a, ovdje je ${eur(totNet, 2)}</span>`,
+      text: `${Dok} kaže ${eur(parsed.totalNet, 2)} bez PDV-a, a stavke daju ${eur(totNet, 2)}.`,
+      html: `<span style="color: var(--negative);">⚠ ${dok} kaže ${eur(parsed.totalNet, 2)} bez PDV-a, ovdje je ${eur(totNet, 2)}</span>`,
     };
   }
   if (hasGross && Math.abs(totGross - parsed.totalGross) >= 0.005) {
     return {
       ok: false,
-      text: `Račun kaže ${eur(parsed.totalGross, 2)} s PDV-om, a stavke daju ${eur(totGross, 2)}.`,
-      html: `<span style="color: var(--negative);">⚠ račun kaže ${eur(parsed.totalGross, 2)} s PDV-om, ovdje je ${eur(totGross, 2)}</span>`,
+      text: `${Dok} kaže ${eur(parsed.totalGross, 2)} s PDV-om, a stavke daju ${eur(totGross, 2)}.`,
+      html: `<span style="color: var(--negative);">⚠ ${dok} kaže ${eur(parsed.totalGross, 2)} s PDV-om, ovdje je ${eur(totGross, 2)}</span>`,
     };
   }
   return {
     ok: true,
     text: '',
-    html: `<span style="color: var(--positive);">✓ ${hasNet && hasGross ? 'odgovara računu, bez PDV-a i s PDV-om' : hasNet ? 'zbroj bez PDV-a odgovara računu' : 'zbroj s PDV-om odgovara računu'}</span>`,
+    html: `<span style="color: var(--positive);">✓ ${hasNet && hasGross ? `odgovara ${dokDat}, bez PDV-a i s PDV-om` : hasNet ? `zbroj bez PDV-a odgovara ${dokDat}` : `zbroj s PDV-om odgovara ${dokDat}`}</span>`,
   };
 }
 /* Je li račun već u napomeni zapisa ("Račun 12729-01-91"); 2729-01-91 nije isto što i 12729-01-91 */
@@ -3397,13 +3422,17 @@ function stoImportReview(parsed) {
 
   const mobile = isMobileView();
   const dateMissing = !parsed.date && !parsed.manual;
+  const odob = parsed.docType === 'odobrenje';
+  const dokGen = odob ? 'odobrenja' : 'računa';
 
   const html = `
-    <div class="modal-title">${parsed.manual ? 'Ručni unos stavki materijala' : 'Pregled računa' + (parsed.invoiceNo ? ' · ' + escapeHtml(parsed.invoiceNo) : '')}</div>
-    <div class="modal-sub">Provjeri stavke i svakoj dodijeli projekt — jedan račun smije ići na više projekata. Iznos s PDV-om se računa automatski.</div>
+    <div class="modal-title">${parsed.manual ? 'Ručni unos stavki materijala' : (odob ? 'Pregled odobrenja' : 'Pregled računa') + (parsed.invoiceNo ? ' · ' + escapeHtml(parsed.invoiceNo) : '')}</div>
+    <div class="modal-sub">${odob
+      ? 'Knjižno odobrenje: iznosi su negativni i umanjuju materijal na projektu i stanje prema STO-u. Svakoj stavci dodijeli projekt na koji se odnosi.'
+      : 'Provjeri stavke i svakoj dodijeli projekt. Jedan račun smije ići na više projekata. Iznos s PDV-om se računa automatski.'}</div>
     <div class="grid grid-2" style="gap: 14px; margin-bottom: 14px;">
-      <div class="field"><label class="field-label">Datum računa</label><input class="input${dateMissing ? ' invalid' : ''}" id="ir-date" type="text" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" value="${parsed.date ? isoToEU(parsed.date) : (parsed.manual ? isoToEU(new Date().toISOString().slice(0, 10)) : '')}">${dateMissing ? '<div class="field-hint" style="color: var(--negative);">Datum nije pročitan s računa. Upiši ga.</div>' : ''}</div>
-      <div class="field"><label class="field-label">Broj računa</label><input class="input" id="ir-no" value="${escapeHtml(parsed.invoiceNo || '')}" placeholder="Npr. 9094-01-91"></div>
+      <div class="field"><label class="field-label">Datum ${dokGen}</label><input class="input${dateMissing ? ' invalid' : ''}" id="ir-date" type="text" inputmode="numeric" placeholder="DD/MM/YYYY" maxlength="10" value="${parsed.date ? isoToEU(parsed.date) : (parsed.manual ? isoToEU(new Date().toISOString().slice(0, 10)) : '')}">${dateMissing ? `<div class="field-hint" style="color: var(--negative);">Datum nije pročitan s ${dokGen}. Upiši ga.</div>` : ''}</div>
+      <div class="field"><label class="field-label">Broj ${dokGen}</label><input class="input" id="ir-no" value="${escapeHtml(parsed.invoiceNo || '')}" placeholder="Npr. 9094-01-91"></div>
     </div>
     <div class="field" style="margin-bottom: 14px;">
       <label class="field-label">Projekt za sve stavke</label>
@@ -3449,7 +3478,7 @@ function stoImportReview(parsed) {
   const summaryEl = m.root.querySelector('#ir-summary');
 
   const updateSummary = () => {
-    const valid = rows.filter(r => (r.name || '').trim() || (Number(r.gross) || 0) > 0);
+    const valid = rows.filter(r => (r.name || '').trim() || (Number(r.gross) || 0) !== 0);
     const totNet = round2(valid.reduce((a, r) => a + (Number(r.net) || 0), 0));
     const totGross = round2(valid.reduce((a, r) => a + (Number(r.gross) || 0), 0));
     const byProj = {};
@@ -3561,17 +3590,19 @@ function stoImportReview(parsed) {
     const invNo = m.root.querySelector('#ir-no').value.trim();
     const clean = rows
       .map(r => ({ ...r, name: (r.name || '').trim(), unit: (r.unit || '').trim(), project: (r.project || '').trim() }))
-      .filter(r => r.name || (Number(r.gross) || 0) > 0);
+      .filter(r => r.name || (Number(r.gross) || 0) !== 0);
     if (!clean.length) { toast('Nema stavki za spremanje', 'error'); return; }
     for (const r of clean) {
       if (!r.name) { toast('Svaka stavka mora imati naziv', 'error'); return; }
-      if (!(Number(r.gross) > 0)) { toast(`Stavka „${r.name}" nema iznos`, 'error'); return; }
+      if (!(Math.abs(Number(r.gross) || 0) > 0)) { toast(`Stavka „${r.name}" nema iznos`, 'error'); return; }
       if (!r.project) { toast(`Stavka „${r.name}" nema dodijeljen projekt`, 'error'); return; }
     }
     const tc = stoImportTotalsCheck(parsed,
       round2(clean.reduce((a, r) => a + (Number(r.net) || 0), 0)),
       round2(clean.reduce((a, r) => a + (Number(r.gross) || 0), 0)));
     if (tc.ok === false && !confirm(`${tc.text} Svejedno spremiti?`)) return;
+    const jeOdob = odob || clean.every(r => (Number(r.gross) || 0) < 0);
+    const Dok = jeOdob ? 'Odobrenje' : 'Račun';
     if (invNo) {
       let dup = 0;
       for (const k of allMonths()) {
@@ -3579,7 +3610,7 @@ function stoImportReview(parsed) {
           if (stoNoteHasInvoice(t.note, invNo)) dup++;
         }
       }
-      if (dup && !confirm(`Račun ${invNo} već postoji u aplikaciji (${dup} ${dup === 1 ? 'zapis' : 'zapisa'}). Svejedno spremiti ponovno?`)) return;
+      if (dup && !confirm(`${Dok} ${invNo} već postoji u aplikaciji (${dup} ${dup === 1 ? 'zapis' : 'zapisa'}). Svejedno spremiti ponovno?`)) return;
     }
     const targetMonth = date.slice(0, 7);
     ensureMonth(targetMonth);
@@ -3594,7 +3625,7 @@ function stoImportReview(parsed) {
         date,
         amount: round2(list.reduce((a, r) => a + (Number(r.gross) || 0), 0)),
         project: proj,
-        note: invNo ? `Račun ${invNo}` : '',
+        note: invNo ? `${Dok} ${invNo}` : '',
         items: list.map(r => {
           const it = { name: r.name, qty: Number(r.qty) || 0, unit: r.unit, vatPct: Number(r.vatPct) || 0, net: round2(Number(r.net) || 0), amount: round2(Number(r.gross) || 0) };
           if (r.code) it.code = r.code;
@@ -3607,7 +3638,7 @@ function stoImportReview(parsed) {
       m.close();
       activeMonth = targetMonth;
       stoView = 'month';
-      toast(`Uvezeno: ${clean.length} ${clean.length === 1 ? 'stavka' : 'stavki'} → ${projNames.length} ${projNames.length === 1 ? 'projekt' : 'projekta'}`, 'success', 3200);
+      toast(`${jeOdob ? 'Odobrenje uvezeno' : 'Uvezeno'}: ${clean.length} ${clean.length === 1 ? 'stavka' : 'stavki'} → ${projNames.length} ${projNames.length === 1 ? 'projekt' : 'projekta'}`, 'success', 3200);
       renderSto();
     } else {
       state.sto[targetMonth] = JSON.parse(snapshot);
@@ -3685,7 +3716,7 @@ const DEFAULT_STO_IOS_SEED = {
   ],
 };
 
-const STO_INV_NO_RE = /Račun\s+(\d{1,6}-\d{2}-\d{2})/;
+const STO_INV_NO_RE = /(?:Račun|Odobrenje)\s+(\d{1,6}-\d{2}-\d{2})/;
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const nowISO = () => new Date().toISOString();   // created / ucitano: puni timestamp, da se uplata unesena prije učitavanja IOS-a razlikuje od one nakon
 
