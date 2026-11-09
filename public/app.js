@@ -7339,7 +7339,21 @@ function renderRegistar() {
           ${isAdmin ? 'Klikni „Novi rok" i dodaj npr. tehnički pregled, liječnički, atest skele…' : 'Admin ih dodaje preko gumba „Novi rok".'}
         </div>
       ` : `
-      <div class="table-scroll">
+      <div class="reg-mlist mob-only">
+        ${sorted.map(r => {
+          const st = rokStatus(r);
+          const row2 = (r.rok ? `<span class="reg-mdate">${isoToEU(r.rok)}</span>` : '')
+            + (r.note ? `<span class="reg-mnote">${escapeHtml(r.note)}</span>` : '')
+            + (r.kategorija ? `<span class="pill gray">${escapeHtml(r.kategorija)}</span>` : '');
+          return `
+          <div class="reg-mcard rok-mcard ${st.key}${isAdmin ? ' clickable' : ''}" data-idx="${r._idx}">
+            <div class="reg-mtop"><strong class="reg-mname">${escapeHtml(r.naziv || '')}</strong>${st.pill}</div>
+            ${row2 ? `<div class="reg-mrow">${row2}</div>` : ''}
+            ${r.zadnje ? `<div class="reg-msub">Zadnje obavljeno ${isoToEU(r.zadnje)}</div>` : ''}
+          </div>`;
+        }).join('')}
+      </div>
+      <div class="table-scroll desk-only">
         <table class="table">
           <thead>
             <tr>
@@ -7383,7 +7397,7 @@ function renderRegistar() {
           <div class="card-sub">Iskorišteno se zbraja iz perioda koji počinju u ${registarYear}.${isAdmin ? ' · klikni radnika za kvotu i periode' : ''}</div>
         </div>
         <div class="page-actions">
-          <span class="pill gray">Iskorišteno: <strong style="margin-left: 4px;">${gRows.reduce((a, r) => a + r.iskoristeno, 0)} / ${gRows.reduce((a, r) => a + r.ukupno, 0)} dana</strong></span>
+          <span class="pill gray reg-god-pill">Iskorišteno: <strong style="margin-left: 4px;">${gRows.reduce((a, r) => a + r.iskoristeno, 0)} / ${gRows.reduce((a, r) => a + r.ukupno, 0)} dana</strong></span>
           <div class="month-picker">
             <button data-act="reg-year-prev" aria-label="Prethodna godina">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
@@ -7395,7 +7409,20 @@ function renderRegistar() {
           </div>
         </div>
       </div>
-      <div class="table-scroll">
+      <div class="reg-mlist mob-only">
+        ${gRows.length === 0 ? '<div class="empty" style="padding: 24px 12px;">Nema radnika u Postavkama.</div>' : gRows.map(r => `
+          <div class="reg-mcard god-mcard${isAdmin ? ' clickable' : ''}" data-worker="${escapeHtml(r.name)}">
+            <div class="reg-mtop"><strong class="reg-mname">${escapeHtml(r.name)}</strong>${(r.rub.od || r.rub.do) ? `<span class="pill amber">${[r.rub.od ? 'od ' + isoToEU(r.rub.od) : '', r.rub.do ? 'do ' + isoToEU(r.rub.do) : ''].filter(Boolean).join(' ')}</span>` : ''}</div>
+            <div class="god-mnums">
+              <div><span>Ukupno</span><b>${r.ukupno ? r.ukupno : '—'}</b></div>
+              <div><span>Iskorišteno</span><b>${r.iskoristeno}</b></div>
+              <div><span>Preostalo</span><b style="color: ${r.ukupno ? (r.preostalo < 0 ? 'var(--negative)' : 'var(--positive)') : 'var(--muted-2)'};">${r.ukupno ? r.preostalo : '—'}</b></div>
+            </div>
+            ${r.periodi.length ? `<div class="god-mper">${r.periodi.map(p => `<span class="per-chip">${p.od ? `${isoToEU(p.od).slice(0, 5)}–${isoToEU(p.do).slice(0, 5)} · ` : ''}${p.dana} d${p.note ? ' · ' + escapeHtml(p.note) : ''}</span>`).join('')}</div>` : ''}
+          </div>`).join('')}
+        ${gRows.length ? `<div class="reg-mtotal"><span>Ukupno</span><span class="num">${gRows.reduce((a, r) => a + r.iskoristeno, 0)} / ${gRows.reduce((a, r) => a + r.ukupno, 0)} dana · preostalo ${gRows.reduce((a, r) => a + (r.ukupno ? r.preostalo : 0), 0)}</span></div>` : ''}
+      </div>
+      <div class="table-scroll desk-only">
         <table class="table">
           <thead>
             <tr>
@@ -7445,6 +7472,8 @@ function renderRegistar() {
       if (e.target.closest('button')) return;
       rokModal(parseInt(tr.dataset.idx));
     }));
+    panel.querySelectorAll('.rok-mcard.clickable').forEach(c => c.addEventListener('click', () => rokModal(parseInt(c.dataset.idx))));
+    panel.querySelectorAll('.god-mcard.clickable').forEach(c => c.addEventListener('click', () => godisnjiModal(c.dataset.worker)));
     panel.querySelectorAll('tr.god-row.clickable').forEach(tr => tr.addEventListener('click', () => {
       godisnjiModal(tr.dataset.worker);
     }));
@@ -8646,6 +8675,94 @@ function v4PdvCardHtml(p) {
     </div>`;
 }
 
+/* Materijal po stavkama · isti artikl zapisan s različitim nazivom zbraja se u jedan red.
+   "StoLevell Novo" i "StoLevell Novo 15 kg" su isti artikl: veličina pakiranja (kg, l) na kraju
+   naziva, broj komada/paleta i razred toniranja (C1) ne čine novi artikl. Naziv u koji se pri
+   uvozu zalijepio redak drugog artikla ("StoColl IP 25 kg 00714-030 StoLevell Novo …") reže se
+   na prvi dio. Spremljeni računi se ne mijenjaju, ovo vrijedi samo za zbrajanje i prikaz. */
+let matSort = { key: 'name', dir: 1 };   // zadano: abecedno A–Ž
+function matCleanName(name) {
+  let s = String(name || '').replace(/\s+/g, ' ').trim();
+  const g = s.match(/\s(?:HR\s+)?\d{4,7}-\d{2,4}\s/);
+  if (g && g.index > 0) s = s.slice(0, g.index).trim();
+  return s || 'Stavka';
+}
+function matGroupKey(name, unit) {
+  let s = matCleanName(name).toLowerCase();
+  s = s.replace(/\s\d+\s(?:komada|paleta|paketa)(?=\s|$)/g, '');
+  s = s.replace(/\s+\d+(?:[.,]\d+)?\s*(?:kg|l|lit)\.?$/, '');
+  s = s.replace(/,?\s*c\d$/, '');
+  s = s.replace(/[\s,]+$/, '');
+  return s + '¦' + String(unit || '').trim().toLowerCase();
+}
+function matStavkeTableHtml(rows, p, matTotal, nonItemized) {
+  const byName = (a, b) => a.name.localeCompare(b.name, 'hr', { sensitivity: 'base', numeric: true });
+  const sorted = rows.slice().sort((a, b) => {
+    if (matSort.key === 'name') return matSort.dir * byName(a, b);
+    return (matSort.dir * (a.amount - b.amount)) || byName(a, b);
+  });
+  const udio = r => p.materijal > 0 ? ((r.amount / p.materijal) * 100).toFixed(1).replace('.', ',') + ' %' : '';
+  const kol = r => r.qty ? fmtQty(r.qty) + (r.unit ? ' ' + escapeHtml(r.unit) : '') : '';
+  const th = (key, label, right) => {
+    const on = matSort.key === key;
+    const arr = on ? (matSort.dir === 1 ? '↑' : '↓') : '↕';
+    return `<th${right ? ' class="text-right"' : ''} aria-sort="${on ? (matSort.dir === 1 ? 'ascending' : 'descending') : 'none'}"><button type="button" class="mat-sort${on ? ' on' : ''}" data-mat-sort="${key}">${label}<span class="arr">${arr}</span></button></th>`;
+  };
+  return `
+        <table class="table mat-stavke-table">
+          <thead><tr>${th('name', 'Artikl', false)}<th class="text-right">Ukupna količina</th>${th('amount', 'Iznos (s PDV)', true)}${th('udio', 'Udio u materijalu', true)}</tr></thead>
+          <tbody>
+            ${sorted.map(r => `<tr><td><strong>${escapeHtml(r.name)}</strong>${kol(r) ? `<span class="mat-m">${kol(r)}</span>` : ''}</td><td class="num text-right">${kol(r)}</td><td class="num text-right" style="font-weight: 600;">${eur(r.amount, 2)}${udio(r) ? `<span class="mat-m">${udio(r)}</span>` : ''}</td><td class="num text-right" style="color: var(--muted);">${udio(r)}</td></tr>`).join('')}
+          </tbody>
+          <tfoot>
+            <tr><td>Σ razrađeno po stavkama</td><td></td><td class="num text-right"><strong>${eur(matTotal, 2)}</strong></td><td></td></tr>
+            ${nonItemized > 0.005 ? `<tr><td style="color: var(--muted);">Materijal bez razrade (unosi bez stavki)</td><td></td><td class="num text-right" style="color: var(--muted);">${eur(nonItemized, 2)}</td><td></td></tr>` : ''}
+          </tfoot>
+        </table>`;
+}
+
+/* CSS: sortiranje materijala, Registar kao kartice na mobitelu · iz app.js da deploy ostane jedan file */
+function injectV5Css() {
+  if (document.getElementById('sr-v5-css')) return;
+  const st = document.createElement('style');
+  st.id = 'sr-v5-css';
+  st.textContent = `
+    .mat-sort { display: inline-flex; align-items: center; gap: 5px; padding: 6px 0; margin: -6px 0; font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit; background: none; border: 0; cursor: pointer; white-space: nowrap; }
+    .mat-sort .arr { font-size: 11px; opacity: .4; letter-spacing: 0; }
+    .mat-sort:hover, .mat-sort.on { color: var(--ink); }
+    .mat-sort.on .arr { opacity: 1; color: var(--acc); }
+    .mat-stavke-table .mat-m { display: none; }
+
+    .reg-mcard { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+    .reg-mcard + .reg-mcard { margin-top: 8px; }
+    .reg-mcard.clickable { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+    .reg-mcard.clickable:active { background: var(--surface-2); }
+    .rok-mcard.late { border-left: 3px solid var(--negative); padding-left: 12px; }
+    .rok-mcard.soon { border-left: 3px solid #d9b45a; padding-left: 12px; }
+    .reg-mtop { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+    .reg-mname { font-weight: 600; font-size: 15px; line-height: 1.3; min-width: 0; overflow-wrap: anywhere; }
+    .reg-mtop .pill { flex-shrink: 0; }
+    .reg-mrow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 6px; font-size: 13px; }
+    .reg-mdate { font-family: var(--font-mono); font-weight: 600; font-variant-numeric: tabular-nums; }
+    .reg-mnote { color: var(--muted); }
+    .reg-mrow .pill { margin-left: auto; }
+    .reg-msub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .god-mnums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+    .god-mnums span { display: block; font-size: 10px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+    .god-mnums b { font-family: var(--font-mono); font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .god-mper { margin-top: 8px; }
+    .reg-mtotal { display: flex; justify-content: space-between; gap: 12px; padding: 12px 2px 0; font-size: 13px; font-weight: 600; }
+    @media (max-width: 719px) {
+      .mat-stavke-table th:nth-child(2), .mat-stavke-table td:nth-child(2) { display: none; }
+      .mat-stavke-table .mat-m { display: block; margin-top: 2px; font-family: var(--font-mono); font-size: 12px; font-weight: 400; color: var(--muted); }
+      #panel-registar .card-head { flex-wrap: wrap; }
+      #panel-registar .card-head .page-actions { width: 100%; }
+      #panel-registar .reg-god-pill { display: none; }
+    }
+  `;
+  document.head.appendChild(st);
+}
+
 /* Detalj otvoren s prvog ekrana Projekata (usporedba, upozorenja) vraća se na taj ekran */
 let v4Detalj = { proj: null, pregled: false };
 function renderProjectDetail(p) {
@@ -8664,8 +8781,10 @@ function renderProjectDetail(p) {
       if (nm !== p.name || !t.items || !t.items.length) continue;
       itemizedTotal += t.amount;
       for (const it of t.items) {
-        const key = (it.name || 'Stavka') + '¦' + (it.unit || '');
-        if (!matMap[key]) matMap[key] = { name: it.name || 'Stavka', unit: it.unit || '', qty: 0, amount: 0 };
+        const key = matGroupKey(it.name, it.unit);
+        const clean = matCleanName(it.name);
+        if (!matMap[key]) matMap[key] = { name: clean, unit: String(it.unit || '').trim().toLowerCase(), qty: 0, amount: 0, names: {} };
+        matMap[key].names[clean] = (matMap[key].names[clean] || 0) + 1;
         matMap[key].qty += Number(it.qty) || 0;
         matMap[key].amount += Number(it.amount) || 0;
       }
@@ -8674,6 +8793,11 @@ function renderProjectDetail(p) {
   const matRows = Object.values(matMap).sort((a, b) => b.amount - a.amount);
   const matTotal = round2(matRows.reduce((a, r) => a + r.amount, 0));
   const nonItemized = Math.max(0, round2(p.materijal - itemizedTotal));
+  // Prikazni naziv spojene stavke: najčešći zapis, kod izjednačenja duži (npr. "StoLevell Novo 15 kg")
+  for (const r of matRows) {
+    const best = Object.entries(r.names || {}).sort((a, b) => (b[1] - a[1]) || (b[0].length - a[0].length))[0];
+    if (best) r.name = best[0];
+  }
 
   projectsGroup = isNone ? null : (p.zakljucen ? 'zavrseni' : 'tekuci');
   const hasNapl = p.naplaceno > 0;
@@ -8830,18 +8954,7 @@ function renderProjectDetail(p) {
     <div class="card" style="margin-top: 24px;">
       <div class="card-head"><div><div class="card-title">Materijal po stavkama</div><div class="card-sub">Što je točno potrošeno na projekt · iz uvezenih STO računa · iznosi s PDV-om</div></div></div>
       ${matRows.length === 0 ? `<div class="empty">Još nema razrade po stavkama za ovaj projekt.<br>Nove račune ubacuj kroz „Uvoz računa" u STO tabu i stavke će se ovdje same zbrajati.</div>` : `
-      <div class="table-scroll">
-        <table class="table mat-stavke-table">
-          <thead><tr><th>Artikl</th><th class="text-right">Ukupna količina</th><th class="text-right">Iznos (s PDV)</th><th class="text-right">Udio u materijalu</th></tr></thead>
-          <tbody>
-            ${matRows.map(r => `<tr><td><strong>${escapeHtml(r.name)}</strong></td><td class="num text-right">${r.qty ? fmtQty(r.qty) + (r.unit ? ' ' + escapeHtml(r.unit) : '') : ''}</td><td class="num text-right" style="font-weight: 600;">${eur(r.amount, 2)}</td><td class="num text-right" style="color: var(--muted);">${p.materijal > 0 ? ((r.amount / p.materijal) * 100).toFixed(1).replace('.', ',') + ' %' : ''}</td></tr>`).join('')}
-          </tbody>
-          <tfoot>
-            <tr><td>Σ razrađeno po stavkama</td><td></td><td class="num text-right"><strong>${eur(matTotal, 2)}</strong></td><td></td></tr>
-            ${nonItemized > 0.005 ? `<tr><td style="color: var(--muted);">Materijal bez razrade (unosi bez stavki)</td><td></td><td class="num text-right" style="color: var(--muted);">${eur(nonItemized, 2)}</td><td></td></tr>` : ''}
-          </tfoot>
-        </table>
-      </div>`}
+      <div class="table-scroll" id="mat-stavke-box">${matStavkeTableHtml(matRows, p, matTotal, nonItemized)}</div>`}
     </div>
 
     ${ponudaHtml}
@@ -8855,6 +8968,14 @@ function renderProjectDetail(p) {
   });
   panel.querySelector('#proj-remove')?.addEventListener('click', () => removeProjectModal(p.name));
   bindObracunDetail(panel, p);
+  const matBox = panel.querySelector('#mat-stavke-box');
+  if (matBox) matBox.addEventListener('click', e => {
+    const b = e.target.closest('[data-mat-sort]');
+    if (!b) return;
+    const k = b.dataset.matSort;
+    matSort = matSort.key === k ? { key: k, dir: -matSort.dir } : { key: k, dir: k === 'name' ? 1 : -1 };
+    matBox.innerHTML = matStavkeTableHtml(matRows, p, matTotal, nonItemized);
+  });
   panel.querySelectorAll('[data-pdv-rezim]').forEach(b => b.addEventListener('click', async () => {
     if (!isAdmin) return;
     const val = b.dataset.pdvRezim;
@@ -9902,6 +10023,7 @@ async function boot() {
   injectObracunCss();
   injectWorkerPeriodCss();
   injectV4Css();
+  injectV5Css();
   // Restore admin from localStorage if exists
   if (API.pin) {
     try {
