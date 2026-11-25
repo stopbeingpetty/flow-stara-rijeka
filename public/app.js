@@ -1058,7 +1058,7 @@ async function saveData() {
 /* ============================================================
    RENDER: CASHFLOW
    ============================================================ */
-function renderCashflow() {
+function renderCashflowV5() {
   const summary = computeCashflowSummary();
   const months = allMonths();
 
@@ -10018,12 +10018,697 @@ function praviloModal(idx) {
   });
 }
 
+/* ============================================================
+   v6 · CASHFLOW: stanje od početka godine na vrhu
+   Novi izgled početnog taba. Izračun je isti kao dosad
+   (computeCashflowSummary); mijenja se samo prikaz:
+   · na vrhu stanje od početka godine, uz prihode i troškove
+     na istoj skali (vidi se koliko jedno prelazi drugo)
+   · raspodjela troškova (Radnici, STO materijal, Tekući,
+     Nepredviđeni) otvara se klikom i vrijedi za cijeli tab;
+     izbor se pamti u pregledniku (localStorage: sr_cf_split)
+   · tri grafa: prihodi i troškovi po mjesecima, stanje kroz
+     godinu i krug "Struktura troškova" s ukupnim iznosom u sredini
+   · mjesečna tablica ima kumulativno stanje; na mobitelu su
+     umjesto tablice kartice (ne prikazuje se oboje)
+   Stari prikaz ostaje u kodu kao renderCashflowV5.
+   CSS se ubacuje iz app.js da deploy ostane jedan file.
+   ============================================================ */
+const CF6_IN = '#3f9463';    // prihodi
+const CF6_OUT = '#9b2c2c';   // troškovi (isto kao --negative)
+/* Stalni redoslijed i boje kategorija troškova (boja prati kategoriju, ne veličinu) */
+const CF6_KAT = [
+  { key: 'radnici', naziv: 'Radnici', kratko: 'Radnici', boja: '#34609b' },
+  { key: 'sto', naziv: 'STO materijal', kratko: 'STO', boja: '#dea20a' },
+  { key: 'tekuci', naziv: 'Tekući', kratko: 'Tekući', boja: '#12a08a' },
+  { key: 'nepredvideni', naziv: 'Nepredviđeni', kratko: 'Nepredv.', boja: '#a8425a' },
+];
+let cf6Split = false;        // je li raspodjela troškova otvorena
+try { cf6Split = localStorage.getItem('sr_cf_split') === '1'; } catch (e) {}
+
+const cf6Int = (n) => Math.round(Number(n) || 0) || 0;                       // bez −0
+const cf6Num = (n) => { const r = cf6Int(n); return (r < 0 ? '−' : '') + FMT_INT.format(Math.abs(r)); };
+const cf6Eur = (n) => cf6Num(n) + ' €';
+const cf6Signed = (n) => (cf6Int(n) > 0 ? '+' : '') + cf6Eur(n);
+const cf6Exact = (n) => { const v = Number(n) || 0; return (v < 0 ? '−' : '') + FMT.format(Math.abs(v)) + ' €'; };   // za title: iznos s centima
+const cf6Cls = (n) => { const r = cf6Int(n); return r < 0 ? 'cf6-neg' : r > 0 ? 'cf6-pos' : 'cf6-zero'; };
+const cf6Pct = (part, whole) => FMT_PCT.format(whole > 0 ? Math.max(0, part) / whole : 0);
+const cf6Tick = (v) => {
+  const a = Math.abs(v);
+  if (a < 1000) return cf6Num(v);
+  return (v < 0 ? '−' : '') + new Intl.NumberFormat('hr-HR', { maximumFractionDigits: 1 }).format(a / 1000) + ' tis.';
+};
+const CF6_MJ = ['Sij', 'Velj', 'Ožu', 'Tra', 'Svi', 'Lip', 'Srp', 'Kol', 'Ruj', 'Lis', 'Stu', 'Pro'];
+const cf6MjKratko = (key) => CF6_MJ[parseInt(String(key).split('-')[1], 10) - 1] || monthLabelShort(key).slice(0, 3);
+const CF6_CHEV = '<svg class="cf6-chev" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>';
+
+function cf6Period(months) {
+  if (!months.length) return '';
+  const a = months[0], b = months[months.length - 1];
+  const lo = (k) => monthLabelShort(k).toLowerCase();
+  const ya = a.slice(0, 4), yb = b.slice(0, 4);
+  if (a === b) return `${lo(a)} ${ya}`;
+  return ya === yb ? `${lo(a)} – ${lo(b)} ${yb}` : `${lo(a)} ${ya} – ${lo(b)} ${yb}`;
+}
+
+function injectV6Css() {
+  if (document.getElementById('sr-v6-css')) return;
+  const st = document.createElement('style');
+  st.id = 'sr-v6-css';
+  st.textContent = `
+    #panel-cashflow { --cf6-in: ${CF6_IN}; --cf6-out: ${CF6_OUT}; }
+    #panel-cashflow .cf6-mob { display: none; }
+    #panel-cashflow button:focus-visible, #panel-cashflow tr[data-month]:focus-visible, #panel-cashflow .cf6-mcard:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; border-radius: 8px; }
+
+    /* Vrh: stanje od početka godine + prihodi i troškovi */
+    #panel-cashflow .cf6-hero { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-xl); box-shadow: var(--shadow-sm); margin-bottom: 24px; overflow: hidden; }
+    #panel-cashflow .cf6-result { display: flex; flex-direction: column; justify-content: center; padding: 34px 38px; border-right: 1px solid var(--line); min-width: 0; }
+    #panel-cashflow .cf6-kicker { font-size: 13.5px; font-weight: 500; color: var(--muted); }
+    #panel-cashflow .cf6-big { font-family: var(--font-display); font-weight: 400; font-size: clamp(46px, 5.4vw, 74px); line-height: 1; letter-spacing: -0.035em; margin: 12px 0 16px; white-space: nowrap; }
+    #panel-cashflow .cf6-big .cur { font-size: 0.48em; letter-spacing: 0; margin-left: 0.14em; opacity: .62; }
+    #panel-cashflow .cf6-read { font-size: 15px; line-height: 1.45; color: var(--ink-2); max-width: 32ch; }
+    #panel-cashflow .cf6-period { font-size: 12.5px; color: var(--muted); margin-top: 8px; }
+
+    #panel-cashflow .cf6-ledger { display: flex; flex-direction: column; justify-content: center; gap: 24px; padding: 30px 38px; min-width: 0; }
+    #panel-cashflow .cf6-line-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; text-align: left; }
+    #panel-cashflow button.cf6-line-top { cursor: pointer; }
+    #panel-cashflow .cf6-name { display: inline-flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 500; color: var(--ink); min-width: 0; }
+    #panel-cashflow .cf6-key { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+    #panel-cashflow .cf6-amt { font-size: 21px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.015em; white-space: nowrap; color: var(--ink); }
+    #panel-cashflow .cf6-chip { display: inline-flex; align-items: center; gap: 5px; margin-left: 4px; padding: 4px 8px 4px 11px; border: 1px solid var(--line-strong); border-radius: 999px; font-size: 12.5px; font-weight: 500; color: var(--ink-2); background: var(--surface); white-space: nowrap; transition: background .15s var(--ease-snap), border-color .15s var(--ease-snap); }
+    #panel-cashflow button:hover > .cf6-name .cf6-chip, #panel-cashflow button.cf6-chip:hover { background: var(--surface-2); border-color: var(--muted-2); }
+    #panel-cashflow .cf6-chev { transition: transform .25s var(--ease-snap); flex-shrink: 0; }
+    #panel-cashflow .cf6.cf6-open .cf6-chev { transform: rotate(180deg); }
+    #panel-cashflow .cf6.cf6-open .cf6-chip { background: var(--acc-soft); border-color: var(--acc); color: var(--acc); }
+
+    #panel-cashflow .cf6-track { display: flex; gap: 2px; height: 10px; margin-top: 11px; }
+    #panel-cashflow .cf6-seg { height: 100%; min-width: 3px; border-radius: 3px; }
+    #panel-cashflow .cf6-seg:first-child { border-top-left-radius: 999px; border-bottom-left-radius: 999px; }
+    #panel-cashflow .cf6-seg:last-child { border-top-right-radius: 999px; border-bottom-right-radius: 999px; }
+    #panel-cashflow .cf6-track.is-split { display: none; }
+    #panel-cashflow .cf6.cf6-open .cf6-track.is-split { display: flex; }
+    #panel-cashflow .cf6.cf6-open .cf6-track.is-solid { display: none; }
+
+    #panel-cashflow .cf6-split { display: grid; grid-template-rows: 0fr; visibility: hidden; transition: grid-template-rows .32s var(--ease), visibility 0s .32s; }
+    #panel-cashflow .cf6.cf6-open .cf6-split { grid-template-rows: 1fr; visibility: visible; transition: grid-template-rows .32s var(--ease), visibility 0s; }
+    #panel-cashflow .cf6-split-in { overflow: hidden; min-height: 0; }
+    #panel-cashflow .cf6-split-row { display: grid; grid-template-columns: 10px minmax(0, 1fr) 62px 112px; column-gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+    #panel-cashflow .cf6-split-row:first-child { margin-top: 10px; border-top: 1px solid var(--line); }
+    #panel-cashflow .cf6-split-row:last-child { border-bottom: none; padding-bottom: 0; }
+    #panel-cashflow .cf6-split-row .nm { color: var(--ink-2); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #panel-cashflow .cf6-split-row .pc { font-size: 13px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    #panel-cashflow .cf6-split-row .am { font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--ink); }
+
+    /* Grafovi */
+    #panel-cashflow .cf6-charts { display: grid; grid-template-columns: minmax(0, 1.28fr) minmax(0, 1fr) minmax(0, 0.84fr); gap: 20px; margin-bottom: 24px; }
+    #panel-cashflow .cf6-charts .card { min-width: 0; display: flex; flex-direction: column; }
+    #panel-cashflow .cf6-chart { position: relative; flex: 1 1 300px; min-height: 300px; }
+    #panel-cashflow .cf6-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12.5px; color: var(--ink-2); }
+    #panel-cashflow .cf6-legend span { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+    #panel-cashflow .cf6-legend i { width: 10px; height: 10px; border-radius: 3px; }
+
+    /* Krug: struktura troškova */
+    #panel-cashflow .cf6-donut { position: relative; width: 100%; max-width: 212px; height: 168px; margin: 0 auto 16px; }
+    #panel-cashflow .cf6-donut-mid { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; pointer-events: none; text-align: center; }
+    #panel-cashflow .cf6-donut-mid b { font-family: var(--font-display); font-weight: 500; font-size: 21px; line-height: 1.1; letter-spacing: -0.02em; white-space: nowrap; }
+    #panel-cashflow .cf6-donut-mid span { font-size: 11.5px; color: var(--muted); }
+    #panel-cashflow .cf6-dl { margin-top: auto; }
+    #panel-cashflow .cf6-dl-row { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto 78px; column-gap: 9px; align-items: center; padding: 7px 0; border-top: 1px solid var(--line); font-size: 13px; }
+    #panel-cashflow .cf6-dl-row .nm { color: var(--ink-2); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #panel-cashflow .cf6-dl-row .pc { color: var(--muted); font-size: 12.5px; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    #panel-cashflow .cf6-dl-row .am { font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+    /* Mjesečna razrada */
+    #panel-cashflow .cf6-head { flex-wrap: wrap; }
+    #panel-cashflow button.cf6-chip { cursor: pointer; margin-left: 0; padding: 7px 10px 7px 13px; font-size: 13px; }
+    #panel-cashflow .cf6-table th { position: static; padding: 12px 16px; }
+    #panel-cashflow .cf6-table td { padding: 13px 16px; }
+    #panel-cashflow .cf6-table td.num { white-space: nowrap; }
+    #panel-cashflow .cf6-table tbody tr { cursor: pointer; }
+    #panel-cashflow .cf6-table .cf6-grp-h { text-align: center; color: var(--ink-2); background: #efeee8; border-bottom: 1px solid var(--line); padding-top: 9px; padding-bottom: 9px; }
+    #panel-cashflow .cf6-table th.cf6-k { background: #efeee8; font-size: 10.5px; padding-top: 9px; padding-bottom: 9px; }
+    #panel-cashflow .cf6-table td.cf6-k { background: #fbfaf6; color: var(--ink-2); }
+    #panel-cashflow .cf6-table tr:hover td.cf6-k { background: var(--surface-2); }
+    #panel-cashflow .cf6-table td.cf6-ktot { color: var(--ink); font-weight: 600; }
+    #panel-cashflow .cf6-table tfoot td.cf6-k { background: #efeee8; }
+    #panel-cashflow .cf6-table .cf6-sw { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; vertical-align: baseline; }
+    #panel-cashflow .cf6-table td .pill { margin-left: 8px; vertical-align: 1px; }
+    #panel-cashflow .cf6-table td.cf6-st { color: var(--ink-2); }
+    #panel-cashflow .cf6-table tfoot td { white-space: nowrap; }
+
+    /* Kartice mjeseci (mobitel) */
+    #panel-cashflow .cf6-mcards { display: flex; flex-direction: column; gap: 10px; }
+    #panel-cashflow .cf6-mcard { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 14px 12px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+    #panel-cashflow .cf6-mcard:active { background: var(--surface-2); }
+    #panel-cashflow .cf6-mtop { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+    #panel-cashflow .cf6-mname { font-size: 15px; font-weight: 600; }
+    #panel-cashflow .cf6-mname .pill { margin-left: 6px; vertical-align: 1px; font-weight: 500; }
+    #panel-cashflow .cf6-mneto { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    #panel-cashflow .cf6-mrow { display: grid; grid-template-columns: 62px minmax(0, 1fr) auto; align-items: center; column-gap: 10px; font-size: 13px; color: var(--muted); padding: 3px 0; }
+    #panel-cashflow .cf6-mrow .v { color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; min-width: 76px; text-align: right; }
+    #panel-cashflow .cf6-mrow .cf6-track { height: 8px; margin-top: 0; }
+    #panel-cashflow .cf6-msplit { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
+    #panel-cashflow .cf6-msplit span { display: flex; align-items: center; gap: 6px; min-width: 0; }
+    #panel-cashflow .cf6-msplit i { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+    #panel-cashflow .cf6-msplit b { margin-left: auto; font-weight: 500; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    #panel-cashflow .cf6-mfoot { display: flex; justify-content: space-between; gap: 10px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
+    #panel-cashflow .cf6-mfoot b { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--ink-2); }
+    #panel-cashflow .cf6-mcard.cf6-mtotal { cursor: default; background: var(--surface-2); border-color: var(--line-strong); }
+    #panel-cashflow .cf6-mcard.cf6-mtotal .cf6-mrow { grid-template-columns: minmax(0, 1fr) auto; }
+    #panel-cashflow .cf6-note { margin-top: 14px; }
+    #panel-cashflow .cf6-round { font-size: 12.5px; color: var(--muted); margin-top: 6px; }
+
+    /* Predznak (na kraju, da vrijedi i uz pravila iznad) */
+    #panel-cashflow .cf6-neg { color: var(--negative); }
+    #panel-cashflow .cf6-pos { color: var(--positive); }
+    #panel-cashflow .cf6-zero { color: var(--muted); }
+
+    @media (max-width: 1180px) {
+      #panel-cashflow .cf6-charts { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
+      #panel-cashflow .cf6-charts > .card:first-child { grid-column: 1 / -1; }
+      #panel-cashflow .cf6-donut { max-width: 230px; height: 184px; }
+    }
+    @media (max-width: 980px) {
+      #panel-cashflow .cf6-hero { grid-template-columns: minmax(0, 1fr); }
+      #panel-cashflow .cf6-result { border-right: none; border-bottom: 1px solid var(--line); }
+      #panel-cashflow .cf6-read { max-width: none; }
+    }
+    @media (max-width: 719px) {
+      #panel-cashflow .cf6-desk, #panel-cashflow .cf6-desk-i { display: none; }
+      #panel-cashflow .cf6-mob { display: block; }
+      #panel-cashflow .cf6-hero { border-radius: var(--radius-lg); margin-bottom: 16px; }
+      #panel-cashflow .cf6-result { padding: 24px 20px 22px; }
+      #panel-cashflow .cf6-big { font-size: clamp(42px, 13vw, 56px); margin: 10px 0 12px; }
+      #panel-cashflow .cf6-read { font-size: 14.5px; }
+      #panel-cashflow .cf6-ledger { padding: 22px 20px 24px; gap: 22px; }
+      #panel-cashflow .cf6-amt { font-size: 19px; }
+      #panel-cashflow .cf6-split-row { grid-template-columns: 10px minmax(0, 1fr) 54px auto; column-gap: 10px; }
+      #panel-cashflow .cf6-charts { grid-template-columns: minmax(0, 1fr); gap: 16px; margin-bottom: 16px; }
+      #panel-cashflow .cf6-chart { flex-basis: 240px; min-height: 240px; }
+      #panel-cashflow .cf6-donut { max-width: 240px; height: 196px; margin-bottom: 18px; }
+      #panel-cashflow .cf6-donut-mid b { font-size: 23px; }
+      #panel-cashflow .cf6-dl-row { font-size: 14px; padding: 9px 0; grid-template-columns: 10px minmax(0, 1fr) auto 92px; }
+      #panel-cashflow .cf6-charts .card-head { flex-direction: column; align-items: flex-start; gap: 10px; }
+      #panel-cashflow .cf6-head { margin-bottom: 14px; padding-bottom: 14px; }
+      #panel-cashflow .cf6-head > button.cf6-chip { width: 100%; justify-content: space-between; padding: 10px 12px 10px 14px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #panel-cashflow .cf6-split, #panel-cashflow .cf6.cf6-open .cf6-split, #panel-cashflow .cf6-chev { transition: none; }
+    }
+    @media print {
+      #panel-cashflow .cf6-chip { display: none; }
+    }
+  `;
+  document.head.appendChild(st);
+}
+
+/* Traka troškova: jedna boja (zatvoreno) i ista traka podijeljena po kategorijama (otvoreno) */
+function cf6CostTracksHtml(r, scale) {
+  const w = (v) => (scale > 0 ? Math.max(0, v) / scale * 100 : 0).toFixed(2);
+  const segs = CF6_KAT.filter(c => cf6Int(r[c.key]) > 0)
+    .map(c => `<div class="cf6-seg" style="width: ${w(r[c.key])}%; background: ${c.boja};" title="${escapeHtml(c.naziv)}: ${cf6Eur(r[c.key])}"></div>`).join('');
+  const solid = cf6Int(r.troskovi) > 0 ? `<div class="cf6-seg" style="width: ${w(r.troskovi)}%; background: var(--cf6-out);"></div>` : '';
+  return `<div class="cf6-track is-solid">${solid}</div><div class="cf6-track is-split">${segs}</div>`;
+}
+
+/* Mjesečna razrada: tablica (računalo) i kartice (mobitel) */
+function cf6MonthsHtml(rows, tot, summary, months) {
+  const open = cf6Split;
+  const curKey = todayISO().slice(0, 7);
+  const sameYear = new Set(months.map(k => k.slice(0, 4))).size <= 1;
+  const mName = (k) => sameYear ? monthLabelShort(k) : monthLabel(k);
+  const maxBar = Math.max(1, ...rows.map(r => Math.max(r.prihodi, r.troskovi)));
+  const pill = (r) => r.key === curKey
+    ? '<span class="pill gray">u tijeku</span>'
+    : (r.izvor && r.izvor !== 'troskovi' ? '<span class="pill amber" title="Plaće za ovaj mjesec još nisu upisane, pa je uzeta procjena">plaće: procjena</span>' : '');
+  const kHead = CF6_KAT.map(c => `<th class="text-right cf6-k"><i class="cf6-sw" style="background: ${c.boja};"></i>${c.kratko}</th>`).join('');
+  const kCells = (r) => CF6_KAT.map(c => `<td class="num text-right cf6-k" title="${cf6Exact(r[c.key])}">${cf6Eur(r[c.key])}</td>`).join('');
+
+  const table = `
+    <div class="table-scroll cf6-desk">
+      <table class="table cf6-table">
+        <thead>
+          ${open ? `
+          <tr>
+            <th rowspan="2">Mjesec</th>
+            <th rowspan="2" class="text-right">Prihodi</th>
+            <th colspan="5" class="cf6-grp-h">Troškovi</th>
+            <th rowspan="2" class="text-right">Neto</th>
+            <th rowspan="2" class="text-right" title="Zbroj neto rezultata od početka godine do kraja tog mjeseca">Stanje</th>
+          </tr>
+          <tr>${kHead}<th class="text-right cf6-k">Ukupno</th></tr>` : `
+          <tr>
+            <th>Mjesec</th>
+            <th class="text-right">Prihodi</th>
+            <th class="text-right">Troškovi</th>
+            <th class="text-right">Neto</th>
+            <th class="text-right" title="Zbroj neto rezultata od početka godine do kraja tog mjeseca">Stanje</th>
+          </tr>`}
+        </thead>
+        <tbody>
+          ${rows.map(r => `
+          <tr data-month="${r.key}" tabindex="0">
+            <td><strong>${mName(r.key)}</strong>${pill(r)}</td>
+            <td class="num text-right" title="${cf6Exact(r.prihodi)}">${cf6Eur(r.prihodi)}</td>
+            ${open ? kCells(r) : ''}
+            <td class="num text-right${open ? ' cf6-k cf6-ktot' : ''}" title="${cf6Exact(r.troskovi)}">${cf6Eur(r.troskovi)}</td>
+            <td class="num text-right ${cf6Cls(r.neto)}" style="font-weight: 600;" title="${cf6Exact(r.neto)}">${cf6Signed(r.neto)}</td>
+            <td class="num text-right cf6-st" title="${cf6Exact(r.stanje)}">${cf6Eur(r.stanje)}</td>
+          </tr>`).join('')}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td>Ukupno od početka godine</td>
+            <td class="num text-right" title="${cf6Exact(tot.prihodi)}">${cf6Eur(tot.prihodi)}</td>
+            ${open ? CF6_KAT.map(c => `<td class="num text-right cf6-k" title="${cf6Exact(tot[c.key])}">${cf6Eur(tot[c.key])}</td>`).join('') : ''}
+            <td class="num text-right${open ? ' cf6-k' : ''}" title="${cf6Exact(tot.troskovi)}">${cf6Eur(tot.troskovi)}</td>
+            <td class="num text-right ${cf6Cls(tot.neto)}" colspan="2" title="${cf6Exact(tot.neto)}">${cf6Eur(tot.neto)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>`;
+
+  const cards = `
+    <div class="cf6-mob"><div class="cf6-mcards">
+      ${rows.map(r => `
+      <div class="cf6-mcard" data-month="${r.key}" tabindex="0">
+        <div class="cf6-mtop">
+          <span class="cf6-mname">${mName(r.key)}${pill(r)}</span>
+          <span class="cf6-mneto ${cf6Cls(r.neto)}">${cf6Signed(r.neto)}</span>
+        </div>
+        <div class="cf6-mrow">
+          <span>Prihodi</span>
+          <div class="cf6-track">${cf6Int(r.prihodi) > 0 ? `<div class="cf6-seg" style="width: ${(r.prihodi / maxBar * 100).toFixed(2)}%; background: var(--cf6-in);"></div>` : ''}</div>
+          <span class="v">${cf6Eur(r.prihodi)}</span>
+        </div>
+        <div class="cf6-mrow">
+          <span>Troškovi</span>
+          <div>${cf6CostTracksHtml(r, maxBar)}</div>
+          <span class="v">${cf6Eur(r.troskovi)}</span>
+        </div>
+        ${open ? `<div class="cf6-msplit">${CF6_KAT.map(c => `<span><i style="background: ${c.boja};"></i>${c.kratko}<b>${cf6Eur(r[c.key])}</b></span>`).join('')}</div>` : ''}
+        <div class="cf6-mfoot"><span>Stanje nakon mjeseca</span><b>${cf6Eur(r.stanje)}</b></div>
+      </div>`).join('')}
+      <div class="cf6-mcard cf6-mtotal">
+        <div class="cf6-mtop">
+          <span class="cf6-mname">Ukupno od početka godine</span>
+          <span class="cf6-mneto ${cf6Cls(tot.neto)}">${cf6Signed(tot.neto)}</span>
+        </div>
+        <div class="cf6-mrow"><span>Prihodi</span><span class="v">${cf6Eur(tot.prihodi)}</span></div>
+        <div class="cf6-mrow"><span>Troškovi</span><span class="v">${cf6Eur(tot.troskovi)}</span></div>
+      </div>
+    </div></div>`;
+
+  return `
+    <div class="card-head cf6-head">
+      <div>
+        <div class="card-title">Mjesečna razrada</div>
+        <div class="card-sub">Klikni mjesec za sve transakcije tog mjeseca</div>
+      </div>
+      <button type="button" class="cf6-chip" data-cf6-toggle aria-pressed="${open ? 'true' : 'false'}">${open ? 'Sakrij raspodjelu troškova' : 'Prikaži raspodjelu troškova'}${CF6_CHEV}</button>
+    </div>
+    ${table}
+    ${cards}
+    <div class="cf6-note">
+      ${cashflowPlaceNapomenaHtml(summary, months)}
+      <div class="cf6-round">Iznosi su zaokruženi na cijeli euro, pa se zbroj može razlikovati za 1 €.<span class="cf6-desk-i"> Točan iznos vidi se kad mišem staneš na broj.</span></div>
+    </div>`;
+}
+
+/* Vrijednost uz zadnju i uz najnižu točku krivulje stanja (bez broja na svakoj točki) */
+const cf6PointLabels = {
+  id: 'cf6PointLabels',
+  afterDatasetsDraw(chart) {
+    const meta = chart.getDatasetMeta(0);
+    const data = (chart.data.datasets[0] || {}).data || [];
+    if (!meta || !meta.data || !meta.data.length) return;
+    const { ctx, chartArea: area } = chart;
+    const font = `600 12px ${cssVar('--font-body')}`;
+    const surface = cssVar('--surface') || '#fff';
+    const ink = cssVar('--ink') || '#0a0a0a';
+    const put = (text, x, y, align) => {
+      ctx.save();
+      ctx.font = font;
+      ctx.textAlign = align;
+      ctx.textBaseline = 'middle';
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = surface;
+      ctx.strokeText(text, x, y);
+      ctx.fillStyle = ink;
+      ctx.fillText(text, x, y);
+      ctx.restore();
+    };
+    const last = data.length - 1;
+    const pl = meta.data[last];
+    // krivulja dolazi odozgo (pad) -> oznaka ispod točke; dolazi odozdo (rast) -> iznad
+    const pada = last > 0 ? data[last] <= data[last - 1] : data[last] < 0;
+    let lastY = pada ? pl.y + 18 : pl.y - 16;
+    if (lastY > area.bottom - 6) lastY = pl.y - 16;
+    if (lastY < area.top + 6) lastY = pl.y + 18;
+    put(cf6Eur(data[last]), pl.x + 8, lastY, 'right');
+    let mi = 0;
+    data.forEach((v, i) => { if (v < data[mi]) mi = i; });
+    if (mi === last || !(data[mi] < 0)) return;
+    const pm = meta.data[mi];
+    const text = cf6Eur(data[mi]);
+    ctx.save(); ctx.font = font; const half = ctx.measureText(text).width / 2; ctx.restore();
+    const below = pm.y + 18 <= area.bottom - 6;
+    const y = below ? pm.y + 18 : pm.y - 16;
+    const x = Math.min(Math.max(pm.x, area.left + half + 2), area.right - half - 2);
+    if (pl.x - x < half * 2 + 24 && Math.abs(y - lastY) < 16) return;   // ne preko oznake zadnje točke
+    put(text, x, y, 'center');
+  },
+};
+
+function renderCashflow() {
+  const summary = computeCashflowSummary();
+  const months = allMonths();
+  const panel = document.getElementById('panel-cashflow');
+  ['cfMonthly', 'cfDonut', 'cfStanje'].forEach(k => { if (charts[k]) { charts[k].destroy(); delete charts[k]; } });
+
+  let run = 0;
+  const rows = months.map(k => {
+    const s = summary[k] || {};
+    const r = {
+      key: k,
+      prihodi: Number(s.prihodi) || 0,
+      troskovi: Number(s.troskoviUkupno) || 0,
+      neto: Number(s.neto) || 0,
+      radnici: Number(s.radnici) || 0,
+      sto: Number(s.sto) || 0,
+      tekuci: Number(s.tekuci) || 0,
+      nepredvideni: Number(s.nepredvideni) || 0,
+      izvor: (s.radniciRazrada || {}).izvor,
+    };
+    run += r.neto;
+    r.stanje = run;
+    return r;
+  });
+  const tot = rows.reduce((a, r) => {
+    for (const f of ['prihodi', 'troskovi', 'neto', 'radnici', 'sto', 'tekuci', 'nepredvideni']) a[f] += r[f];
+    return a;
+  }, { prihodi: 0, troskovi: 0, neto: 0, radnici: 0, sto: 0, tekuci: 0, nepredvideni: 0 });
+  const period = cf6Period(months);
+  const hasData = rows.some(r => cf6Int(r.prihodi) !== 0 || cf6Int(r.troskovi) !== 0);
+
+  const head = `
+    <div class="page-head">
+      <div class="page-title-block">
+        <div class="page-eyebrow">Od početka godine${period ? ' · ' + period : ''}</div>
+        <h1 class="page-title">Cashflow <em>sažetak</em></h1>
+      </div>
+    </div>`;
+
+  if (!hasData) {
+    panel.innerHTML = `${head}
+      <div class="card">
+        <div class="empty">
+          <div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg></div>
+          Još nema upisanih prihoda ni troškova.<br>Kad upišeš prvu uplatu ili trošak u tabu Troškovi, ovdje se pojavi stanje.
+        </div>
+      </div>`;
+    return;
+  }
+
+  const scale = Math.max(tot.prihodi, tot.troskovi, 1);
+  const plusN = rows.filter(r => cf6Int(r.neto) > 0).length;
+  const read = cf6Int(tot.prihodi) > 0
+    ? `Na svakih 100 € prihoda dolazi ${cf6Num(tot.troskovi / tot.prihodi * 100)} € troškova.`
+    : 'Još nema upisanih prihoda.';
+  const big = (cf6Int(tot.neto) > 0 ? '+' : '') + cf6Num(tot.neto);
+  const hrMjeseci = (n) => (n % 10 >= 1 && n % 10 <= 4 && !(n % 100 >= 11 && n % 100 <= 14)) ? 'mjeseca' : 'mjeseci';
+
+  panel.innerHTML = `
+    <div class="cf6${cf6Split ? ' cf6-open' : ''}">
+      ${head}
+
+      <section class="cf6-hero" aria-label="Stanje od početka godine">
+        <div class="cf6-result">
+          <div class="cf6-kicker">Stanje od početka godine</div>
+          <div class="cf6-big ${cf6Cls(tot.neto)}" title="${cf6Exact(tot.neto)}">${big}<span class="cur">€</span></div>
+          <div class="cf6-read">${read}</div>
+          <div class="cf6-period">Prihodi minus troškovi, ${period}</div>
+        </div>
+        <div class="cf6-ledger">
+          <div class="cf6-line">
+            <div class="cf6-line-top">
+              <span class="cf6-name"><i class="cf6-key" style="background: var(--cf6-in);"></i>Prihodi</span>
+              <span class="cf6-amt" title="${cf6Exact(tot.prihodi)}">${cf6Eur(tot.prihodi)}</span>
+            </div>
+            <div class="cf6-track">${cf6Int(tot.prihodi) > 0 ? `<div class="cf6-seg" style="width: ${(tot.prihodi / scale * 100).toFixed(2)}%; background: var(--cf6-in);"></div>` : ''}</div>
+          </div>
+          <div class="cf6-line">
+            <button type="button" class="cf6-line-top" data-cf6-toggle aria-expanded="${cf6Split ? 'true' : 'false'}" aria-controls="cf6-split">
+              <span class="cf6-name"><i class="cf6-key" style="background: var(--cf6-out);"></i>Troškovi<span class="cf6-chip">Raspodjela${CF6_CHEV}</span></span>
+              <span class="cf6-amt" title="${cf6Exact(tot.troskovi)}">${cf6Eur(tot.troskovi)}</span>
+            </button>
+            ${cf6CostTracksHtml(tot, scale)}
+            <div class="cf6-split" id="cf6-split" aria-hidden="${cf6Split ? 'false' : 'true'}">
+              <div class="cf6-split-in">
+                ${CF6_KAT.map(c => `
+                <div class="cf6-split-row">
+                  <i class="cf6-key" style="background: ${c.boja};"></i>
+                  <span class="nm">${c.naziv}</span>
+                  <span class="pc">${cf6Pct(tot[c.key], tot.troskovi)}</span>
+                  <span class="am" title="${cf6Exact(tot[c.key])}">${cf6Eur(tot[c.key])}</span>
+                </div>`).join('')}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="cf6-charts">
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <div class="card-title">Prihodi i troškovi po mjesecima</div>
+              <div class="card-sub">U plusu ${plusN} od ${rows.length} ${hrMjeseci(rows.length)}</div>
+            </div>
+            <div class="cf6-legend" aria-hidden="true"><span><i style="background: var(--cf6-in);"></i>Prihodi</span><span><i style="background: var(--cf6-out);"></i>Troškovi</span></div>
+          </div>
+          <div class="cf6-chart"><canvas id="cf-chart-monthly" role="img" aria-label="Prihodi i troškovi po mjesecima. Iste brojke su u tablici Mjesečna razrada."></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <div class="card-title">Stanje kroz godinu</div>
+              <div class="card-sub">Zbroj mjesečnih rezultata od početka godine</div>
+            </div>
+          </div>
+          <div class="cf6-chart"><canvas id="cf-chart-stanje" role="img" aria-label="Stanje od početka godine, mjesec po mjesec. Iste brojke su u stupcu Stanje u tablici Mjesečna razrada."></canvas></div>
+        </div>
+        <div class="card cf6-donut-card">
+          <div class="card-head">
+            <div>
+              <div class="card-title">Struktura troškova</div>
+              <div class="card-sub">Od početka godine</div>
+            </div>
+          </div>
+          <div class="cf6-donut">
+            <canvas id="cf-chart-donut" role="img" aria-label="Struktura troškova od početka godine. Iste brojke su u popisu ispod kruga."></canvas>
+            <div class="cf6-donut-mid"><b title="${cf6Exact(tot.troskovi)}">${cf6Eur(tot.troskovi)}</b><span>ukupno troškovi</span></div>
+          </div>
+          <div class="cf6-dl">
+            ${CF6_KAT.map(c => `
+            <div class="cf6-dl-row">
+              <i class="cf6-key" style="background: ${c.boja};"></i>
+              <span class="nm">${c.naziv}</span>
+              <span class="pc">${cf6Pct(tot[c.key], tot.troskovi)}</span>
+              <span class="am" title="${cf6Exact(tot[c.key])}">${cf6Eur(tot[c.key])}</span>
+            </div>`).join('')}
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="cf6-months">${cf6MonthsHtml(rows, tot, summary, months)}</div>
+    </div>`;
+
+  const root = panel.querySelector('.cf6');
+  const monthsBox = panel.querySelector('#cf6-months');
+  const goMonth = (el) => { activeMonth = el.dataset.month; setTab('trx'); };
+
+  /* Raspodjela troškova: jedan prekidač za vrh i za mjesečnu razradu */
+  const applySplit = () => {
+    root.classList.toggle('cf6-open', cf6Split);
+    const hb = panel.querySelector('.cf6-ledger [data-cf6-toggle]');
+    if (hb) hb.setAttribute('aria-expanded', cf6Split ? 'true' : 'false');
+    const sp = panel.querySelector('#cf6-split');
+    if (sp) sp.setAttribute('aria-hidden', cf6Split ? 'false' : 'true');
+    monthsBox.innerHTML = cf6MonthsHtml(rows, tot, summary, months);
+  };
+  root.addEventListener('click', (e) => {
+    const tg = e.target.closest('[data-cf6-toggle]');
+    if (tg) {
+      cf6Split = !cf6Split;
+      try { localStorage.setItem('sr_cf_split', cf6Split ? '1' : '0'); } catch (err) {}
+      const inMonths = monthsBox.contains(tg);
+      applySplit();
+      if (inMonths) { const nb = monthsBox.querySelector('[data-cf6-toggle]'); if (nb) nb.focus(); }
+      return;
+    }
+    const m = e.target.closest('[data-month]');
+    if (m && monthsBox.contains(m)) goMonth(m);
+  });
+  root.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const m = e.target.closest ? e.target.closest('[data-month]') : null;
+    if (m && m === e.target) { e.preventDefault(); goMonth(m); }
+  });
+
+  /* GRAFOVI */
+  const small = isMobileView();
+  const boxW = (id) => { const el = document.getElementById(id); return el && el.parentElement ? el.parentElement.clientWidth : 0; };
+  const uzi = Math.min(boxW('cf-chart-monthly') || 9999, boxW('cf-chart-stanje') || 9999);
+  const kratko = small || (uzi - 56) / Math.max(months.length, 1) < 58;   // puni nazivi samo kad stanu na oba grafa
+  const labels = months.map(k => kratko ? cf6MjKratko(k) : monthLabelShort(k));
+  const reduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const fBody = cssVar('--font-body');
+  const cLine = cssVar('--line');
+  const cInk = cssVar('--ink');
+  const cMuted = cssVar('--muted');
+  const cSurface = cssVar('--surface');
+  const tooltip = (callbacks) => ({
+    backgroundColor: cInk,
+    padding: 12,
+    cornerRadius: 10,
+    boxPadding: 5,
+    usePointStyle: true,
+    titleFont: { family: fBody, weight: 600, size: 13 },
+    bodyFont: { family: fBody, size: 13 },
+    footerFont: { family: fBody, weight: 600, size: 13 },
+    footerMarginTop: 8,
+    callbacks,
+  });
+  const stanja = rows.map(r => r.stanje);
+  const sMin = Math.min(0, ...stanja), sMax = Math.max(0, ...stanja);
+  const sRange = Math.max(sMax - sMin, 1);
+  const scales = (zeroStrong) => ({
+    x: {
+      offset: true,
+      grid: { display: false },
+      border: { color: cLine },
+      ticks: { font: { family: fBody, size: 11 }, color: cMuted, maxRotation: 0, autoSkip: months.length > 12, autoSkipPadding: 6 },
+    },
+    y: {
+      beginAtZero: true,
+      min: zeroStrong ? sMin - sRange * (sMin < 0 ? 0.2 : 0.06) : undefined,
+      max: zeroStrong ? sMax + sRange * (sMax > 0 ? 0.16 : 0.06) : undefined,
+      border: { display: false },
+      grid: { color: (c) => (zeroStrong && c.tick && c.tick.value === 0) ? cssVar('--muted-2') : cLine, lineWidth: 1 },
+      ticks: { font: { family: fBody, size: 11 }, color: cMuted, maxTicksLimit: 7, includeBounds: false, callback: (v) => cf6Tick(v) },
+    },
+  });
+
+  const ctx1 = document.getElementById('cf-chart-monthly');
+  charts.cfMonthly = new Chart(ctx1, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Prihodi', data: rows.map(r => r.prihodi), backgroundColor: CF6_IN, hoverBackgroundColor: '#35805a', borderRadius: 4, maxBarThickness: 22, categoryPercentage: 0.74, barPercentage: 0.84 },
+        { label: 'Troškovi', data: rows.map(r => r.troskovi), backgroundColor: CF6_OUT, hoverBackgroundColor: '#842424', borderRadius: 4, maxBarThickness: 22, categoryPercentage: 0.74, barPercentage: 0.84 },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: reduce ? false : { duration: 500 },
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: tooltip({
+          title: (items) => items.length ? monthLabel(months[items[0].dataIndex]) : '',
+          label: (c) => ` ${c.dataset.label}: ${cf6Eur(c.raw)}`,
+          footer: (items) => items.length ? 'Neto: ' + cf6Signed(rows[items[0].dataIndex].neto) : '',
+        }),
+      },
+      scales: scales(false),
+    },
+  });
+
+  const ctx2 = document.getElementById('cf-chart-stanje');
+  const cAcc = cssVar('--acc-cashflow') || '#1e3a5f';
+  charts.cfStanje = new Chart(ctx2, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Stanje',
+        data: rows.map(r => r.stanje),
+        borderColor: cAcc,
+        borderWidth: 2,
+        tension: 0,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        pointBackgroundColor: cAcc,
+        pointBorderColor: cSurface,
+        pointBorderWidth: 2,
+        pointHoverBorderWidth: 2,
+        pointHitRadius: 16,
+        fill: { target: 'origin', above: 'rgba(63, 148, 99, 0.10)', below: 'rgba(155, 44, 44, 0.08)' },
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: reduce ? false : { duration: 500 },
+      interaction: { mode: 'index', intersect: false },
+      layout: { padding: { right: 10, top: 6 } },
+      plugins: {
+        legend: { display: false },
+        tooltip: tooltip({
+          title: (items) => items.length ? monthLabel(months[items[0].dataIndex]) : '',
+          label: (c) => ` Stanje: ${cf6Eur(c.raw)}`,
+          footer: (items) => items.length ? 'Taj mjesec: ' + cf6Signed(rows[items[0].dataIndex].neto) : '',
+        }),
+      },
+      scales: scales(true),
+    },
+    plugins: [cf6PointLabels],
+  });
+
+  /* Krug: udio svake kategorije u troškovima (iste boje i redoslijed kao u raspodjeli) */
+  const dk = CF6_KAT.filter(c => cf6Int(tot[c.key]) > 0);
+  const ctx3 = document.getElementById('cf-chart-donut');
+  charts.cfDonut = new Chart(ctx3, {
+    type: 'doughnut',
+    data: {
+      labels: dk.length ? dk.map(c => c.naziv) : ['Nema troškova'],
+      datasets: [{
+        data: dk.length ? dk.map(c => tot[c.key]) : [1],
+        backgroundColor: dk.length ? dk.map(c => c.boja) : [cLine],
+        borderColor: cSurface,
+        borderWidth: 2,
+        hoverOffset: dk.length ? 5 : 0,
+        hoverBorderColor: cSurface,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '68%',
+      layout: { padding: 4 },
+      animation: reduce ? false : { duration: 500 },
+      plugins: {
+        legend: { display: false },
+        tooltip: dk.length ? tooltip({
+          title: () => '',
+          label: (c) => ` ${c.label}: ${cf6Eur(c.raw)} (${cf6Pct(c.raw, tot.troskovi)})`,
+        }) : { enabled: false },
+      },
+    },
+  });
+}
+
 async function boot() {
   injectExtraCss();
   injectObracunCss();
   injectWorkerPeriodCss();
   injectV4Css();
   injectV5Css();
+  injectV6Css();
   // Restore admin from localStorage if exists
   if (API.pin) {
     try {
